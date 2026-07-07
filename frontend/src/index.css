@@ -1,0 +1,284 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #131c31;
+  --color-brand-100: #1e293b;
+  --color-brand-200: #334155;
+  --color-brand-300: #475569;
+  --color-brand-400: #38bdf8;
+  --color-brand-500: #0ea5e9;
+  --color-brand-600: #0284c7;
+  --color-brand-700: #0369a1;
+  --color-brand-800: #075985;
+  --color-brand-900: #0c4a6e;
+  --color-brand-950: #082f49;
+
+  --color-slate-850: #111827;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #0b0f19;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Lora', Georgia, serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ─── Base ──────────────────────────────────────────────── */
+body {
+  background-color: #0b0f19;
+  color: #f1f5f9;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #0b0f19; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+/* ─── Card / Glass Panel ────────────────────────────────── */
+.glass {
+  background: #111827;
+  border: 1px solid #1f2937;
+  box-shadow: 0 4px 24px -4px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
+  border-radius: 6px;
+}
+
+.glass-hover { transition: all 0.2s ease; }
+.glass-hover:hover {
+  background: #111827;
+  border-color: #38bdf8;
+  box-shadow: 0 10px 30px -6px rgba(0,0,0,0.45), 0 0 0 1px rgba(56,189,248,0.15);
+}
+
+.glass-accent {
+  background: #0f172a;
+  border: 1px solid #38bdf8;
+}
+
+/* ─── Font Gravitas ─────────────────────────────────────── */
+.font-display { font-family: var(--font-serif); }
+
+/* ─── Form Input System ─────────────────────────────────── */
+
+/* Base shared input style */
+.form-input-base {
+  width: 100%;
+  background: #070b14;
+  border: 1.5px solid #1e2d45;
+  border-radius: 5px;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.form-input-base::placeholder {
+  color: #3a4d6a;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.form-input-base:hover {
+  border-color: #2d4a6e;
+  background: #080d18;
+}
+
+.form-input-base:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  background: #06111e;
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.35),
+    0 0 0 3px rgba(14,165,233,0.12),
+    0 0 12px rgba(14,165,233,0.06);
+  color: #f1f5f9;
+}
+
+/* Textarea specific */
+textarea.form-input-base {
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.65;
+  font-size: 13.5px;
+  letter-spacing: 0.01em;
+}
+
+/* Number inputs right-aligned monospace */
+input[type="number"].form-input-base {
+  font-family: var(--font-mono);
+  text-align: right;
+  letter-spacing: 0.03em;
+}
+
+/* Select inputs */
+select.form-input-base {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+/* ─── Form Field Label ──────────────────────────────────── */
+.field-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-family: var(--font-sans);
+}
+
+/* ─── Character Counter ─────────────────────────────────── */
+.char-counter {
+  font-size: 10px;
+  color: #334155;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.char-counter.active { color: #38bdf8; }
+.char-counter.warn { color: #f59e0b; }
+
+/* ─── Validation Badges ─────────────────────────────────── */
+.badge-valid {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #34d399;
+  background: rgba(2,44,34,0.6);
+  border: 1px solid #064e3b;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.badge-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #fbbf24;
+  background: rgba(45,26,0,0.6);
+  border: 1px solid #78350f;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.badge-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #f87171;
+  background: rgba(59,7,18,0.6);
+  border: 1px solid #7f1d1d;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ─── Focus ring fallback (for non-classed inputs) ──────── */
+.input-focus-ring:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.12), inset 0 1px 2px rgba(0,0,0,0.25);
+}
+
+/* ─── Sidebar section dividers ──────────────────────────── */
+.nav-section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #334155;
+}
+
+/* ─── Animations ────────────────────────────────────────── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* ─── Glow accents ──────────────────────────────────────── */
+.glow-indigo {
+  box-shadow: 0 0 0 1px rgba(56,189,248,0.08), 0 8px 32px -8px rgba(56,189,248,0.1);
+}
+
+/* ─── Status dot pulse ──────────────────────────────────── */
+@keyframes soft-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.animate-soft-pulse {
+  animation: soft-pulse 2s ease-in-out infinite;
+}
+
+/* ─── Tooltip ───────────────────────────────────────────── */
+.tooltip-box {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 240px;
+  background: #0f172a;
+  border: 1px solid #1e2d45;
+  border-radius: 5px;
+  padding: 9px 12px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #94a3b8;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+/* ─── Section header divider ────────────────────────────── */
+.section-subhead {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #38bdf8;
+  opacity: 0.75;
+}
+
+/* ─── Prospectus preview monospace ─────────────────────── */
+.prospectus-preview {
+  font-family: var(--font-serif);
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Dashboard stat cards ──────────────────────────────── */
+.stat-card {
+  background: linear-gradient(135deg, #111827 0%, #0f172a 100%);
+  border: 1px solid #1e2d45;
+  border-radius: 6px;
+  padding: 20px 22px;
+}

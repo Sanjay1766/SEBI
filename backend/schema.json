@@ -1,0 +1,159 @@
+{
+  "sections": [
+    {
+      "id": "cover_page",
+      "name": "Cover page",
+      "description": "Basic details appearing on the prospectus cover, such as company name, logo, issue details, and lead manager.",
+      "fields": [
+        {"key": "company_name", "label": "Company Name", "type": "string", "source": "form", "required": true, "tooltip": "Exact registered name of the company"},
+        {"key": "issue_size", "label": "Issue Size (₹ Crores)", "type": "number", "source": "form", "required": true, "tooltip": "Total size of the IPO issue in INR Crores"},
+        {"key": "price_band", "label": "Price Band (₹)", "type": "string", "source": "form", "required": true, "tooltip": "Price band range, e.g., '100 - 105'"},
+        {"key": "lead_manager", "label": "Lead Manager Name", "type": "string", "source": "form", "required": true, "tooltip": "Merchant banker managing the issue"},
+        {"key": "registrar", "label": "Registrar Name", "type": "string", "source": "form", "required": true, "tooltip": "Registrar to the issue"}
+      ]
+    },
+    {
+      "id": "definitions",
+      "name": "Definitions & abbreviations",
+      "description": "Standard terms and acronyms used in the draft prospectus.",
+      "fields": [
+        {"key": "company_acronym", "label": "Company Acronym/Abbreviation", "type": "string", "source": "form", "required": true, "tooltip": "Short name used for the company throughout the document, e.g. 'XYZ'"}
+      ]
+    },
+    {
+      "id": "risk_factors",
+      "name": "Risk factors",
+      "description": "Internal and external factors that could impact business operations and profitability.",
+      "fields": [
+        {"key": "internal_risks", "label": "Internal Risk Factors", "type": "text", "source": "form", "required": true, "tooltip": "Describe company-specific risks like key customer dependency, outstanding litigations, promoter background"},
+        {"key": "external_risks", "label": "External Risk Factors", "type": "text", "source": "form", "required": true, "tooltip": "Describe external risks like raw material inflation, regulatory changes, or competition"}
+      ]
+    },
+    {
+      "id": "summary_offer",
+      "name": "Summary of the offer",
+      "description": "A high-level summary of the business, financial position, and the proposed issue size.",
+      "fields": [
+        {"key": "summary_business_note", "label": "Summary Business Note", "type": "text", "source": "form", "required": false, "tooltip": "A brief, one-paragraph summary of business operations"}
+      ]
+    },
+    {
+      "id": "general_info",
+      "name": "General information",
+      "description": "Corporate information, incorporation details, registrar, lead managers, auditors, and advisors.",
+      "fields": [
+        {"key": "cin", "label": "CIN (Corporate Identification Number)", "type": "string", "source": "incorporation", "required": false, "tooltip": "21-digit Corporate Identification Number (auto-extracted from Incorporation Certificate)"},
+        {"key": "incorporation_date", "label": "Date of Incorporation", "type": "date", "source": "incorporation", "required": false, "tooltip": "Date the company was officially incorporated (auto-extracted from Incorporation Certificate)"},
+        {"key": "registered_office", "label": "Registered Office Address", "type": "string", "source": "incorporation", "required": false, "tooltip": "Official address registered with ROC (auto-extracted from Incorporation Certificate)"},
+        {"key": "company_type", "label": "Company Type", "type": "string", "source": "incorporation", "required": false, "tooltip": "E.g., Private Limited, Public Limited (auto-extracted from Incorporation Certificate)"},
+        {"key": "auditor_name", "label": "Statutory Auditor Name", "type": "string", "source": "form", "required": true, "tooltip": "Name of the auditor firm"},
+        {"key": "auditor_membership", "label": "Auditor Registration/Membership No.", "type": "string", "source": "form", "required": true, "tooltip": "ICAI membership number"}
+      ]
+    },
+    {
+      "id": "capital_structure",
+      "name": "Capital structure",
+      "description": "Authorized, issued, and paid-up capital of the company before and after the IPO.",
+      "fields": [
+        {"key": "authorized_capital", "label": "Authorized Share Capital (₹)", "type": "number", "source": "form", "required": true, "tooltip": "Maximum share capital company is authorized to issue"},
+        {"key": "paid_up_capital_pre", "label": "Pre-Issue Paid-up Capital (₹)", "type": "number", "source": "form", "required": true, "tooltip": "Total capital paid by shareholders pre-IPO"},
+        {"key": "promoter_shareholding_pre_pct", "label": "Pre-Issue Promoter Shareholding (%)", "type": "number", "source": "form", "required": true, "tooltip": "Percentage of share capital held by promoters before IPO"}
+      ]
+    },
+    {
+      "id": "objects_issue",
+      "name": "Objects of the issue",
+      "description": "Detailed utilization of the IPO proceeds, broken down into working capital, expansion, and other purposes.",
+      "fields": [
+        {"key": "expansion_amount", "label": "Capital Expenditure/Expansion (₹ Crores)", "type": "number", "source": "form", "required": true, "tooltip": "Funding allocated for machinery, plants, or expansion"},
+        {"key": "working_capital_amount", "label": "Working Capital Requirement (₹ Crores)", "type": "number", "source": "form", "required": true, "tooltip": "Funding allocated for working capital"},
+        {"key": "debt_repayment_amount", "label": "Debt Repayment Amount (₹ Crores)", "type": "number", "source": "form", "required": true, "tooltip": "Funding allocated to pay off borrowings"},
+        {"key": "general_corp_amount", "label": "General Corporate Purposes (₹ Crores)", "type": "number", "source": "form", "required": true, "tooltip": "Funding allocated for miscellaneous corporate expenses"},
+        {"key": "issue_expenses", "label": "Issue Expenses (₹ Crores)", "type": "number", "source": "form", "required": true, "tooltip": "Lead manager fees, marketing, legal, and printing expenses"}
+      ]
+    },
+    {
+      "id": "business_overview",
+      "name": "Business overview",
+      "description": "Complete breakdown of products, services, operating model, customers, and key suppliers.",
+      "fields": [
+        {"key": "products_services", "label": "Main Products & Services Offered", "type": "text", "source": "form", "required": true, "tooltip": "Describe primary product and service offerings"},
+        {"key": "business_model", "label": "Business Model Description", "type": "text", "source": "form", "required": true, "tooltip": "How the business makes money, sales channels, etc."},
+        {"key": "key_customers", "label": "Key Customers/Industries Served", "type": "text", "source": "form", "required": true, "tooltip": "Key client segments or specific large customers"}
+      ]
+    },
+    {
+      "id": "industry_overview",
+      "name": "Industry overview",
+      "description": "Market trends, industry size, and potential growth of the business segment.",
+      "fields": [
+        {"key": "industry_name", "label": "Industry/Sector Name", "type": "string", "source": "form", "required": true, "tooltip": "E.g., Speciality Chemicals, IT Services"},
+        {"key": "industry_narrative", "label": "Industry Narrative Summary", "type": "text", "source": "form", "required": false, "tooltip": "Narrative overview of industry trends (can be auto-drafted)"}
+      ]
+    },
+    {
+      "id": "management",
+      "name": "Management & promoters",
+      "description": "Details of the founders/promoters, board members, key managerial personnel, and remuneration.",
+      "fields": [
+        {"key": "promoters_names", "label": "Promoter Names", "type": "string", "source": "form", "required": true, "tooltip": "Comma-separated list of individual or corporate promoters"},
+        {"key": "directors_names", "label": "Board Directors Names", "type": "string", "source": "form", "required": true, "tooltip": "Comma-separated list of directors on the board"},
+        {"key": "promoter_experience", "label": "Key Promoter Experience Summary", "type": "text", "source": "form", "required": true, "tooltip": "Brief work and educational history of promoters"}
+      ]
+    },
+    {
+      "id": "rpt",
+      "name": "Related party transactions",
+      "description": "Transactions with subsidiaries, promoters, relatives, or director-controlled entities.",
+      "fields": [
+        {"key": "rpt_declared", "label": "Related Party Transactions Declared", "type": "text", "source": "form", "required": true, "tooltip": "Details of sales, loans, or purchases with related parties over last 3 years"}
+      ]
+    },
+    {
+      "id": "financials",
+      "name": "Financial statements (restated)",
+      "description": "Restated financial performance metrics including assets, revenue, profits, and borrowings for the past 3 fiscal years.",
+      "fields": [
+        {"key": "fy_years", "label": "Financial Years Included", "type": "string", "source": "financials", "required": false, "tooltip": "E.g., FY24, FY25, FY26 (auto-extracted from Financial Statements)"},
+        {"key": "revenue_fy_latest", "label": "Latest Year Revenue (₹ Crores)", "type": "number", "source": "financials", "required": false, "tooltip": "Total revenue in the latest financial year (auto-extracted from Financial Statements)"},
+        {"key": "pat_fy_latest", "label": "Latest Year Profit After Tax (₹ Crores)", "type": "number", "source": "financials", "required": false, "tooltip": "Net profit (PAT) in the latest financial year (auto-extracted from Financial Statements)"},
+        {"key": "borrowings_latest", "label": "Total Borrowings (₹ Crores)", "type": "number", "source": "financials", "required": false, "tooltip": "Total short-term and long-term borrowings outstanding (auto-extracted from Financial Statements)"}
+      ]
+    },
+    {
+      "id": "legal_disclosures",
+      "name": "Legal & regulatory disclosures",
+      "description": "Pending litigations, criminal proceedings, regulatory actions, and statutory tax disputes.",
+      "fields": [
+        {"key": "litigations_company", "label": "Litigations against Company", "type": "text", "source": "form", "required": true, "tooltip": "Details of civil, criminal, or tax proceedings pending against company"},
+        {"key": "litigations_promoters", "label": "Litigations against Promoters", "type": "text", "source": "form", "required": true, "tooltip": "Details of proceedings pending against promoters"}
+      ]
+    },
+    {
+      "id": "compliance_certs",
+      "name": "Statutory compliance certificates",
+      "description": "Statutory identification numbers and registrations verified from documents.",
+      "fields": [
+        {"key": "gstin", "label": "GSTIN (GST Number)", "type": "string", "source": "gst", "required": false, "tooltip": "Goods and Services Tax Identification Number (auto-extracted from GST Certificate)"},
+        {"key": "pan", "label": "PAN (Permanent Account Number)", "type": "string", "source": "form", "required": true, "tooltip": "Company PAN Card Number"},
+        {"key": "gst_annual_turnover", "label": "GST Declared Annual Turnover (₹ Crores)", "type": "number", "source": "gst", "required": false, "tooltip": "Annual turnover registered in GST filings (auto-extracted from GST Certificate)"}
+      ]
+    },
+    {
+      "id": "material_contracts",
+      "name": "Material contracts & documents for inspection",
+      "description": "List of critical supplier/customer agreements, MOA/AOA, and other inspectable files.",
+      "fields": [
+        {"key": "material_contracts_desc", "label": "Description of Material Contracts", "type": "text", "source": "form", "required": true, "tooltip": "Brief description of key commercial contracts, underwriting agreements, or leases"}
+      ]
+    },
+    {
+      "id": "declaration",
+      "name": "Declaration",
+      "description": "Directors' official declaration and signature certifying the prospectus validity.",
+      "fields": [
+        {"key": "declaration_signed", "label": "Declaration Signed Status", "type": "boolean", "source": "form", "required": true, "tooltip": "Confirm directors have agreed to the standard declaration"}
+      ]
+    }
+  ]
+}
