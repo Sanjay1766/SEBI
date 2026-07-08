@@ -5,8 +5,21 @@ import {
   ChevronRight, Info
 } from 'lucide-react';
 
-export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, validationResults }) {
+export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, validationResults, extractedData }) {
   const [draftingFields, setDraftingFields] = useState({});
+
+  // Build a flat map of all extracted values for source detection
+  const extractedFlat = React.useMemo(() => {
+    const flat = {};
+    if (extractedData) {
+      for (const docType of Object.values(extractedData)) {
+        if (docType && typeof docType === 'object') {
+          Object.assign(flat, docType);
+        }
+      }
+    }
+    return flat;
+  }, [extractedData]);
 
   const handleAIDraft = async (key) => {
     setDraftingFields(prev => ({ ...prev, [key]: true }));
@@ -115,6 +128,26 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           </label>
 
           <div className="flex items-center gap-2">
+            {/* Source indicator badge */}
+            {(() => {
+              const extractedVal = extractedFlat[key];
+              const hasExtracted = extractedVal !== undefined && extractedVal !== null && extractedVal !== '';
+              const currentVal = formData[key];
+              const hasCurrent = currentVal !== undefined && currentVal !== null && currentVal !== '';
+              if (!hasCurrent) return null;
+              if (hasExtracted && String(currentVal) === String(extractedVal)) {
+                return (
+                  <span className="inline-flex items-center gap-1 text-[8.5px] font-bold text-sky-400 bg-sky-950/40 border border-sky-900/50 px-1.5 py-0.5 rounded select-none" title="Value auto-extracted from uploaded document">
+                    🔗 Auto-extracted
+                  </span>
+                );
+              }
+              return (
+                <span className="inline-flex items-center gap-1 text-[8.5px] font-bold text-slate-500 bg-slate-900/40 border border-slate-800 px-1.5 py-0.5 rounded select-none" title="Manually entered by user">
+                  ✍️ Manual
+                </span>
+              );
+            })()}
             {/* Character counter for textareas */}
             {isTextarea && <CharCounter value={String(value)} />}
 
@@ -288,10 +321,10 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {/* ─ BASICS ─ */}
           {activeTab === 'basics' && (
             <div>
-              {renderInput('company_name', 'Company Name', 'text', 'Exact registered corporate name with RoC.', 'e.g. Apex Technochem Limited')}
-              {renderInput('company_acronym', 'Company Acronym', 'text', 'Short form used throughout prospectus.', 'e.g. APEX')}
-              {renderInput('lead_manager', 'Lead Manager Name', 'text', 'SEBI registered Category I Merchant Banker.', 'e.g. BlueSky Capital Advisors Limited')}
-              {renderInput('registrar', 'Registrar to the Issue', 'text', 'SEBI registered registrar to maintain share records.', 'e.g. Link Intime India Private Limited')}
+              {renderInput('company_name', 'Company Name', 'text', 'SEBI ICDR Sch VI Part A(1) — Exact registered corporate name as per RoC Certificate of Incorporation.', 'e.g. Apex Technochem Limited')}
+              {renderInput('company_acronym', 'Company Acronym', 'text', 'Short form used throughout the prospectus per SEBI ICDR Sch VI Part A(2).', 'e.g. APEX')}
+              {renderInput('lead_manager', 'Lead Manager Name', 'text', 'SEBI ICDR Reg 232 — SEBI-registered Category I Merchant Banker appointed to manage the issue.', 'e.g. BlueSky Capital Advisors Limited')}
+              {renderInput('registrar', 'Registrar to the Issue', 'text', 'SEBI ICDR Reg 232 — SEBI-registered registrar to maintain share records and process applications.', 'e.g. Link Intime India Private Limited')}
             </div>
           )}
 
@@ -299,40 +332,40 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {activeTab === 'general' && (
             <div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('authorized_capital', 'Authorized Capital (₹ Crores)', 'number', 'Maximum share value company is authorized to issue.', '15.00')}
-                {renderInput('paid_up_capital_pre', 'Pre-Issue Paid-up Capital (₹ Crores)', 'number', 'Actual paid-up value prior to public issue.', '10.00')}
+                {renderInput('authorized_capital', 'Authorized Capital (₹ Crores)', 'number', 'SEBI ICDR Reg 244 — Maximum share value company is authorized to issue per MoA.', '15.00')}
+                {renderInput('paid_up_capital_pre', 'Pre-Issue Paid-up Capital (₹ Crores)', 'number', 'SEBI ICDR Reg 244 — Actual paid-up value prior to public issue as per latest audited accounts.', '10.00')}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('pan', 'Company PAN Number', 'text', 'Permanent Account Number of the corporate entity.', 'AAACA1234A')}
-                {renderInput('pan_name', 'Name on PAN Card', 'text', 'Exact legal name as registered on the PAN.', 'Apex Technochem Limited')}
+                {renderInput('pan', 'Company PAN Number', 'text', 'Income Tax Act Sec 139A — Permanent Account Number of the corporate entity (format: 5 letters + 4 digits + 1 letter).', 'AAACA1234A')}
+                {renderInput('pan_name', 'Name on PAN Card', 'text', 'Exact legal name as registered on the PAN. Must match company name on RoC certificate.', 'Apex Technochem Limited')}
               </div>
 
               <SubGroupHeader icon={FileText} label="From Incorporation Certificate" note="(auto-extracted from doc, or enter manually)" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('cin', 'CIN Number', 'text', 'Corporate Identification Number — 21 digits.', 'U74999MH2018PLC312456')}
-                {renderInput('incorporation_date', 'Date of Incorporation', 'text', 'Date the company was officially incorporated.', 'e.g. 2018-05-15')}
+                {renderInput('cin', 'CIN Number', 'text', 'Companies Act 2013 Sec 7(1) — Corporate Identification Number (21 alphanumeric characters) as assigned by RoC.', 'U74999MH2018PLC312456')}
+                {renderInput('incorporation_date', 'Date of Incorporation', 'text', 'Companies Act 2013 Sec 7(2) — Date the company was officially incorporated by the Registrar.', 'e.g. 2018-05-15')}
               </div>
-              {renderInput('registered_office', 'Registered Office Address', 'text', 'Official address registered with ROC.', 'e.g. Plot 42, GIDC Industrial Area, Vapi, Gujarat')}
-              {renderInput('company_type', 'Company Type', 'select', 'Legal form of the company.', '', ['Public Limited Company', 'Private Limited Company', 'LLP'])}
+              {renderInput('registered_office', 'Registered Office Address', 'text', 'Companies Act 2013 Sec 12 — Official address registered with ROC. All statutory correspondence is served here.', 'e.g. Plot 42, GIDC Industrial Area, Vapi, Gujarat')}
+              {renderInput('company_type', 'Company Type', 'select', 'Companies Act 2013 Sec 3 — Legal form of the company as classified by RoC.', '', ['Public Limited Company', 'Private Limited Company', 'LLP'])}
 
               <SubGroupHeader icon={FileText} label="From GST Certificate" note="(auto-extracted from doc, or enter manually)" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('gstin', 'GSTIN Number', 'text', 'GST registration number of the entity.', 'e.g. 27AAACG1234A1Z5')}
-                {renderInput('gst_annual_turnover', 'GST Declared Turnover (₹ Crores)', 'number', 'Annual turnover declared in GST filings.', '42.8')}
+                {renderInput('gstin', 'GSTIN Number', 'text', 'CGST Act 2017 Sec 25 — GST registration number (15 characters: 2-digit state code + PAN + entity code + Z + check digit).', 'e.g. 27AAACG1234A1Z5')}
+                {renderInput('gst_annual_turnover', 'GST Declared Turnover (₹ Crores)', 'number', 'Annual turnover declared in GST filings. Compared against P&L revenue for consistency check.', '42.8')}
               </div>
 
               <SubGroupHeader icon={FileText} label="From Financial Statements" note="(auto-extracted from doc, or enter manually)" />
-              {renderInput('fy_years', 'Financial Years Covered', 'text', 'Fiscal years included in restated financials.', 'e.g. FY24, FY25, FY26')}
+              {renderInput('fy_years', 'Financial Years Covered', 'text', 'SEBI ICDR Reg 244(2)(a) — Fiscal years included in restated financials (minimum 3 years for SME IPO).', 'e.g. FY24, FY25, FY26')}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5">
-                {renderInput('revenue_fy_latest', 'Latest Revenue (₹ Crores)', 'number', 'Total revenue in most recent fiscal year.', '45.5')}
-                {renderInput('pat_fy_latest', 'Latest PAT (₹ Crores)', 'number', 'Net profit after tax in most recent fiscal year.', '3.8')}
-                {renderInput('borrowings_latest', 'Total Borrowings (₹ Crores)', 'number', 'Total outstanding borrowings at year end.', '12.4')}
+                {renderInput('revenue_fy_latest', 'Latest Revenue (₹ Crores)', 'number', 'SEBI ICDR Sch VI Part B — Total revenue in most recent fiscal year per restated P&L statement.', '45.5')}
+                {renderInput('pat_fy_latest', 'Latest PAT (₹ Crores)', 'number', 'SEBI ICDR Sch VI Part B — Net profit after tax in most recent fiscal year per restated P&L statement.', '3.8')}
+                {renderInput('borrowings_latest', 'Total Borrowings (₹ Crores)', 'number', 'SEBI ICDR Sch VI Part B — Total outstanding short-term and long-term borrowings at year end.', '12.4')}
               </div>
 
               <SubGroupHeader icon={Users} label="Statutory Auditor" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('auditor_name', 'Statutory Auditor Firm', 'text', 'Audit firm restating the financial profiles.', 'e.g. M/s R.K. Associates & Co.')}
-                {renderInput('auditor_membership', 'Auditor Membership No.', 'text', 'ICAI firm membership / registration code.', 'e.g. 084532N')}
+                {renderInput('auditor_name', 'Statutory Auditor Firm', 'text', 'Companies Act 2013 Sec 139 — Audit firm restating the financial profiles. Must be ICAI-registered.', 'e.g. M/s R.K. Associates & Co.')}
+                {renderInput('auditor_membership', 'Auditor Membership No.', 'text', 'Chartered Accountants Act 1949 — ICAI firm membership / registration code (minimum 5 characters).', 'e.g. 084532N')}
               </div>
             </div>
           )}
@@ -340,13 +373,13 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {/* ─ MANAGEMENT ─ */}
           {activeTab === 'management' && (
             <div>
-              {renderInput('promoters_names', 'Promoter Names', 'text', 'Names of founders / controlling shareholders.', 'e.g. Rajesh Kumar, Sunita Kumar')}
-              {renderInput('directors_names', 'Board Directors Names', 'text', 'Full Board of Directors names list.', 'e.g. Rajesh Kumar, Sunita Kumar, Anil Sharma')}
-              {renderInput('promoter_experience', 'Promoter Experience Summary', 'textarea', 'Work achievements, education profile, and track record.', 'Describe background, industry experience, and key achievements…')}
+              {renderInput('promoters_names', 'Promoter Names', 'text', 'SEBI ICDR Reg 245 — Names of founders / controlling shareholders as per RoC records.', 'e.g. Rajesh Kumar, Sunita Kumar')}
+              {renderInput('directors_names', 'Board Directors Names', 'text', 'Companies Act 2013 Sec 149 — Full Board of Directors names (minimum 3 for public company, including 1 independent director).', 'e.g. Rajesh Kumar, Sunita Kumar, Anil Sharma')}
+              {renderInput('promoter_experience', 'Promoter Experience Summary', 'textarea', 'SEBI ICDR Reg 245(2) — Work achievements, education profile, and track record relevant to the business.', 'Describe background, industry experience, and key achievements…')}
               <SubGroupHeader icon={Users} label="Statutory Auditor" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('auditor_name', 'Statutory Auditor Firm', 'text', 'Audit firm restating financial profiles.', 'e.g. M/s R.K. Associates & Co.')}
-                {renderInput('auditor_membership', 'Auditor Membership No.', 'text', 'ICAI firm membership / registration code.', 'e.g. 084532N')}
+                {renderInput('auditor_name', 'Statutory Auditor Firm', 'text', 'Companies Act 2013 Sec 139 — Audit firm restating financial profiles. Must be ICAI-registered.', 'e.g. M/s R.K. Associates & Co.')}
+                {renderInput('auditor_membership', 'Auditor Membership No.', 'text', 'Chartered Accountants Act 1949 — ICAI firm membership / registration code.', 'e.g. 084532N')}
               </div>
             </div>
           )}
@@ -354,9 +387,9 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {/* ─ CAPITAL ─ */}
           {activeTab === 'capital' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-              {renderInput('promoter_shareholding_pre_pct', 'Pre-Issue Promoter Shareholding (%)', 'number', 'Percentage pre-issue held by promoters.', '78.5')}
-              {renderInput('price_band', 'Price Band (₹)', 'text', 'Proposed share price or bid range.', '100 - 105')}
-              {renderInput('issue_size', 'Proposed Issue Size (₹ Crores)', 'number', 'Total funding sought through IPO.', '25.0')}
+              {renderInput('promoter_shareholding_pre_pct', 'Pre-Issue Promoter Shareholding (%)', 'number', 'SEBI ICDR Reg 236(1)(a) — Promoters must contribute ≥20% of post-issue capital, locked in for 3 years.', '78.5')}
+              {renderInput('price_band', 'Price Band (₹)', 'text', 'SEBI ICDR Reg 246(1) — Price band spread must be within 20% of the floor price.', '100 - 105')}
+              {renderInput('issue_size', 'Proposed Issue Size (₹ Crores)', 'number', 'SEBI ICDR Reg 229(1) — Post-issue paid-up capital must not exceed ₹25 Cr for SME platform listing.', '25.0')}
             </div>
           )}
 
@@ -371,11 +404,11 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
                 <p className="text-[11.5px] text-slate-400 leading-relaxed">All amounts must sum to the Proposed Issue Size. General Corporate Purposes is capped at 25% of issue size per SEBI Reg 247.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('expansion_amount', 'CAPEX Expansion (₹ Crores)', 'number', 'Machinery, setup or real-estate acquisition.', '8.5')}
-                {renderInput('working_capital_amount', 'Working Capital Support (₹ Crores)', 'number', 'Inventory, payroll, operational support.', '10.0')}
-                {renderInput('debt_repayment_amount', 'Debt Repayment (₹ Crores)', 'number', 'Clearing borrowings or outstanding loans.', '3.0')}
-                {renderInput('general_corp_amount', 'General Corporate Purposes (₹ Crores)', 'number', 'Marketing, admin, minor legal, corporate cycles.', '2.0')}
-                {renderInput('issue_expenses', 'IPO Expenses (₹ Crores)', 'number', 'Merchant banking fees, underwriting, registries.', '1.5')}
+                {renderInput('expansion_amount', 'CAPEX Expansion (₹ Crores)', 'number', 'SEBI ICDR Reg 247 — Capital expenditure must be backed by quotations/estimates in the prospectus.', '8.5')}
+                {renderInput('working_capital_amount', 'Working Capital Support (₹ Crores)', 'number', 'SEBI ICDR Reg 247 — Working capital requirements supported by CA certificate.', '10.0')}
+                {renderInput('debt_repayment_amount', 'Debt Repayment (₹ Crores)', 'number', 'SEBI ICDR Reg 247 — Clearing borrowings or outstanding loans. Must specify lender and schedule.', '3.0')}
+                {renderInput('general_corp_amount', 'General Corporate Purposes (₹ Crores)', 'number', 'SEBI ICDR Reg 247(3) — General corporate purposes capped at 25% of total issue size.', '2.0')}
+                {renderInput('issue_expenses', 'IPO Expenses (₹ Crores)', 'number', 'SEBI ICDR Reg 247 — Merchant banking fees, underwriting, registries, and printing expenses.', '1.5')}
               </div>
               {/* Live sum display */}
               {formData.issue_size && (
@@ -399,28 +432,28 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {activeTab === 'business' && (
             <div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('industry_name', 'Industry Sector Name', 'text', 'Standard category classification.', 'e.g. Speciality Chemicals')}
-                {renderInput('key_customers', 'Key Customer Segments', 'text', 'Target groups or enterprise segments.', 'e.g. Paint manufacturers, Packaging firms')}
+                {renderInput('industry_name', 'Industry Sector Name', 'text', 'SEBI ICDR Reg 248 — Standard sector classification (e.g. NIC code category).', 'e.g. Speciality Chemicals')}
+                {renderInput('key_customers', 'Key Customer Segments', 'text', 'SEBI ICDR Reg 248 — Target groups or enterprise segments served by the company.', 'e.g. Paint manufacturers, Packaging firms')}
               </div>
-              {renderInput('business_model', 'Business Model Description', 'textarea', 'Revenue model, operations, logistics, warehouses.', 'Describe revenue flows, sales channels, manufacturing capacity, logistics networks…')}
-              {renderInput('products_services', 'Key Products & Solutions', 'textarea', 'Detailed product SKU profiles, services offered.', 'Detail product lines, technical specifications, quality certifications…')}
-              {renderInput('summary_business_note', 'Summary Business Note (Prospectus Cover)', 'textarea', 'A brief one-paragraph summary for the Offer Summary section.', 'e.g. We are a Gujarat-based manufacturer of specialty chemicals…')}
+              {renderInput('business_model', 'Business Model Description', 'textarea', 'SEBI ICDR Reg 248(1) — Revenue model, operations, logistics, and manufacturing capacity details.', 'Describe revenue flows, sales channels, manufacturing capacity, logistics networks…')}
+              {renderInput('products_services', 'Key Products & Solutions', 'textarea', 'SEBI ICDR Reg 248(2) — Detailed product SKU profiles, services offered, quality certifications held.', 'Detail product lines, technical specifications, quality certifications…')}
+              {renderInput('summary_business_note', 'Summary Business Note (Prospectus Cover)', 'textarea', 'SEBI ICDR Sch VI Part A — A brief one-paragraph summary for the Offer Summary section.', 'e.g. We are a Gujarat-based manufacturer of specialty chemicals…')}
             </div>
           )}
 
           {/* ─ DISCLOSURES ─ */}
           {activeTab === 'disclosures' && (
             <div>
-              {renderInput('internal_risks', 'Internal Risk Factors', 'textarea', 'Specific company operational risks and dependencies.', 'List key internal risks, e.g.:\n1. Dependency on key raw materials…\n2. Customer concentration risk…')}
-              {renderInput('external_risks', 'External Risk Factors', 'textarea', 'Sector legal rules, economic, currency, and market risks.', 'List external risks, e.g.:\n1. Regulatory changes (pollution control norms)…\n2. Foreign exchange fluctuation…')}
+              {renderInput('internal_risks', 'Internal Risk Factors', 'textarea', 'SEBI ICDR Sch VI Part C — Specific company operational risks, customer dependencies, and key-person risks.', 'List key internal risks, e.g.:\n1. Dependency on key raw materials…\n2. Customer concentration risk…')}
+              {renderInput('external_risks', 'External Risk Factors', 'textarea', 'SEBI ICDR Sch VI Part C — Sector legal rules, economic, currency, and market risks affecting the business.', 'List external risks, e.g.:\n1. Regulatory changes (pollution control norms)…\n2. Foreign exchange fluctuation…')}
 
               <SubGroupHeader icon={AlertTriangle} label="Litigation Disclosures" />
-              {renderInput('litigations_company', 'Litigations Against the Issuer', 'textarea', 'Pending corporate civil or criminal suits.', 'e.g. No material litigations are pending against the Company as of date. — OR — describe pending cases.')}
-              {renderInput('litigations_promoters', 'Litigations Against Promoters', 'textarea', 'Pending disputes against the promoter group.', 'e.g. None — OR — describe pending cases.')}
+              {renderInput('litigations_company', 'Litigations Against the Issuer', 'textarea', 'SEBI ICDR Reg 250(1) — Pending corporate civil, criminal, or tax suits. Material litigation threshold applies.', 'e.g. No material litigations are pending against the Company as of date. — OR — describe pending cases.')}
+              {renderInput('litigations_promoters', 'Litigations Against Promoters', 'textarea', 'SEBI ICDR Reg 250(2) — Pending disputes against the promoter group including criminal, civil, and regulatory proceedings.', 'e.g. None — OR — describe pending cases.')}
 
               <SubGroupHeader icon={FileText} label="Transactions & Contracts" />
-              {renderInput('rpt_declared', 'Related Party Transactions (Last 3 Years)', 'textarea', 'Leases, loan profiles, promoter remuneration disclosures.', 'e.g. Rent of office warehouse from Rajesh Kumar: ₹12.0 Lakhs/annum; Director Remuneration: ₹1.2 Crores/annum')}
-              {renderInput('material_contracts_desc', 'Material Contracts for Inspection', 'textarea', 'Key corporate agreements, registrar mandates, underwriting.', 'e.g.\n1. Tripartite Agreement dated Jan 12, 2026 with Registrar and Issuer.\n2. Underwriting Agreement dated Feb 1, 2026 with Lead Manager.')}
+              {renderInput('rpt_declared', 'Related Party Transactions (Last 3 Years)', 'textarea', 'AS-18 / Ind AS 24 — Leases, loan profiles, promoter remuneration disclosures with related parties.', 'e.g. Rent of office warehouse from Rajesh Kumar: ₹12.0 Lakhs/annum; Director Remuneration: ₹1.2 Crores/annum')}
+              {renderInput('material_contracts_desc', 'Material Contracts for Inspection', 'textarea', 'SEBI ICDR Reg 250(3) — Key corporate agreements, registrar mandates, underwriting agreements available for public inspection.', 'e.g.\n1. Tripartite Agreement dated Jan 12, 2026 with Registrar and Issuer.\n2. Underwriting Agreement dated Feb 1, 2026 with Lead Manager.')}
 
               <SubGroupHeader icon={CheckCircle2} label="Board Declaration" />
               <div className="p-4 rounded-lg bg-[#050c18] border border-[#0d2036] mb-5">
@@ -428,7 +461,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
                   "We hereby certify that all guidelines and regulations issued by SEBI under the Chapter IX framework are complied with, and the facts presented in this Draft Prospectus represent the true and fair status of the entity."
                 </p>
               </div>
-              {renderInput('declaration_signed', 'Board Approval Declaration', 'checkbox', 'Must be confirmed by the Board of Directors.', 'I confirm that the Board of Directors has approved and agreed to this declaration.')}
+              {renderInput('declaration_signed', 'Board Approval Declaration', 'checkbox', 'SEBI ICDR Reg 250 / Companies Act Sec 26 — Board must certify all disclosures are true and fair.', 'I confirm that the Board of Directors has approved and agreed to this declaration.')}
             </div>
           )}
 

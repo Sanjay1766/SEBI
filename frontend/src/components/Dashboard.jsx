@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   CheckCircle2, AlertTriangle, XCircle, FileDown, 
   ChevronDown, ChevronUp, Loader2, Sparkles, FileText, ArrowRight,
-  TrendingUp, Shield, AlertOctagon, BarChart3
+  TrendingUp, Shield, AlertOctagon, BarChart3, Clock
 } from 'lucide-react';
 
 const SECTION_TO_TAB = {
@@ -34,7 +34,7 @@ const TAB_NAMES = {
   'disclosures': 'Risk Disclosures'
 };
 
-export default function Dashboard({ validationResults, onGenerate, generating, onNavigateTab, onPreFill }) {
+export default function Dashboard({ validationResults, onGenerate, generating, onNavigateTab, onPreFill, lastSavedTime }) {
   const [expandedSection, setExpandedSection] = useState(null);
   
   if (!validationResults) {
@@ -50,12 +50,17 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
   }
 
   const {
+    filing_readiness = 0,
+    overall_completeness = 0,
     readiness_score = 0,
     sections = [],
     inconsistencies = [],
     status_counts = { complete: 0, incomplete: 0, inconsistent: 0 },
     completed_fields = 0,
-    total_fields = 0
+    total_fields = 0,
+    completed_blocking_fields = 0,
+    total_blocking_fields = 0,
+    has_blocking_flags = false,
   } = validationResults;
 
   const toggleSection = (id) => setExpandedSection(expandedSection === id ? null : id);
@@ -96,9 +101,11 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
     }
   };
 
-  const scoreColor = readiness_score >= 80 ? '#10b981' : readiness_score >= 50 ? '#f59e0b' : '#ef4444';
-  const scoreTextColor = readiness_score >= 80 ? 'text-emerald-400' : readiness_score >= 50 ? 'text-amber-400' : 'text-rose-400';
-  const scoreBorderColor = readiness_score >= 80 ? 'border-emerald-900/30' : readiness_score >= 50 ? 'border-amber-900/30' : 'border-rose-900/30';
+  // Primary metric: filing readiness
+  const primaryScore = filing_readiness;
+  const scoreColor = primaryScore >= 80 ? '#10b981' : primaryScore >= 50 ? '#f59e0b' : '#ef4444';
+  const scoreTextColor = primaryScore >= 80 ? 'text-emerald-400' : primaryScore >= 50 ? 'text-amber-400' : 'text-rose-400';
+  const scoreBorderColor = primaryScore >= 80 ? 'border-emerald-900/30' : primaryScore >= 50 ? 'border-amber-900/30' : 'border-rose-900/30';
   const circumference = 2 * Math.PI * 30;
 
   return (
@@ -107,15 +114,24 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
       {/* ── Top Stats Row ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-        {/* Filing Readiness */}
+        {/* Filing Readiness (primary score — blocking fields only) */}
         <div className={`glass rounded-lg p-6 border ${scoreBorderColor} flex items-center justify-between`}>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Filing Readiness</p>
-            <p className={`text-4xl font-bold tracking-tight ${scoreTextColor}`}>{readiness_score}%</p>
+            <p className={`text-4xl font-bold tracking-tight ${scoreTextColor}`}>{primaryScore}%</p>
             <p className="text-[11.5px] text-slate-500 font-medium mt-1.5">
-              {completed_fields} <span className="text-slate-600">/</span> {total_fields} audit fields
+              {completed_blocking_fields} <span className="text-slate-600">/</span> {total_blocking_fields} blocking fields
             </p>
-            {readiness_score === 100 && (
+            {/* Secondary metric: overall completeness */}
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">
+              Overall completeness: {overall_completeness}% ({completed_fields}/{total_fields})
+            </p>
+            {has_blocking_flags && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-950/50 border border-amber-900/50 px-2 py-0.5 rounded mt-2 animate-soft-pulse">
+                <AlertTriangle className="w-3 h-3" /> Capped at 80% — resolve data conflicts
+              </span>
+            )}
+            {primaryScore === 100 && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-900/50 px-2 py-0.5 rounded mt-2">
                 <CheckCircle2 className="w-3 h-3" /> IPO-Ready
               </span>
@@ -128,13 +144,13 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
               <circle cx="36" cy="36" r="30" fill="none"
                 stroke={scoreColor} strokeWidth="5"
                 strokeDasharray={circumference}
-                strokeDashoffset={circumference - (circumference * readiness_score) / 100}
+                strokeDashoffset={circumference - (circumference * primaryScore) / 100}
                 strokeLinecap="round"
                 style={{ transition: 'stroke-dashoffset 1s ease-out' }}
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className={`text-[13px] font-bold font-mono ${scoreTextColor}`}>{readiness_score}%</span>
+              <span className={`text-[13px] font-bold font-mono ${scoreTextColor}`}>{primaryScore}%</span>
             </div>
           </div>
         </div>
@@ -188,10 +204,17 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
                 title="Load all form fields with sample data for Apex Technochem Limited"
               >
                 <Sparkles className="w-3 h-3 text-sky-500/60" />
-                <span>Load Demo Data</span>
+                <span>Load sample filing — Apex Technochem Ltd</span>
               </button>
             )}
           </div>
+          {/* Last synced timestamp */}
+          {lastSavedTime && (
+            <div className="mt-3 pt-2.5 border-t border-slate-800/40 flex items-center gap-1.5 text-[9.5px] text-slate-600 font-semibold select-none">
+              <Clock className="w-3 h-3" />
+              <span>Last synced: {lastSavedTime}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -215,6 +238,11 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
                     <span className="text-[9px] uppercase tracking-wider bg-rose-950 text-rose-400 px-1.5 py-0.5 rounded font-mono border border-rose-900/50">
                       {inc.severity}
                     </span>
+                    {inc.blocking && (
+                      <span className="text-[8px] uppercase tracking-wider bg-amber-950/60 text-amber-400 px-1.5 py-0.5 rounded font-mono border border-amber-900/50">
+                        Blocking
+                      </span>
+                    )}
                   </div>
                   <p className="text-[12px] text-slate-300 leading-relaxed">{inc.description}</p>
                 </div>

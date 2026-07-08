@@ -271,6 +271,23 @@ export default function App() {
     }
   };
 
+  // ── Wizard step navigation ──────────────────────────────────────────────
+  const tabOrder = ['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'];
+
+  const handleNextTab = () => {
+    const idx = tabOrder.indexOf(activeTab);
+    if (idx >= 0 && idx < tabOrder.length - 1) {
+      setActiveTab(tabOrder[idx + 1]);
+    }
+  };
+
+  const handlePrevTab = () => {
+    const idx = tabOrder.indexOf(activeTab);
+    if (idx > 0) {
+      setActiveTab(tabOrder[idx - 1]);
+    }
+  };
+
   // Sync session on upload changes - always persist extracted_data
   useEffect(() => {
     if (!loading) {
@@ -565,6 +582,7 @@ export default function App() {
                   generating={generating}
                   onNavigateTab={setActiveTab}
                   onPreFill={handlePreFill}
+                  lastSavedTime={lastSavedTime}
                 />
               )}
 
@@ -577,18 +595,14 @@ export default function App() {
               )}
 
               {['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab) && (
-                <Wizard
+                <Wizard 
                   formData={sessionData.form_data}
+                  extractedData={sessionData.extracted_data}
+                  uploadedFiles={sessionData.uploaded_files}
                   onChange={handleFormChange}
                   activeTab={activeTab}
-                  onNext={() => {
-                    const idx = steps.findIndex(s => s.id === activeTab);
-                    if (idx < steps.length - 1) setActiveTab(steps[idx + 1].id);
-                  }}
-                  onPrev={() => {
-                    const idx = steps.findIndex(s => s.id === activeTab);
-                    if (idx > 0) setActiveTab(steps[idx - 1].id);
-                  }}
+                  onNext={handleNextTab}
+                  onPrev={handlePrevTab}
                   validationResults={validationResults}
                 />
               )}
@@ -599,7 +613,7 @@ export default function App() {
         {/* Footer */}
         <footer className="py-3 border-t border-[#111827] bg-[#070b12] text-center text-[10.5px] text-slate-500 font-medium flex items-center justify-center gap-2 select-none">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span>AI-assisted compliance draft under Chapter IX. Final regulatory submission requires validation by a SEBI registered merchant banker.</span>
+          <span>⚖️ AI-assisted draft under SEBI ICDR Chapter IX (Regulations 229–259). Not a substitute for legal review by a SEBI-registered Category I Merchant Banker.</span>
         </footer>
       </main>
 

@@ -10,10 +10,11 @@ from dotenv import load_dotenv
 
 # Import our custom modules
 try:
-    from extractor import extract_document_data
+    from extractor import extract_document_data, OCR_STATUS
     from validator import validate_session_data
     from generator import generate_draft_docx
 except ImportError:
+    OCR_STATUS = {"ocr_available": False, "tesseract_version": None, "poppler_available": False}
     # Fallbacks in case modules are written later or are in paths
     pass
 
@@ -297,6 +298,12 @@ def draft_field(payload: DraftPayload):
     except Exception as e:
         logger.error(f"Auto-draft failed for {field_key}: {e}. Returning fallback template.")
         return {"draft": local_drafts.get(field_key, "Auto-draft fallback placeholder.")}
+
+@app.get("/api/ocr_status")
+def get_ocr_status():
+    """Returns whether Tesseract OCR and Poppler binaries are available on the server."""
+    return OCR_STATUS
+
 
 @app.get("/api/schema")
 def get_schema():

@@ -28,6 +28,38 @@ except ImportError:
     Groq = None
     logger.warning("groq SDK not installed. LLM extraction will be unavailable.")
 
+
+def ocr_available() -> dict:
+    """Check whether Tesseract OCR binary and Poppler are reachable on this system."""
+    import subprocess
+    result = {"ocr_available": False, "tesseract_version": None, "poppler_available": False}
+    
+    # Check Tesseract binary
+    if pytesseract is not None:
+        try:
+            version = pytesseract.get_tesseract_version()
+            result["tesseract_version"] = str(version)
+            result["ocr_available"] = True
+        except Exception:
+            pass
+    
+    # Check Poppler (pdf2image needs pdftoppm from Poppler)
+    try:
+        proc = subprocess.run(
+            ["pdftoppm", "-v"],
+            capture_output=True, timeout=3
+        )
+        # pdftoppm writes version to stderr
+        if proc.returncode == 0 or b"Poppler" in proc.stderr or b"pdftoppm" in proc.stderr:
+            result["poppler_available"] = True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    
+    return result
+
+# Pre-compute at startup for fast API responses
+OCR_STATUS = ocr_available()
+
 # Mock Extracted Data for Demo Safety (if API key is missing or calls fail)
 MOCK_DATA = {
     "financials": {
@@ -156,55 +188,72 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
         logger.error(f"Failed to initialize Groq client: {e}. Using mock data.")
         return MOCK_DATA.get(doc_type, {})
 
+    # System-level instruction to prevent hallucination across all doc types
+    system_instruction = (
+        "You are a strict document data extractor for SEBI IPO compliance. "
+        "RULES: 1) Only extract values that are EXPLICITLY and CLEARLY visible in the provided text. "
+        "2) Do NOT guess, estimate, infer, or fill in placeholders. "
+        "3) If a field is not clearly present, you MUST set it to null and add its key to the 'missing_fields' array. "
+        "4) Return ONLY valid JSON with the requested keys. No markdown, no commentary."
+    )
+
     # Setup prompts based on document type
     prompts = {
         "financials": """
-            You are a professional financial data extractor. You must extract the following fields from the restated financial statements text:
+            Extract the following fields from the restated financial statements text:
             1. 'fy_years': The financial years included, as a comma-separated list (e.g., 'FY24, FY25, FY26')
             2. 'revenue_fy_latest': Total Revenue / Total Income in the latest financial year (in INR Crores, as a float number)
             3. 'pat_fy_latest': Profit After Tax (PAT) / Net Profit in the latest financial year (in INR Crores, as a float number)
             4. 'borrowings_latest': Total short-term and long-term borrowings in the latest financial year (in INR Crores, as a float number)
             5. 'auditor_name': Name of the statutory auditor or auditing firm
             6. 'auditor_membership': Auditor membership number or registration number
+            7. 'missing_fields': An array of strings listing any of the above 6 field KEYS that are NOT clearly present in the text.
 
-            Output format must be JSON. Do not hallucinate. If a field is missing, set it to null.
+            CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
+            Output format must be valid JSON.
             Text to extract from:
             ---
             {text}
         """,
         "gst": """
-            You are an expert tax document extractor. Extract the following fields from the GST certificate / filing documents:
-            1. 'gstin': GST Identification Number
-            2. 'company_name': Registered legal name of the taxpayer
+            Extract the following fields from the GST certificate / filing documents:
+            1. 'gstin': GST Identification Number (exactly 15 alphanumeric characters)
+            2. 'company_name': Registered legal name of the taxpayer (exact spelling from the document)
             3. 'gst_annual_turnover': Annual turnover or taxable value (in INR Crores, as a float number)
             4. 'registration_date': Date of registration (format YYYY-MM-DD)
             5. 'filing_status': Status of filings (e.g. 'Active', 'Suspended')
+            6. 'missing_fields': An array of strings listing any of the above 5 field KEYS that are NOT clearly present in the text.
 
-            Output format must be JSON. Do not hallucinate. If a field is missing, set it to null.
+            CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
+            Output format must be valid JSON.
             Text to extract from:
             ---
             {text}
         """,
         "incorporation": """
-            You are a corporate legal clerk. Extract the following fields from the Certificate of Incorporation:
-            1. 'cin': Corporate Identification Number (CIN)
-            2. 'company_name': Company Name as registered
+            Extract the following fields from the Certificate of Incorporation:
+            1. 'cin': Corporate Identification Number (CIN) — must be exactly 21 alphanumeric characters
+            2. 'company_name': Company Name exactly as registered on the certificate
             3. 'incorporation_date': Date of incorporation (format YYYY-MM-DD)
-            4. 'registered_office': Full registered office address
+            4. 'registered_office': Full registered office address as printed
             5. 'company_type': E.g. 'Public Limited Company', 'Private Limited Company'
+            6. 'missing_fields': An array of strings listing any of the above 5 field KEYS that are NOT clearly present in the text.
 
-            Output format must be JSON. Do not hallucinate. If a field is missing, set it to null.
+            CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
+            Output format must be valid JSON.
             Text to extract from:
             ---
             {text}
         """,
         "compliance": """
-            You are a compliance officer. Extract the following fields from the PAN, TAN, or other compliance licenses:
-            1. 'pan': Permanent Account Number (10 characters)
-            2. 'pan_name': Name registered on PAN Card
-            3. 'tan': Tax Deduction Account Number (10 characters)
+            Extract the following fields from the PAN, TAN, or other compliance licenses:
+            1. 'pan': Permanent Account Number (must be exactly 10 alphanumeric characters: 5 letters + 4 digits + 1 letter)
+            2. 'pan_name': Name registered on PAN Card (exact text from the document)
+            3. 'tan': Tax Deduction Account Number (must be exactly 10 alphanumeric characters)
+            4. 'missing_fields': An array of strings listing any of the above 3 field KEYS that are NOT clearly present in the text.
 
-            Output format must be JSON. Do not hallucinate. If a field is missing, set it to null.
+            CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
+            Output format must be valid JSON.
             Text to extract from:
             ---
             {text}
@@ -219,6 +268,10 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
     try:
         chat_completion = client.chat.completions.create(
             messages=[
+                {
+                    "role": "system",
+                    "content": system_instruction,
+                },
                 {
                     "role": "user",
                     "content": prompt_template.format(text=trimmed_text),
@@ -253,7 +306,26 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
                         extracted_data[key] = float(cleaned)
                 except ValueError:
                     extracted_data[key] = None
-                    
+
+        # ── Post-extraction validation: flag suspiciously short/invalid values ──
+        # Define minimum plausible lengths for string fields per doc type
+        min_lengths = {
+            "financials": {"auditor_name": 3, "auditor_membership": 5, "fy_years": 4},
+            "gst": {"gstin": 15, "company_name": 3},
+            "incorporation": {"cin": 21, "company_name": 3, "registered_office": 5},
+            "compliance": {"pan": 10, "pan_name": 3, "tan": 10},
+        }
+        doc_mins = min_lengths.get(doc_type, {})
+        if "missing_fields" not in extracted_data:
+            extracted_data["missing_fields"] = []
+        for field_key, min_len in doc_mins.items():
+            val = extracted_data.get(field_key)
+            if val is not None and isinstance(val, str) and len(val.strip()) < min_len:
+                logger.warning(f"Suspicious value for '{field_key}': '{val}' (len={len(val)}). Marking as missing.")
+                extracted_data[field_key] = None
+                if field_key not in extracted_data["missing_fields"]:
+                    extracted_data["missing_fields"].append(field_key)
+
         return extracted_data
     except Exception as e:
         logger.error(f"Groq API call failed: {e}. Falling back to mock data for demo safety.")
