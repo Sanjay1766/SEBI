@@ -115,10 +115,9 @@ export default function App() {
       [docType]: extractedFields
     };
     
-    const updatedFiles = [...sessionData.uploaded_files];
-    if (!updatedFiles.some(f => f.filename === filename)) {
-      updatedFiles.push({ filename, type: docType, size: 256000 });
-    }
+    // Replace any existing file of the same type to update the filename and meta
+    const updatedFiles = sessionData.uploaded_files.filter(f => f.type !== docType);
+    updatedFiles.push({ filename, type: docType, size: 256000 });
 
     setSessionData(prev => ({
       ...prev,
@@ -309,7 +308,8 @@ export default function App() {
         return;
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const docxBlob = new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(docxBlob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'SME_IPO_Draft_Prospectus.docx';

@@ -238,7 +238,7 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
                 <div className="p-2 bg-red-50 text-red-500 rounded-lg h-fit shrink-0 border border-red-100">
                   <AlertTriangle className="w-4 h-4" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h4 className="font-bold text-[13px] text-gray-800">{inc.title}</h4>
                     <span className="text-[9.5px] uppercase tracking-wider bg-red-50 text-red-600 px-1.5 py-0.5 rounded-md font-mono border border-red-200 font-bold">
@@ -251,6 +251,15 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
                     )}
                   </div>
                   <p className="text-[12.5px] text-gray-500 leading-relaxed">{inc.description}</p>
+                  {inc.section_id && SECTION_TO_TAB[inc.section_id] && (
+                    <button
+                      onClick={() => onNavigateTab(SECTION_TO_TAB[inc.section_id])}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-accent-700 bg-accent-50 hover:bg-accent-100 active:bg-accent-200 rounded-lg border border-accent-200 hover:border-accent-300 transition-all cursor-pointer"
+                    >
+                      <span>Go to {TAB_NAMES[SECTION_TO_TAB[inc.section_id]] || 'Wizard'}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
