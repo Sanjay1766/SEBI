@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Home, Upload, FormInput, FileCheck, RefreshCw, 
-  HelpCircle, Settings, Check, Sparkles, LogOut, Loader2, ShieldCheck
+  Home, Upload, FileCheck, RefreshCw, 
+  Check, Sparkles, LogOut, Loader2, ShieldCheck,
+  ChevronRight, LayoutDashboard, FolderOpen, AlertTriangle
 } from 'lucide-react';
 import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
@@ -28,6 +29,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState('saved'); // saved, saving, error
   const [lastSavedTime, setLastSavedTime] = useState(new Date().toLocaleTimeString());
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const handleApplySuggestion = (key, value) => {
     handleFormChange(key, value);
@@ -37,10 +39,6 @@ export default function App() {
   useEffect(() => {
     fetchSession();
   }, []);
-
-  // Whenever sessionData changes, fetch updated validation rules
-  // (disabled here - we validate manually after each save to avoid race conditions)
-  // useEffect(() => { if (!loading) { validateSession(); } }, [sessionData]);
 
   // Update auto-saved timestamp when saved status turns to 'saved'
   useEffect(() => {
@@ -130,19 +128,19 @@ export default function App() {
   };
 
   const handleReset = async () => {
-    if (window.confirm('Are you sure you want to reset all form fields and uploaded documents?')) {
-      try {
-        setLoading(true);
-        const res = await fetch(`${BACKEND_URL}/api/reset`, { method: 'POST' });
-        if (res.ok) {
-          fetchSession();
-          setActiveTab('dashboard');
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+    // Called after inline confirm is accepted
+    setConfirmReset(false);
+    try {
+      setLoading(true);
+      const res = await fetch(`${BACKEND_URL}/api/reset`, { method: 'POST' });
+      if (res.ok) {
+        fetchSession();
+        setActiveTab('dashboard');
       }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -330,13 +328,13 @@ export default function App() {
   };
 
   const steps = [
-    { id: 'basics', label: 'Cover Page Details', code: 'Sch VI Pt I' },
-    { id: 'general', label: 'General Information', code: 'ICDR Reg 244' },
-    { id: 'management', label: 'Board & Promoters', code: 'ICDR Reg 245' },
-    { id: 'capital', label: 'Capital Structure', code: 'ICDR Reg 246' },
-    { id: 'objects', label: 'Objects of the Issue', code: 'ICDR Reg 247' },
-    { id: 'business', label: 'Business Operations', code: 'ICDR Reg 248' },
-    { id: 'disclosures', label: 'Risk Disclosures', code: 'ICDR Reg 250' }
+    { id: 'basics',      label: 'Cover Page Details',  code: 'Sch VI Pt I'  },
+    { id: 'general',     label: 'General Information', code: 'ICDR Reg 244' },
+    { id: 'management',  label: 'Board & Promoters',   code: 'ICDR Reg 245' },
+    { id: 'capital',     label: 'Capital Structure',   code: 'ICDR Reg 246' },
+    { id: 'objects',     label: 'Objects of the Issue',code: 'ICDR Reg 247' },
+    { id: 'business',    label: 'Business Operations', code: 'ICDR Reg 248' },
+    { id: 'disclosures', label: 'Risk Disclosures',    code: 'ICDR Reg 250' }
   ];
 
   const getStepStatus = (stepId) => {
@@ -363,7 +361,6 @@ export default function App() {
 
     if (stepInconsistencies.length > 0) return 'error';
 
-    // Only required fields that users can actually fill (no doc-only optional fields)
     const stepFields = {
       basics: ['company_name', 'company_acronym', 'lead_manager', 'registrar'],
       general: ['authorized_capital', 'paid_up_capital_pre', 'pan', 'pan_name', 'auditor_name', 'auditor_membership'],
@@ -391,119 +388,132 @@ export default function App() {
   const getStatusDot = (status) => {
     switch (status) {
       case 'complete':
-        return <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block shrink-0" title="Section Complete"></span>;
+        return <span className="w-2 h-2 rounded-full bg-emerald-500 block shrink-0" title="Section Complete" />;
       case 'in_progress':
-        return <span className="w-1.5 h-1.5 rounded-full bg-amber-550 block shrink-0 animate-pulse" title="In Progress"></span>;
+        return <span className="w-2 h-2 rounded-full bg-amber-400 block shrink-0 animate-pulse" title="In Progress" />;
       case 'error':
-        return <span className="w-1.5 h-1.5 rounded-full bg-rose-500 block shrink-0 animate-pulse" title="Flagged Issues"></span>;
+        return <span className="w-2 h-2 rounded-full bg-red-500 block shrink-0 animate-pulse" title="Flagged Issues" />;
       case 'empty':
       default:
-        return <span className="w-1.5 h-1.5 rounded-full bg-slate-600 block shrink-0" title="Not Started"></span>;
+        return <span className="w-2 h-2 rounded-full bg-gray-200 block shrink-0" title="Not Started" />;
     }
   };
 
+  const isWizardTab = ['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab);
+  const wizardStepIndex = isWizardTab ? tabOrder.indexOf(activeTab) : -1;
+
+  const pageTitle = activeTab === 'dashboard' 
+    ? 'Filing Dashboard'
+    : activeTab === 'uploads' 
+    ? 'Document Vault'
+    : steps.find(s => s.id === activeTab)?.label || 'Drafting Wizard';
+
   return (
-    <div className="min-h-screen flex bg-[#0b0f19] text-[#f1f5f9] relative font-sans">
+    <div className="min-h-screen flex bg-gray-50 text-gray-900 relative font-sans">
       
       {/* Pinned Top Progress Bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-slate-800 z-50">
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-100 z-50">
         <div 
-          className="h-full bg-sky-500 transition-all duration-500 ease-out" 
+          className="h-full bg-accent-500 transition-all duration-700 ease-out rounded-r-full" 
           style={{ width: `${progressPct}%` }}
-        ></div>
+        />
       </div>
 
-      {/* Sidebar Navigation */}
-      <aside className="w-64 border-r border-[#111827] bg-[#070b12] shrink-0 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-40 shadow-2xl">
-        <div>
-          {/* Brand Header */}
-          <div className="px-5 py-4 border-b border-[#111827] flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-sky-900 to-sky-800 border border-sky-700/50 flex items-center justify-center text-white font-bold text-sm font-display shadow-lg shrink-0">
-              S
-            </div>
+      {/* ── Sidebar Navigation ── */}
+      <aside className="w-64 border-r border-gray-100 bg-white shrink-0 flex flex-col hidden md:flex sticky top-0 h-screen z-40 shadow-sm overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Brand / Logo */}
+          <div className="px-4 py-4 border-b border-gray-100 flex items-center gap-3">
+            <img
+              src="/logo.png"
+              alt="IPO Sherpa"
+              className="h-9 w-auto shrink-0 rounded-lg"
+            />
             <div>
-              <h1 className="font-bold text-[12.5px] tracking-wide font-sans text-white leading-tight">SEBI COMPLIANCE</h1>
-              <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Chapter IX Draft Auditor</p>
+              <h1 className="font-display font-700 text-[14.5px] text-gray-900 leading-tight tracking-tight">
+                IPO <span className="text-accent-500">Sherpa</span>
+              </h1>
+              <p className="text-[9px] uppercase font-bold tracking-widest text-gray-400 mt-0.5">SEBI IPO Workspace</p>
             </div>
           </div>
 
           {/* Sync status pill */}
-          <div className="px-5 py-2 border-b border-[#111827]/60 flex items-center justify-between">
-            <span className="text-[10.5px] text-slate-500 font-semibold select-none">Compliance Sync</span>
+          <div className="px-5 py-2.5 border-b border-gray-50 flex items-center justify-between">
+            <span className="text-[10.5px] text-gray-400 font-semibold select-none">Auto-sync</span>
             {saveStatus === 'saved' && (
-              <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1" title={`Synced at ${lastSavedTime}`}>
-                <Check className="w-3 h-3" /> Auto-saved
+              <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1" title={`Synced at ${lastSavedTime}`}>
+                <Check className="w-3 h-3" /> Saved
               </span>
             )}
             {saveStatus === 'saving' && (
-              <span className="text-[10px] text-sky-400 font-bold flex items-center gap-1">
+              <span className="text-[10px] text-blue-500 font-bold flex items-center gap-1">
                 <Loader2 className="w-3 h-3 animate-spin" /> Syncing…
               </span>
             )}
             {saveStatus === 'error' && (
-              <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" /> Sync Offline
+              <span className="text-[10px] text-red-500 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" /> Offline
               </span>
             )}
           </div>
 
           {/* Nav */}
-          <nav className="p-3 space-y-0.5">
-            <div className="pb-1.5 px-3 text-[9px] uppercase font-bold tracking-widest text-slate-600 select-none">
-              Console
+          <nav className="p-3 space-y-0.5 overflow-y-auto flex-1 min-h-0">
+            <div className="pb-2 px-3 pt-2 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
+              Overview
             </div>
             
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold rounded-md transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'dashboard'
-                  ? 'bg-sky-950/60 text-sky-200 border border-sky-900/60 shadow-sm'
-                  : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-accent-50 text-accent-700 border-l-[3px] border-accent-500'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-l-[3px] border-transparent'
               }`}
             >
-              <Home className="w-4 h-4 shrink-0" />
-              <span>Prospectus Audit</span>
+              <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'dashboard' ? 'text-accent-500' : 'text-gray-400'}`} />
+              <span>Filing Dashboard</span>
             </button>
 
             <button
               onClick={() => setActiveTab('uploads')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold rounded-md transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'uploads'
-                  ? 'bg-sky-950/60 text-sky-200 border border-sky-900/60 shadow-sm'
-                  : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border border-transparent'
+                  ? 'bg-accent-50 text-accent-700 border-l-[3px] border-accent-500'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-l-[3px] border-transparent'
               }`}
             >
-              <Upload className="w-4 h-4 shrink-0" />
-              <span>Verify Documents</span>
+              <FolderOpen className={`w-4 h-4 shrink-0 ${activeTab === 'uploads' ? 'text-accent-500' : 'text-gray-400'}`} />
+              <span>Document Vault</span>
             </button>
 
-            <div className="pt-4 pb-1.5 px-3 text-[9px] uppercase font-bold tracking-widest text-slate-600 select-none">
+            <div className="pt-4 pb-2 px-3 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
               Drafting Wizard
             </div>
 
             <div className="space-y-0.5">
-              {steps.map((step) => {
+              {steps.map((step, idx) => {
                 const status = getStepStatus(step.id);
                 const isActive = activeTab === step.id;
                 return (
                   <button
                     key={step.id}
                     onClick={() => setActiveTab(step.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-md transition-all cursor-pointer relative ${
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${
                       isActive
-                        ? 'bg-[#111827] text-white border border-slate-700/70 shadow-sm'
-                        : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border border-transparent'
+                        ? 'bg-gray-50 text-gray-900 border-accent-500 shadow-sm'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-transparent'
                     }`}
                   >
-                    {/* Active left accent */}
-                    {isActive && (
-                      <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-sky-500 rounded-r-full" />
-                    )}
                     <div className="flex items-center gap-2.5 min-w-0">
                       {getStatusDot(status)}
                       <span className="truncate">{step.label}</span>
                     </div>
-                    <span className="text-[8px] uppercase bg-[#0b1120] text-slate-500 font-mono px-1.5 py-0.5 rounded border border-[#1a2535] font-bold shrink-0 ml-1">
+                    <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${
+                      isActive 
+                        ? 'bg-accent-50 text-accent-600 border border-accent-100'
+                        : 'bg-gray-100 text-gray-400 border border-gray-200'
+                    }`}>
                       {step.code}
                     </span>
                   </button>
@@ -514,64 +524,109 @@ export default function App() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-3 border-t border-[#111827]">
-          <button
-            onClick={handleReset}
-            className="w-full py-2 px-3 rounded-md text-[11px] font-semibold text-slate-500 hover:bg-slate-900/50 hover:text-rose-400 border border-transparent hover:border-rose-900/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5 rotate-180" /> Reset drafting space
-          </button>
+        <div className="p-3 border-t border-gray-100">
+          {/* Progress summary */}
+          <div className="px-3 py-2.5 mb-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10.5px] font-bold text-gray-500">Wizard progress</span>
+              <span className="text-[10.5px] font-bold text-accent-600">{completedStepsCount}/7</span>
+            </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent-500 rounded-full transition-all duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+          {confirmReset ? (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-2 animate-fade-in-up">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-700">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                Reset all data?
+              </div>
+              <p className="text-[10px] text-red-500 leading-relaxed">This will clear all form fields and uploaded documents.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  className="flex-1 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-bold hover:bg-red-700 transition-all cursor-pointer"
+                >
+                  Yes, reset
+                </button>
+                <button
+                  onClick={() => setConfirmReset(false)}
+                  className="flex-1 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 text-[11px] font-bold hover:bg-gray-50 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="w-full py-2 px-3 rounded-xl text-[11.5px] font-semibold text-gray-400 hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Reset workspace
+            </button>
+          )}
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* ── Main Content Area ── */}
       <main className="flex-grow min-w-0 flex flex-col min-h-screen">
         
         {/* Top Header */}
-        <header className="h-14 border-b border-[#111827] bg-[#070b12]/90 backdrop-blur-xl flex justify-between items-center px-7 sticky top-0 z-30 shadow-md select-none">
+        <header className="h-14 border-b border-gray-100 bg-white flex justify-between items-center px-7 sticky top-0 z-30 shadow-sm select-none">
           <div className="flex items-center gap-3">
-            <h2 className="text-[13px] font-bold text-slate-200 tracking-tight">
-              {activeTab === 'dashboard' ? 'Filing Compliance Report' : activeTab === 'uploads' ? 'Extract Source Documents' : 'IPO Draft Wizard'}
+            {/* Breadcrumb style */}
+            <div className="flex items-center gap-2 text-gray-400">
+              <span className="text-[12px] font-semibold">IPO Sherpa</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-[14px] font-bold text-gray-900 tracking-tight">
+              {pageTitle}
             </h2>
             
-            {!['dashboard', 'uploads'].includes(activeTab) && (
-              <span className="text-[10px] bg-[#111827] text-slate-400 px-2.5 py-1 rounded-md font-mono font-bold border border-slate-800">
-                {completedStepsCount}/7 Sections Verified
+            {isWizardTab && (
+              <span className="text-[10.5px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg font-semibold border border-gray-200">
+                Step {wizardStepIndex + 1} / 7
               </span>
             )}
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="text-[10.5px] text-slate-400 flex items-center gap-1.5 border border-[#1a2535] px-3 py-1.5 rounded-md bg-[#0a1020] font-semibold">
+          <div className="flex items-center gap-2.5">
+            {/* SEBI compliance badge */}
+            <div className="text-[10.5px] text-emerald-700 flex items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>SEBI ICDR Chapter IX Compliant</span>
+              <span>SEBI ICDR Chapter IX</span>
             </div>
 
+            {/* Copilot toggle */}
             <button
               onClick={() => setCopilotOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10.5px] font-bold border transition-all cursor-pointer shadow-sm relative ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shadow-sm relative ${
                 copilotOpen 
-                  ? 'bg-sky-600 text-white border-sky-600 shadow-md shadow-sky-500/10' 
-                  : 'bg-[#0a1020] hover:bg-[#111827] text-slate-300 border-[#1a2535] hover:border-sky-900/50'
+                  ? 'bg-accent-500 text-white border-accent-500 shadow-accent' 
+                  : 'bg-white hover:bg-accent-50 text-gray-600 hover:text-accent-700 border-gray-200 hover:border-accent-200'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+              <Sparkles className={`w-3.5 h-3.5 ${copilotOpen ? 'text-white' : 'text-accent-500'}`} />
               <span>AI Copilot</span>
               {validationResults?.inconsistencies?.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border border-[#070b12] animate-pulse" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse" />
               )}
             </button>
           </div>
         </header>
 
         {/* Content Container */}
-        <div className="flex-grow p-7 md:p-8 overflow-y-auto bg-[#070b12]">
+        <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-gray-50">
           {loading ? (
             <div className="h-96 flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-full bg-sky-950/30 border border-sky-900/30 flex items-center justify-center mb-5">
-                <Loader2 className="w-6 h-6 text-sky-500 animate-spin" />
+              <div className="w-16 h-16 rounded-2xl bg-white border border-gray-100 shadow-card flex items-center justify-center mb-5">
+                <Loader2 className="w-7 h-7 text-accent-500 animate-spin" />
               </div>
-              <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wide animate-pulse">Auditing compliance workspace…</p>
+              <p className="text-[13px] font-bold text-gray-500 tracking-wide">Loading workspace…</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">Fetching session data and running compliance checks</p>
             </div>
           ) : (
             <>
@@ -611,9 +666,9 @@ export default function App() {
         </div>
 
         {/* Footer */}
-        <footer className="py-3 border-t border-[#111827] bg-[#070b12] text-center text-[10.5px] text-slate-500 font-medium flex items-center justify-center gap-2 select-none">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span>⚖️ AI-assisted draft under SEBI ICDR Chapter IX (Regulations 229–259). Not a substitute for legal review by a SEBI-registered Category I Merchant Banker.</span>
+        <footer className="py-3 border-t border-gray-100 bg-white text-center text-[10.5px] text-gray-400 font-medium flex items-center justify-center gap-2 select-none">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <span>AI-assisted draft under SEBI ICDR Chapter IX (Reg 229–259). Not a substitute for review by a SEBI-registered Category I Merchant Banker.</span>
         </footer>
       </main>
 

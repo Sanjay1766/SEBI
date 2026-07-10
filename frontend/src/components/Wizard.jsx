@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   Building2, Users, DollarSign, Briefcase, AlertTriangle, HelpCircle, 
   CheckCircle2, BookOpen, AlertCircle, FileText, ArrowRight, Loader2,
-  ChevronRight, Info
+  ChevronRight, ChevronLeft, Info, Sparkles
 } from 'lucide-react';
 
 export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, validationResults, extractedData }) {
@@ -42,11 +42,11 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
 
   const renderTooltip = (regText) => (
     <div className="group relative inline-block ml-1.5 cursor-pointer align-middle select-none">
-      <HelpCircle className="w-3.5 h-3.5 text-slate-600 hover:text-sky-400 transition-colors" />
-      <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2.5 w-64 -translate-x-1/2 rounded-md bg-[#0a1020] px-3 py-2.5 text-[11px] font-normal leading-relaxed text-slate-300 opacity-0 shadow-2xl transition-opacity duration-200 group-hover:opacity-100 border border-[#1e3054]">
-        <div className="font-bold text-sky-400 uppercase tracking-wider mb-1 text-[9px]">SEBI ICDR Requirement</div>
+      <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-accent-500 transition-colors" />
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-3 w-72 -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-3 text-[11.5px] font-normal leading-relaxed text-gray-200 opacity-0 shadow-2xl transition-opacity duration-200 group-hover:opacity-100 border border-gray-800">
+        <div className="font-bold text-accent-400 uppercase tracking-wider mb-1.5 text-[9.5px]">SEBI ICDR Requirement</div>
         {regText}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#0a1020]"></div>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
       </div>
     </div>
   );
@@ -87,7 +87,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
   const CharCounter = ({ value, soft = 300, hard = 600 }) => {
     const len = (value || '').length;
     if (len === 0) return null;
-    const cls = len > hard ? 'text-rose-400' : len > soft ? 'text-amber-400' : 'text-slate-500';
+    const cls = len > hard ? 'text-red-500' : len > soft ? 'text-amber-500' : 'text-gray-400';
     return (
       <span className={`text-[10px] font-mono font-semibold tabular-nums transition-colors ${cls}`}>
         {len.toLocaleString()} chars
@@ -97,10 +97,10 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
 
   /* ── Section sub-group header ── */
   const SubGroupHeader = ({ icon: Icon, label, note }) => (
-    <div className="flex items-center gap-2 mt-5 mb-3 pb-2 border-b border-[#1a2a40]">
-      {Icon && <Icon className="w-3.5 h-3.5 text-sky-500/70 shrink-0" />}
-      <span className="text-[10px] font-bold uppercase tracking-widest text-sky-400/70">{label}</span>
-      {note && <span className="text-[10px] text-slate-500 font-medium ml-1">{note}</span>}
+    <div className="flex items-center gap-2 mt-6 mb-4 pb-2.5 border-b border-gray-100">
+      {Icon && <Icon className="w-4 h-4 text-accent-500 shrink-0" />}
+      <span className="text-[11px] font-bold uppercase tracking-widest text-accent-600">{label}</span>
+      {note && <span className="text-[10.5px] text-gray-400 font-medium ml-1">{note}</span>}
     </div>
   );
 
@@ -121,13 +121,13 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
         <div className="flex justify-between items-center mb-2 select-none">
           <label
             htmlFor={key}
-            className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-0.5 cursor-pointer"
+            className="text-[11.5px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-0.5 cursor-pointer"
           >
             {label}
             {tooltip && renderTooltip(tooltip)}
           </label>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
             {/* Source indicator badge */}
             {(() => {
               const extractedVal = extractedFlat[key];
@@ -137,13 +137,13 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               if (!hasCurrent) return null;
               if (hasExtracted && String(currentVal) === String(extractedVal)) {
                 return (
-                  <span className="inline-flex items-center gap-1 text-[8.5px] font-bold text-sky-400 bg-sky-950/40 border border-sky-900/50 px-1.5 py-0.5 rounded select-none" title="Value auto-extracted from uploaded document">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-accent-700 bg-accent-50 border border-accent-200 px-1.5 py-0.5 rounded-md select-none" title="Value auto-extracted from uploaded document">
                     🔗 Auto-extracted
                   </span>
                 );
               }
               return (
-                <span className="inline-flex items-center gap-1 text-[8.5px] font-bold text-slate-500 bg-slate-900/40 border border-slate-800 px-1.5 py-0.5 rounded select-none" title="Manually entered by user">
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-md select-none" title="Manually entered by user">
                   ✍️ Manual
                 </span>
               );
@@ -153,17 +153,17 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
 
             {/* Validation badge */}
             {validation.status === 'valid' && !isCheckbox && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-900/60 px-2 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
                 <CheckCircle2 className="w-3 h-3" /> Passed
               </span>
             )}
             {validation.status === 'warning' && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-400 bg-amber-950/50 border border-amber-900/60 px-2 py-0.5 rounded" title={validation.message}>
+              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md" title={validation.message}>
                 <AlertTriangle className="w-3 h-3" /> Advisory
               </span>
             )}
             {validation.status === 'error' && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-rose-400 bg-rose-950/50 border border-rose-900/60 px-2 py-0.5 rounded" title={validation.message}>
+              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md" title={validation.message}>
                 <AlertCircle className="w-3 h-3" /> Error
               </span>
             )}
@@ -174,12 +174,12 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
                 type="button"
                 onClick={() => handleAIDraft(key)}
                 disabled={draftingFields[key]}
-                className="inline-flex items-center gap-1 text-[9.5px] font-bold text-sky-400 hover:text-sky-300 transition-all cursor-pointer bg-sky-950/40 hover:bg-sky-900/40 border border-sky-900/50 hover:border-sky-600/60 px-2 py-0.5 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 text-[9.5px] font-bold text-accent-700 hover:text-accent-800 transition-all cursor-pointer bg-accent-50 hover:bg-accent-100 border border-accent-200 hover:border-accent-300 px-2 py-0.5 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {draftingFields[key] ? (
                   <><Loader2 className="w-3 h-3 animate-spin" /><span>Drafting…</span></>
                 ) : (
-                  <><span>✨</span><span>AI Assist</span></>
+                  <><Sparkles className="w-3 h-3" /><span>AI Assist</span></>
                 )}
               </button>
             )}
@@ -197,9 +197,9 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               value={value}
               onChange={(e) => onChange(key, e.target.value)}
             />
-            {/* Subtle filled indicator line */}
+            {/* Subtle left filled indicator */}
             {value && (
-              <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md bg-sky-500/30 pointer-events-none" />
+              <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg bg-accent-400/30 pointer-events-none" />
             )}
           </div>
         ) : type === 'select' ? (
@@ -213,15 +213,15 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
             {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         ) : isCheckbox ? (
-          <div className="flex items-start gap-3 mt-1 p-3 rounded-md bg-[#0a1020] border border-[#1e2d45] cursor-pointer hover:border-sky-800/40 transition-colors">
+          <div className="flex items-start gap-3 mt-1 p-4 rounded-xl bg-gray-50 border border-gray-200 cursor-pointer hover:border-accent-200 hover:bg-accent-50/30 transition-all">
             <input
               id={key}
               type="checkbox"
-              className="h-4 w-4 mt-0.5 rounded border-slate-700 bg-[#0b0f19] text-sky-600 focus:ring-sky-500 focus:ring-offset-slate-900 cursor-pointer shrink-0"
+              className="h-4 w-4 mt-0.5 rounded border-gray-300 text-accent-500 focus:ring-accent-500 cursor-pointer shrink-0"
               checked={!!value}
               onChange={(e) => onChange(key, e.target.checked)}
             />
-            <label htmlFor={key} className="text-[12.5px] text-slate-300 font-medium cursor-pointer leading-relaxed">
+            <label htmlFor={key} className="text-[13px] text-gray-600 font-medium cursor-pointer leading-relaxed">
               {placeholder || 'Confirm and agree'}
             </label>
           </div>
@@ -238,10 +238,10 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
 
         {/* Validation message */}
         {(validation.status === 'error' || validation.status === 'warning') && (
-          <p className={`text-[11px] font-semibold mt-1.5 leading-normal flex items-center gap-1.5 ${
-            validation.status === 'error' ? 'text-rose-400' : 'text-amber-400'
+          <p className={`text-[11.5px] font-semibold mt-1.5 leading-normal flex items-center gap-1.5 ${
+            validation.status === 'error' ? 'text-red-600' : 'text-amber-600'
           }`}>
-            {validation.status === 'error' ? <AlertCircle className="w-3 h-3 shrink-0" /> : <AlertTriangle className="w-3 h-3 shrink-0" />}
+            {validation.status === 'error' ? <AlertCircle className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
             {validation.message}
           </p>
         )}
@@ -307,16 +307,16 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in-up">
 
       {/* ── Left: Form (8 cols) ── */}
-      <div className="lg:col-span-8 glass rounded-lg shadow-xl border border-slate-800/80">
+      <div className="lg:col-span-8 bg-white rounded-2xl shadow-card border border-gray-100">
         
         {/* Section header */}
-        <div className="px-7 pt-6 pb-4 border-b border-[#1a2535]">
-          <h2 className="text-lg font-bold text-white tracking-tight">{sectionTitles[activeTab]}</h2>
-          <p className="text-[10.5px] text-slate-500 font-semibold uppercase tracking-widest mt-0.5">SEBI Chapter IX — Required Form Fields</p>
+        <div className="px-7 pt-6 pb-5 border-b border-gray-100">
+          <h2 className="text-[19px] font-display font-700 text-gray-900 tracking-tight">{sectionTitles[activeTab]}</h2>
+          <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mt-0.5">SEBI Chapter IX — Required Form Fields</p>
         </div>
 
         {/* Form body */}
-        <div className="px-7 py-5">
+        <div className="px-7 py-6">
 
           {/* ─ BASICS ─ */}
           {activeTab === 'basics' && (
@@ -396,12 +396,12 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {/* ─ OBJECTS ─ */}
           {activeTab === 'objects' && (
             <div>
-              <div className="mb-5 p-4 rounded-lg bg-[#050c18] border border-[#0d2036]">
+              <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
                 <div className="flex items-center gap-2 mb-1">
-                  <Info className="w-3.5 h-3.5 text-sky-500/70 shrink-0" />
-                  <span className="text-[10.5px] font-bold text-sky-400/70 uppercase tracking-widest">Fund Allocation Structure</span>
+                  <Info className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Fund Allocation Structure</span>
                 </div>
-                <p className="text-[11.5px] text-slate-400 leading-relaxed">All amounts must sum to the Proposed Issue Size. General Corporate Purposes is capped at 25% of issue size per SEBI Reg 247.</p>
+                <p className="text-[12.5px] text-blue-600 leading-relaxed">All amounts must sum to the Proposed Issue Size. General Corporate Purposes is capped at 25% of issue size per SEBI Reg 247.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
                 {renderInput('expansion_amount', 'CAPEX Expansion (₹ Crores)', 'number', 'SEBI ICDR Reg 247 — Capital expenditure must be backed by quotations/estimates in the prospectus.', '8.5')}
@@ -412,16 +412,16 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               </div>
               {/* Live sum display */}
               {formData.issue_size && (
-                <div className="mt-1 p-3 rounded-md bg-[#050c18] border border-[#0d2036] flex justify-between items-center">
-                  <span className="text-[11px] text-slate-400 font-semibold">Current Objects Sum</span>
-                  <span className={`font-mono font-bold text-sm ${
+                <div className="mt-1 p-4 rounded-xl bg-gray-50 border border-gray-200 flex justify-between items-center">
+                  <span className="text-[12px] text-gray-500 font-semibold">Current Objects Sum</span>
+                  <span className={`font-mono font-bold text-[14px] ${
                     Math.abs((['expansion_amount','working_capital_amount','debt_repayment_amount','general_corp_amount','issue_expenses']
                       .reduce((a,f) => a + (Number(formData[f])||0), 0)) - Number(formData.issue_size)) < 0.01
-                      ? 'text-emerald-400' : 'text-amber-400'
+                      ? 'text-emerald-600' : 'text-amber-500'
                   }`}>
                     ₹ {(['expansion_amount','working_capital_amount','debt_repayment_amount','general_corp_amount','issue_expenses']
                       .reduce((a,f) => a + (Number(formData[f])||0), 0)).toFixed(2)} Cr
-                    <span className="text-slate-500 font-sans text-[11px] ml-2">/ ₹{Number(formData.issue_size).toFixed(2)} Cr target</span>
+                    <span className="text-gray-400 font-sans text-[11.5px] ml-2">/ ₹{Number(formData.issue_size).toFixed(2)} Cr target</span>
                   </span>
                 </div>
               )}
@@ -456,8 +456,8 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               {renderInput('material_contracts_desc', 'Material Contracts for Inspection', 'textarea', 'SEBI ICDR Reg 250(3) — Key corporate agreements, registrar mandates, underwriting agreements available for public inspection.', 'e.g.\n1. Tripartite Agreement dated Jan 12, 2026 with Registrar and Issuer.\n2. Underwriting Agreement dated Feb 1, 2026 with Lead Manager.')}
 
               <SubGroupHeader icon={CheckCircle2} label="Board Declaration" />
-              <div className="p-4 rounded-lg bg-[#050c18] border border-[#0d2036] mb-5">
-                <p className="text-[12px] text-slate-400 leading-relaxed italic">
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 mb-5">
+                <p className="text-[12.5px] text-gray-500 leading-relaxed italic">
                   "We hereby certify that all guidelines and regulations issued by SEBI under the Chapter IX framework are complied with, and the facts presented in this Draft Prospectus represent the true and fair status of the entity."
                 </p>
               </div>
@@ -466,20 +466,20 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           )}
 
           {/* ─ Nav buttons ─ */}
-          <div className="flex justify-between items-center mt-8 pt-5 border-t border-[#1a2535] select-none">
+          <div className="flex justify-between items-center mt-8 pt-5 border-t border-gray-100 select-none">
             <button
               onClick={onPrev}
               disabled={activeTab === 'basics'}
-              className="px-5 py-2.5 rounded-md text-xs font-bold border border-slate-700/60 bg-[#0f172a] text-slate-300 hover:bg-[#131c31] hover:text-white hover:border-slate-600 transition-all disabled:opacity-25 disabled:pointer-events-none cursor-pointer flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl text-[13px] font-bold border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-300 transition-all disabled:opacity-25 disabled:pointer-events-none cursor-pointer flex items-center gap-2"
             >
-              ← Previous
+              <ChevronLeft className="w-4 h-4" /> Previous
             </button>
             <button
               onClick={onNext}
               disabled={activeTab === 'disclosures'}
-              className="px-6 py-2.5 rounded-md text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-md shadow-sky-900/30 transition-all cursor-pointer disabled:opacity-30 flex items-center gap-2"
+              className="px-6 py-2.5 rounded-xl text-[13px] font-bold bg-accent-500 hover:bg-accent-600 text-white shadow-accent transition-all cursor-pointer disabled:opacity-30 flex items-center gap-2"
             >
-              Next Step <ChevronRight className="w-3.5 h-3.5" />
+              Next Step <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -489,34 +489,34 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
       <div className="lg:col-span-4 flex flex-col gap-5 select-none">
 
         {/* Compliance Reference */}
-        <div className="glass rounded-lg p-5 bg-[#0e1829] border border-[#1a2d46]">
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5 mb-3">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-card">
+          <h3 className="text-[10.5px] font-bold uppercase tracking-widest text-accent-600 flex items-center gap-1.5 mb-3">
             <BookOpen className="w-3.5 h-3.5" /> {auditDetails.title}
           </h3>
-          <p className="text-[12px] text-slate-300 leading-relaxed">{auditDetails.reg}</p>
-          <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-4 pt-2.5 border-t border-[#1a2d46]">
+          <p className="text-[12.5px] text-gray-500 leading-relaxed">{auditDetails.reg}</p>
+          <div className="text-[9.5px] font-bold text-gray-300 uppercase tracking-widest mt-4 pt-3 border-t border-gray-100">
             Compliance Module Active
           </div>
         </div>
 
         {/* Live Prospectus Preview */}
-        <div className="glass rounded-lg p-5 bg-[#0e1829] border border-[#1a2d46] flex-1 flex flex-col min-h-[300px]">
-          <div className="border-b border-[#1a2d46] pb-2.5 mb-3 flex justify-between items-center">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Live Document Compile</h3>
-            <span className="text-[8px] uppercase bg-slate-900 text-slate-500 px-2 py-0.5 rounded font-mono font-bold tracking-wider border border-slate-800">Legal Draft Style</span>
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-card flex-1 flex flex-col min-h-[300px]">
+          <div className="border-b border-gray-100 pb-3 mb-3 flex justify-between items-center">
+            <h3 className="text-[10.5px] font-bold uppercase tracking-widest text-gray-500">Live Document Preview</h3>
+            <span className="text-[9px] uppercase bg-gray-100 text-gray-400 px-2 py-0.5 rounded-lg font-mono font-bold tracking-wider border border-gray-200">Draft Style</span>
           </div>
 
-          <div className="flex-1 bg-[#06090f] border border-[#1a2535] p-4 rounded-md overflow-y-auto relative">
+          <div className="flex-1 bg-gray-50 border border-gray-200 p-4 rounded-xl overflow-y-auto relative">
             {/* Watermark */}
-            <div className="absolute top-3 right-3 text-[8.5px] uppercase border border-[#1a2535] text-slate-600 font-mono px-2 py-0.5 rounded rotate-2 opacity-50 font-bold pointer-events-none select-none">
-              Draft Preview
+            <div className="absolute top-3 right-3 text-[8.5px] uppercase border border-gray-300 text-gray-400 font-mono px-2 py-0.5 rounded-lg rotate-2 opacity-50 font-bold pointer-events-none select-none">
+              Draft
             </div>
-            <pre className="font-serif text-[11.5px] leading-[1.75] text-slate-200 whitespace-pre-wrap break-words">
+            <pre className="font-mono text-[11px] leading-[1.75] text-gray-500 whitespace-pre-wrap break-words">
               {auditDetails.previewText}
             </pre>
           </div>
-          <div className="text-[9.5px] text-slate-600 italic mt-2.5 leading-normal">
-            * Text compiles automatically as form fields update.
+          <div className="text-[10px] text-gray-300 italic mt-2.5 leading-normal">
+            * Updates automatically as you fill in form fields.
           </div>
         </div>
 

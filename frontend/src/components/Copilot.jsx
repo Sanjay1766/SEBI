@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Sparkles, Send, X, Clipboard, Check, Loader2, 
-  MessageSquare, FileText, ArrowRight, ShieldAlert 
+  Sparkles, Send, X, Check, Loader2, 
+  MessageSquare, FileText, ArrowRight, Bot
 } from 'lucide-react';
 
 const FIELD_LABELS = {
@@ -122,91 +122,105 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, backendUrl
   if (!isOpen) return null;
 
   return (
-    <div className="w-96 border-l border-slate-900 bg-[#080b12] shrink-0 flex flex-col justify-between h-screen sticky top-0 z-40 shadow-2xl relative animate-fade-in-up">
-      {/* Subtle border accent */}
-      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-sky-500/20 to-transparent"></div>
+    <div className="w-96 border-l border-gray-100 bg-white shrink-0 flex flex-col justify-between h-screen sticky top-0 z-40 shadow-card-lg relative animate-fade-in-up">
+      {/* Top accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-accent-400 via-accent-500 to-indigo-500" />
       
       {/* Header */}
-      <div className="p-4 border-b border-slate-900 flex justify-between items-center bg-[#080b12]">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-sky-950 text-sky-400 rounded border border-sky-900/50">
-            <Sparkles className="w-4 h-4 animate-pulse" />
+      <div className="pt-1 px-4 py-3.5 border-b border-gray-100 flex justify-between items-center bg-white">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 bg-accent-500 text-white rounded-xl flex items-center justify-center shadow-sm">
+            <Sparkles className="w-4.5 h-4.5" />
           </div>
           <div>
-            <h3 className="font-bold text-xs text-white">AI Compliance Copilot</h3>
-            <p className="text-[9px] font-bold text-sky-500 uppercase tracking-widest font-sans">SEBI SME Auditor</p>
+            <h3 className="font-bold text-[13px] text-gray-900">AI Compliance Copilot</h3>
+            <p className="text-[9.5px] font-bold text-accent-600 uppercase tracking-widest">SEBI SME Auditor</p>
           </div>
         </div>
         <button 
           onClick={onClose}
-          className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-905 hover:bg-slate-900 transition-all cursor-pointer"
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Message Feed */}
-      <div className="flex-grow overflow-y-auto p-4 space-y-4 scrollbar-thin bg-[#0b0f19]/80">
+      <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50/60">
         {messages.map((msg, index) => {
           const isUser = msg.role === 'user';
           const { cleanText, suggestion } = isUser ? { cleanText: msg.content, suggestion: null } : parseMessageContent(msg.content);
 
           return (
             <div key={index} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-fade-in-up`}>
+              {/* Avatar */}
+              {!isUser && (
+                <div className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center mb-1.5 shrink-0">
+                  <Bot className="w-3.5 h-3.5 text-white" />
+                </div>
+              )}
               <div 
-                className={`max-w-[85%] rounded px-3.5 py-2.5 text-xs shadow-sm leading-relaxed ${
+                className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12.5px] shadow-sm leading-relaxed ${
                   isUser 
-                    ? 'bg-[#0284c7] text-white rounded-tr-none' 
-                    : 'bg-[#131c31] border border-slate-800 text-slate-200 rounded-tl-none'
+                    ? 'bg-accent-500 text-white rounded-tr-none shadow-accent/20' 
+                    : 'bg-white border border-gray-100 text-gray-700 rounded-tl-none shadow-card'
                 }`}
               >
                 {/* Clean formatted text */}
-                <div className="whitespace-pre-line prose prose-invert max-w-none">
+                <div className="whitespace-pre-line">
                   {cleanText}
                 </div>
 
                 {/* Suggestion Card */}
                 {suggestion && (
-                  <div className="mt-3 p-3 bg-[#1e293b] rounded border border-slate-800 flex flex-col gap-2">
-                    <div className="flex items-center gap-1.5 text-sky-450 font-bold text-[10px] uppercase tracking-wider">
-                      <FileText className="w-3.5 h-3.5 text-sky-400" /> Suggestion Draft
+                  <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200 flex flex-col gap-2">
+                    <div className="flex items-center gap-1.5 text-accent-600 font-bold text-[10px] uppercase tracking-wider">
+                      <FileText className="w-3.5 h-3.5" /> Suggestion Draft
+                      {FIELD_LABELS[suggestion.key] && (
+                        <span className="text-gray-400 font-normal normal-case">· {FIELD_LABELS[suggestion.key]}</span>
+                      )}
                     </div>
-                    <p className="text-[10px] text-slate-300 italic line-clamp-3 bg-[#0b0f19] p-2 rounded border border-slate-850 leading-normal">
+                    <p className="text-[10.5px] text-gray-500 italic line-clamp-3 bg-white p-2.5 rounded-lg border border-gray-200 leading-relaxed">
                       "{suggestion.content}"
                     </p>
                     <button
                       onClick={() => handleApply(suggestion.key, suggestion.content)}
-                      className={`w-full py-1.5 px-3 rounded text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`w-full py-2 px-3 rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         appliedField === suggestion.key
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-[#0284c7]/20 hover:bg-[#0284c7] text-sky-300 hover:text-white border border-[#0284c7]/30'
+                          ? 'bg-emerald-500 text-white shadow-sm'
+                          : 'bg-accent-500 hover:bg-accent-600 text-white shadow-accent'
                       }`}
                     >
                       {appliedField === suggestion.key ? (
-                        <>
-                          <Check className="w-3 h-3" />
-                          Applied to Form!
-                        </>
+                        <><Check className="w-3.5 h-3.5" /> Applied to Form!</>
                       ) : (
-                        <>
-                          <ArrowRight className="w-3 h-3" />
-                          <span>Apply Draft</span>
-                        </>
+                        <><ArrowRight className="w-3.5 h-3.5" /><span>Apply to Form</span></>
                       )}
                     </button>
                   </div>
                 )}
               </div>
-              <span className="text-[8px] text-slate-500 mt-1 px-1 font-semibold">
+              <span className="text-[9px] text-gray-400 mt-1 px-1 font-medium">
                 {isUser ? 'You' : 'Copilot'}
               </span>
             </div>
           );
         })}
+
+        {/* Loading indicator */}
         {loading && (
-          <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-500" />
-            <span>Compliance Engine Auditing...</span>
+          <div className="flex items-start gap-2 animate-fade-in-up">
+            <div className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center shrink-0">
+              <Bot className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-card flex items-center gap-2">
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-accent-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-accent-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-accent-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="text-[11px] text-gray-400 font-medium">Analyzing compliance…</span>
+            </div>
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -214,17 +228,17 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, backendUrl
 
       {/* Quick Prompts Panel */}
       {messages.length === 1 && (
-        <div className="px-4 pb-3 pt-2 bg-[#080b12] border-t border-slate-900">
-          <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500 mb-2 select-none">Suggested Actions</p>
+        <div className="px-4 pb-3 pt-2 bg-white border-t border-gray-100">
+          <p className="text-[9.5px] uppercase font-bold tracking-widest text-gray-400 mb-2 select-none">Quick Actions</p>
           <div className="grid grid-cols-1 gap-1.5">
             {quickPrompts.map((p, idx) => (
               <button
                 key={idx}
                 onClick={() => handleSend(p.query)}
-                className="w-full text-left text-[10px] py-2 px-3 rounded bg-[#131c31] hover:bg-[#1e293b] border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between shadow-sm cursor-pointer text-slate-300 hover:text-white font-semibold"
+                className="w-full text-left text-[11px] py-2.5 px-3.5 rounded-xl bg-white hover:bg-accent-50 border border-gray-200 hover:border-accent-200 transition-all flex items-center justify-between shadow-card cursor-pointer text-gray-600 hover:text-accent-700 font-semibold"
               >
                 <span>{p.label}</span>
-                <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
               </button>
             ))}
           </div>
@@ -234,19 +248,19 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, backendUrl
       {/* Input Form */}
       <form 
         onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-        className="p-4 border-t border-slate-900 bg-[#080b12] flex gap-2 select-none"
+        className="p-4 border-t border-gray-100 bg-white flex gap-2 select-none"
       >
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about SEBI compliance or draft..."
-          className="flex-1 bg-[#0b0f19] border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 transition-all shadow-sm"
+          placeholder="Ask about SEBI compliance or draft…"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-[12.5px] text-gray-700 placeholder-gray-400 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-500/10 focus:bg-white transition-all shadow-sm"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="p-2 rounded bg-sky-600 hover:bg-sky-500 text-white transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-sm"
+          className="p-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-accent"
         >
           <Send className="w-4 h-4" />
         </button>
