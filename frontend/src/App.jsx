@@ -8,11 +8,9 @@ import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
-import { API_URL } from './config';
+import { apiFetch } from './api';
 
-const BACKEND_URL = API_URL;
-
-export default function App() {
+export default function App({ user, onSignOut }) {
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, basics, general, management, capital, objects, business, disclosures
   const [sessionData, setSessionData] = useState({
     form_data: {},
@@ -44,6 +42,8 @@ export default function App() {
     handleFormChange(key, value);
   };
 
+  const authFetch = (path, options) => apiFetch(path, options);
+
   // Fetch initial session state
   useEffect(() => {
     fetchSession();
@@ -59,7 +59,7 @@ export default function App() {
   const fetchSession = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${BACKEND_URL}/api/session`);
+      const res = await authFetch('/api/session');
       if (res.ok) {
         const data = await res.json();
         setSessionData(data);
@@ -75,7 +75,7 @@ export default function App() {
 
   const validateSession = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/validate`);
+      const res = await authFetch('/api/validate');
       if (res.ok) {
         const data = await res.json();
         setValidationResults(data);
@@ -87,7 +87,7 @@ export default function App() {
 
   const persistFormData = async (formData) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/session`, {
+      const res = await authFetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ form_data: formData })
@@ -124,7 +124,7 @@ export default function App() {
     setConfirmReset(false);
     try {
       setLoading(true);
-      const res = await fetch(`${BACKEND_URL}/api/reset`, { method: 'POST' });
+      const res = await authFetch('/api/reset', { method: 'POST' });
       if (res.ok) {
         fetchSession();
         setActiveTab('dashboard');
@@ -234,7 +234,7 @@ export default function App() {
 
     // Sync form_data to backend
     try {
-      await fetch(`${BACKEND_URL}/api/session`, {
+      await authFetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ form_data: updatedSession.form_data })
@@ -245,7 +245,7 @@ export default function App() {
 
     // Always sync full session (including extracted_data) to backend
     try {
-      await fetch(`${BACKEND_URL}/api/session_sync`, {
+      await authFetch('/api/session_sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedSession)
@@ -281,7 +281,7 @@ export default function App() {
   // Sync session on upload changes - always persist extracted_data
   useEffect(() => {
     if (!loading) {
-      fetch(`${BACKEND_URL}/api/session_sync`, {
+      authFetch('/api/session_sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionData)
@@ -294,7 +294,7 @@ export default function App() {
   const handleGenerateProspectus = async () => {
     setGenerating(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/generate`, { method: 'POST' });
+      const res = await authFetch('/api/generate', { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
         alert(`Generation failed: ${err.detail || res.statusText}`);
@@ -561,6 +561,12 @@ export default function App() {
               <LogOut className="w-3.5 h-3.5" /> Reset workspace
             </button>
           )}
+          <button
+            onClick={onSignOut}
+            className="w-full mt-2 py-2 px-3 rounded-xl text-[11.5px] font-semibold text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Sign out {user?.email ? `(${user.email})` : ''}
+          </button>
         </div>
       </aside>
 
@@ -638,7 +644,7 @@ export default function App() {
                 <Uploader 
                   sessionData={sessionData}
                   onUploadSuccess={handleUploadSuccess}
-                  backendUrl={BACKEND_URL}
+                  apiFetch={authFetch}
                 />
               )}
 
@@ -669,7 +675,7 @@ export default function App() {
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
         onApplySuggestion={handleApplySuggestion}
-        backendUrl={BACKEND_URL}
+        apiFetch={authFetch}
       />
     </div>
   );
