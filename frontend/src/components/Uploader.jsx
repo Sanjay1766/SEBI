@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X } from 'lucide-react';
 
-export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
+export default function Uploader({ sessionData, onUploadSuccess, apiFetch }) {
   const [uploading, setUploading] = useState({
     financials: false,
     gst: false,
@@ -48,7 +48,7 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${backendUrl}/api/upload`, {
+      const response = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData,
       });

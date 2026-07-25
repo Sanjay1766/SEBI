@@ -16,6 +16,17 @@ Before you begin, ensure you have the following installed on your machine:
   - *macOS:* `brew install poppler tesseract`
   - *Windows:* Download and install [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and [Poppler](https://github.com/oschwartz10612/poppler-windows/releases/), and add them to your system PATH.
 
+## User accounts and isolated workspaces
+
+The application uses Supabase Auth and a Supabase database row for each user's saved workspace. It no longer supports the former shared local session file.
+
+1. Create a Supabase project and enable **Email** authentication.
+2. Run [`supabase/migrations/20260726_create_ipo_workspaces.sql`](supabase/migrations/20260726_create_ipo_workspaces.sql) in the Supabase SQL Editor.
+3. Copy `backend/.env.example` to `backend/.env`, and set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+4. Copy `frontend/.env.example` to `frontend/.env.local`, and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+
+Never place the Supabase service-role key in the frontend. If a key was previously committed, rotate it in its provider dashboard before deployment.
+
 ---
 
 ## Step 1: Environment Setup

@@ -103,7 +103,7 @@ const renderMessageContent = (text) => {
   return <div className="space-y-0.5">{renderedElements}</div>;
 };
 
-export default function Copilot({ isOpen, onClose, onApplySuggestion, backendUrl }) {
+export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -146,7 +146,7 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, backendUrl
         content: msg.content
       }));
 
-      const res = await fetch(`${backendUrl}/api/copilot`, {
+      const res = await apiFetch('/api/copilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
