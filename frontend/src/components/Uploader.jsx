@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck } from 'lucide-react';
+import DigiLockerPanel from './DigiLockerPanel';
 
-export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
+export default function Uploader({ sessionData, onUploadSuccess, backendUrl, onSimulateDigiLocker, pullingDigiLocker, isDigiLockerConnected }) {
   const [uploading, setUploading] = useState({
     financials: false,
     gst: false,
@@ -99,54 +100,48 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
       iconBg: 'bg-blue-100',
       icon: '📊',
       extractedKeys: {
-        fy_years: 'Fiscal Years',
-        revenue_fy_latest: 'Latest Revenue',
-        pat_fy_latest: 'Latest Net Profit',
-        borrowings_latest: 'Outstanding Borrowings',
-        auditor_name: 'Statutory Auditor',
-        auditor_membership: 'Auditor Membership'
+        revenue_fy_latest: 'Latest FY Revenue (Cr)',
+        pat_fy_latest: 'Latest FY PAT (Cr)',
+        net_worth: 'Company Net Worth (Cr)'
       }
     },
     gst: {
-      title: 'GST Certificates',
-      desc: 'GST registration certificate (REG-06) or filing records (PDF/Image).',
+      title: 'GST Registration & Returns',
+      desc: 'GSTR-3B summary or GSTIN Certificate.',
       accentColor: 'text-emerald-600',
       accentBg: 'bg-emerald-50',
       accentBorder: 'border-emerald-200',
       iconBg: 'bg-emerald-100',
       icon: '🧾',
       extractedKeys: {
-        gstin: 'GSTIN Registration',
-        company_name: 'Taxpayer Legal Name',
-        gst_annual_turnover: 'GST Turnover',
-        registration_date: 'Registration Date',
-        filing_status: 'Filing Status'
+        gstin: 'GSTIN Registration No.',
+        company_name: 'Name on GST Certificate',
+        gst_annual_turnover: 'Annual GST Turnover (Cr)',
+        registration_date: 'GST Registration Date'
       }
     },
     incorporation: {
-      title: 'Incorporation Docs',
-      desc: 'Certificate of Incorporation issued by Registrar of Companies (PDF/Image).',
-      accentColor: 'text-indigo-600',
-      accentBg: 'bg-indigo-50',
-      accentBorder: 'border-indigo-200',
-      iconBg: 'bg-indigo-100',
-      icon: '🏢',
+      title: 'Certificate of Incorporation',
+      desc: 'MCA Incorporation Cert or Memorandum of Association (MoA).',
+      accentColor: 'text-purple-600',
+      accentBg: 'bg-purple-50',
+      accentBorder: 'border-purple-200',
+      iconBg: 'bg-purple-100',
+      icon: '📜',
       extractedKeys: {
-        cin: 'RoC Corporate ID (CIN)',
-        company_name: 'RoC Registered Name',
-        incorporation_date: 'Incorporation Date',
-        registered_office: 'Registered Office Address',
-        company_type: 'Company Category'
+        cin: 'Corporate Identity No. (CIN)',
+        company_name: 'Name on Incorporation Cert',
+        incorporation_date: 'Date of Incorporation'
       }
     },
     compliance: {
-      title: 'PAN & TAN Licenses',
-      desc: 'Statutory company PAN, TAN or local operating licenses (PDF/Image).',
+      title: 'PAN Card & Tax Filings',
+      desc: 'Company PAN Card or ITR Verification Acknowledgement.',
       accentColor: 'text-amber-600',
       accentBg: 'bg-amber-50',
       accentBorder: 'border-amber-200',
       iconBg: 'bg-amber-100',
-      icon: '📋',
+      icon: '🪪',
       extractedKeys: {
         pan: 'Company PAN No.',
         pan_name: 'Name on PAN',
@@ -175,9 +170,16 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
       <div className="mb-2">
         <h2 className="text-xl font-display font-700 text-gray-900">Document Vault</h2>
         <p className="text-[12.5px] text-gray-400 font-medium mt-1 leading-normal">
-          Upload statutory certificates and financial documents. The parser validates formats and identifies cross-document discrepancies.
+          Upload statutory certificates and financial documents manually or fetch directly via DigiLocker DPI.
         </p>
       </div>
+
+      {/* DigiLocker DPI Integration Panel */}
+      <DigiLockerPanel
+        onSimulatePull={onSimulateDigiLocker}
+        pulling={pullingDigiLocker}
+        isConnected={isDigiLockerConnected}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {Object.entries(docConfig).map(([type, config]) => {
