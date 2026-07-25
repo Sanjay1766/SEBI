@@ -423,14 +423,8 @@ def run_all_consistency_checks(
     if flag:
         flags.append(flag)
 
-    # 4. Shareholding sum
-    flag = check_shareholding_sum(
-        promoter_pct=merged.get("promoter_shareholding_pre_pct"),
-        issue_size=merged.get("issue_size"),
-        paid_up_pre=merged.get("paid_up_capital_pre"),
-    )
-    if flag:
-        flags.append(flag)
+    # Post-issue promoter holdings require share-level inputs and are intentionally
+    # not inferred from issue proceeds. They must be calculated and reviewed separately.
 
     # 5. Capital structure (returns list)
     cap_flags = check_capital_structure(

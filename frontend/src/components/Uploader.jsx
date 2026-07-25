@@ -59,7 +59,8 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
       }
 
       const result = await response.json();
-      onUploadSuccess(docType, result.extracted, result.filename);
+      onUploadSuccess(docType, result.extracted, { filename: result.filename, size: file.size, extraction_status: result.extraction_status, extraction_error: result.extraction_error });
+      if (result.extraction_status !== 'completed') setError(prev => ({ ...prev, [docType]: result.extraction_error || 'Extraction needs manual review.' }));
     } catch (err) {
       console.error(err);
       setError(prev => ({ ...prev, [docType]: err.message || 'An error occurred.' }));
@@ -184,8 +185,9 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
           const hasError = error[type];
           const isDragging = dragging[type];
           const extractedData = sessionData.extracted_data?.[type] || {};
-          const isUploaded = Object.keys(extractedData).length > 0;
           const uploadedFileObj = sessionData.uploaded_files?.find(f => f.type === type);
+          const extractionCompleted = uploadedFileObj?.extraction_status === 'completed';
+          const isUploaded = Object.keys(extractedData).length > 0 || !!uploadedFileObj;
           const showJson = expandedJson[type];
 
           return (
@@ -207,8 +209,9 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
                     <div>
                       <h3 className="font-bold text-[14px] text-gray-800">{config.title}</h3>
                       {isUploaded && (
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 mt-0.5 select-none w-fit">
-                          <CheckCircle2 className="w-3 h-3" /> Verified
+                        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border mt-0.5 select-none w-fit ${extractionCompleted ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+                          {extractionCompleted ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                          {extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
                         </span>
                       )}
                     </div>
@@ -279,7 +282,7 @@ export default function Uploader({ sessionData, onUploadSuccess, backendUrl }) {
                       </div>
                       <div className="overflow-hidden">
                         <p className="text-[12px] text-gray-700 font-semibold truncate">{uploadedFileObj?.filename || 'Uploaded File'}</p>
-                        <p className="text-[10px] text-gray-400 font-medium">{(uploadedFileObj?.size ? (uploadedFileObj.size / 1024).toFixed(0) : '150')} KB · Verified</p>
+                        <p className="text-[10px] text-gray-400 font-medium">{(uploadedFileObj?.size ? (uploadedFileObj.size / 1024).toFixed(0) : '0')} KB · {extractionCompleted ? 'Extracted — confirm fields' : 'Manual entry needed'}</p>
                       </div>
                     </div>
                     
