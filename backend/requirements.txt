@@ -8,3 +8,7 @@ python-dotenv
 python-multipart
 pytesseract
 pdf2image
+# Blockchain anchoring (Polygon Amoy Testnet)
+# Run: pip install web3
+# Not strictly required — app runs in mock mode if not installed
+web3

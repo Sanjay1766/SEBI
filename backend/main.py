@@ -12,6 +12,23 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+# Import blockchain anchoring service (graceful mock if web3 not installed)
+try:
+    from blockchain import (
+        compute_sha256_file,
+        compute_sha256_bytes,
+        anchor_document_hash,
+        seal_prospectus,
+        verify_document_hash,
+        verify_prospectus_hash,
+        get_blockchain_status,
+    )
+    BLOCKCHAIN_AVAILABLE = True
+except ImportError:
+    BLOCKCHAIN_AVAILABLE = False
+    logger_tmp = logging.getLogger("sebi-ipo-generator")
+    logger_tmp.warning("blockchain.py not found — blockchain features disabled.")
+
 # Import our custom modules
 try:
     from extractor import extract_document_data, OCR_STATUS
@@ -412,6 +429,25 @@ async def upload_document(
         logger.error(f"Failed to write uploaded file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file locally")
     
+    # ── Blockchain: compute SHA-256 BEFORE extraction/cleanup ───────────────
+    blockchain_record = {}
+    doc_hash = None
+    if BLOCKCHAIN_AVAILABLE:
+        try:
+            doc_hash = compute_sha256_file(file_path)
+            logger.info(f"SHA-256 of {file.filename}: {doc_hash[:18]}...")
+            blockchain_record = anchor_document_hash(
+                doc_hash=doc_hash,
+                doc_type=doc_type,
+            )
+            logger.info(
+                f"Blockchain anchor [{blockchain_record.get('mode','?')}] "
+                f"tx={blockchain_record.get('tx_hash','N/A')[:18]}..."
+            )
+        except Exception as bc_err:
+            logger.warning(f"Blockchain anchoring skipped for {file.filename}: {bc_err}")
+    # ────────────────────────────────────────────────────────────────────────
+
     # Run Groq extraction pipeline
     session = load_session(user["id"])
     try:
@@ -422,14 +458,30 @@ async def upload_document(
 
         # Merge or update the specific document type's extracted data
         session["extracted_data"][doc_type] = extracted
-        session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
-        session["uploaded_files"].append({
+
+        # Build file metadata entry (with blockchain fields + extraction status)
+        file_meta = {
             "filename": original_filename,
             "type": doc_type,
             "size": os.path.getsize(file_path),
             "extraction_status": extraction_status,
             "extraction_error": extraction_error,
-        })
+        }
+        # Attach blockchain proof if anchoring succeeded
+        if doc_hash:
+            file_meta["doc_hash"] = doc_hash
+        if blockchain_record:
+            file_meta["blockchain"] = {
+                "mode":         blockchain_record.get("mode"),
+                "status":       blockchain_record.get("status"),
+                "tx_hash":      blockchain_record.get("tx_hash"),
+                "explorer_url": blockchain_record.get("explorer_url"),
+                "network":      blockchain_record.get("network"),
+            }
+
+        # Replace any existing file of same type, then append updated entry
+        session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
+        session["uploaded_files"].append(file_meta)
 
         save_session(user["id"], session)
         return {
@@ -439,13 +491,19 @@ async def upload_document(
             "extracted": extracted,
             "extraction_status": extraction_status,
             "extraction_error": extraction_error,
+            "blockchain": blockchain_record if blockchain_record else None,
         }
     except Exception as e:
         logger.error(f"Extraction failed for {original_filename}: {e}")
         raise HTTPException(status_code=500, detail=f"Data extraction failed: {str(e)}")
     finally:
-        if os.path.exists(file_path):
-            os.unlink(file_path)
+        # Always clean up the temp file to prevent unbounded disk growth
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Cleaned up temp file: {file_path}")
+        except Exception as cleanup_err:
+            logger.warning(f"Could not delete temp file {file_path}: {cleanup_err}")
 
 @app.get("/api/validate")
 def get_validation(user: Dict[str, Any] = Depends(get_current_user)):
@@ -471,17 +529,71 @@ async def generate_draft(user: Dict[str, Any] = Depends(get_current_user)):
         
         if not os.path.exists(output_path):
             raise HTTPException(status_code=500, detail="Draft prospectus file was not generated.")
-            
-        return FileResponse(
-            path=output_path, 
+
+        # ── Blockchain: seal the generated prospectus ────────────────────────
+        blockchain_seal = None
+        if BLOCKCHAIN_AVAILABLE:
+            try:
+                with open(output_path, "rb") as f:
+                    docx_bytes = f.read()
+                draft_hash = compute_sha256_bytes(docx_bytes)
+                company_name = session.get("form_data", {}).get("company_name", "Unknown Company")
+                blockchain_seal = seal_prospectus(
+                    draft_hash=draft_hash,
+                    company_name=company_name,
+                )
+                logger.info(
+                    f"Prospectus sealed [{blockchain_seal.get('mode','?')}] "
+                    f"company={company_name} hash={draft_hash[:18]}..."
+                )
+            except Exception as bc_err:
+                logger.warning(f"Prospectus blockchain seal skipped: {bc_err}")
+        # ────────────────────────────────────────────────────────────────────
+
+        response = FileResponse(
+            path=output_path,
             filename=output_filename,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
+        # Attach blockchain seal metadata in response headers if available
+        if blockchain_seal:
+            response.headers["X-Blockchain-TxHash"]     = blockchain_seal.get("tx_hash", "")
+            response.headers["X-Blockchain-Mode"]       = blockchain_seal.get("mode", "")
+            response.headers["X-Blockchain-ExplorerUrl"] = blockchain_seal.get("explorer_url", "")
+        return response
     except Exception as e:
         logger.error(f"Prospectus generation failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+
+@app.get("/api/blockchain/status")
+def blockchain_status():
+    """Returns blockchain node connectivity, wallet info, and MATIC balance."""
+    if not BLOCKCHAIN_AVAILABLE:
+        return {"mode": "unavailable", "reason": "blockchain.py module not loaded"}
+    return get_blockchain_status()
+
+
+@app.get("/api/blockchain/verify/document/{doc_hash}")
+def verify_doc(doc_hash: str):
+    """Query the blockchain to verify whether a document hash was anchored."""
+    if not BLOCKCHAIN_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Blockchain module not available")
+    if not doc_hash.startswith("0x") or len(doc_hash) != 66:
+        raise HTTPException(status_code=400, detail="Invalid hash format. Expected '0x' + 64 hex chars.")
+    return verify_document_hash(doc_hash)
+
+
+@app.get("/api/blockchain/verify/prospectus/{draft_hash}")
+def verify_prosp(draft_hash: str):
+    """Query the blockchain to verify whether a prospectus hash was sealed."""
+    if not BLOCKCHAIN_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Blockchain module not available")
+    if not draft_hash.startswith("0x") or len(draft_hash) != 66:
+        raise HTTPException(status_code=400, detail="Invalid hash format. Expected '0x' + 64 hex chars.")
+    return verify_prospectus_hash(draft_hash)
 
 if __name__ == "__main__":
     import uvicorn
