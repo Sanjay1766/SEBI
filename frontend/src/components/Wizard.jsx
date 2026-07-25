@@ -6,6 +6,8 @@ import {
   ChevronRight, ChevronLeft, Info, Sparkles
 } from 'lucide-react';
 
+// BACKEND_URL is exported from config.js as API_URL
+
 export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, validationResults, extractedData }) {
   const [draftingFields, setDraftingFields] = useState({});
 
