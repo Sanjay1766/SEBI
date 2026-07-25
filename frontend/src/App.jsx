@@ -8,12 +8,9 @@ import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
-// PerformanceReport removed — component not yet implemented
+import { apiFetch } from './api';
 
-// Read backend URL from Vite env variable; fall back to localhost for local dev
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
-export default function App() {
+export default function App({ user, onSignOut }) {
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, basics, general, management, capital, objects, business, disclosures
   const [sessionData, setSessionData] = useState({
     form_data: {},
@@ -49,6 +46,8 @@ export default function App() {
     handleFormChange(key, value);
   };
 
+  const authFetch = (path, options) => apiFetch(path, options);
+
   // Fetch initial session state
   useEffect(() => {
     fetchSession();
@@ -64,7 +63,7 @@ export default function App() {
   const fetchSession = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${BACKEND_URL}/api/session`);
+      const res = await authFetch('/api/session');
       if (res.ok) {
         const data = await res.json();
         setSessionData(data);
@@ -80,7 +79,7 @@ export default function App() {
 
   const validateSession = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/validate`);
+      const res = await authFetch('/api/validate');
       if (res.ok) {
         const data = await res.json();
         setValidationResults(data);
@@ -90,23 +89,36 @@ export default function App() {
     }
   };
 
+  const persistFormData = async (formData) => {
+    try {
+      const res = await authFetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ form_data: formData })
+      });
+      if (!res.ok) throw new Error('Save failed');
+      setSaveStatus('saved');
+      await validateSession();
+    } catch (err) {
+      console.error('Failed to save session state:', err);
+      setSaveStatus('error');
+    }
+  };
+
   const handleSimulateDigiLocker = async () => {
     setPullingDigiLocker(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/dpi/digilocker/simulate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setSessionData(data.session);
-        } else {
-          await fetchSession();
-        }
-        setIsDigiLockerConnected(true);
-        await validateSession();
+      const res = await authFetch('/api/dpi/digilocker/simulate', { method: 'POST' });
+      if (!res.ok) throw new Error('DigiLocker simulation failed');
+      const data = await res.json();
+      if (data.session) {
+        sessionDataRef.current = data.session;
+        setSessionData(data.session);
+      } else {
+        await fetchSession();
       }
+      setIsDigiLockerConnected(true);
+      await validateSession();
     } catch (err) {
       console.error('DigiLocker simulation failed:', err);
     } finally {
@@ -117,15 +129,13 @@ export default function App() {
   const handleScanRedFlags = async () => {
     setScanningRedFlags(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/nlp/redflag`, {
+      const res = await authFetch('/api/nlp/redflag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ form_data: sessionData.form_data }),
+        body: JSON.stringify({ form_data: sessionDataRef.current.form_data }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setRedFlagResults(data);
-      }
+      if (!res.ok) throw new Error('Red-flag scan failed');
+      setRedFlagResults(await res.json());
     } catch (err) {
       console.error('Red Flag scan failed:', err);
     } finally {
@@ -133,41 +143,16 @@ export default function App() {
     }
   };
 
-  // Ref for the debounce timer — persists across renders without causing re-renders
-  const debounceTimerRef = useRef(null);
 
   const handleFormChange = (key, value) => {
     setSaveStatus('saving');
+    const updatedFormData = { ...sessionDataRef.current.form_data, [key]: value };
+    const updatedSession = { ...sessionDataRef.current, form_data: updatedFormData };
+    sessionDataRef.current = updatedSession;
+    setSessionData(updatedSession);
 
-    // Update local state immediately so the UI stays responsive on every keystroke
-    setSessionData(prev => {
-      const updatedFormData = { ...prev.form_data, [key]: value };
-
-      // Debounce the backend sync: cancel any in-flight timer and start a fresh 500 ms one.
-      // The closure captures updatedFormData so the API call always sends the latest snapshot.
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(async () => {
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/session`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ form_data: updatedFormData })
-          });
-          if (res.ok) {
-            setSaveStatus('saved');
-            // Validate only after the debounced save completes (no redundant calls)
-            await validateSession();
-          } else {
-            setSaveStatus('error');
-          }
-        } catch (err) {
-          console.error('Failed to save session state:', err);
-          setSaveStatus('error');
-        }
-      }, 500);
-
-      return { ...prev, form_data: updatedFormData };
-    });
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => persistFormData(updatedFormData), 500);
   };
 
   const handleUploadSuccess = (docType, extractedFields, upload) => {
@@ -175,21 +160,25 @@ export default function App() {
       const updatedFiles = prev.uploaded_files.filter(f => f.type !== docType);
       updatedFiles.push({ ...upload, type: docType });
 
+      // Auto-fill only blank fields. A manually entered value always takes priority.
       const updatedFormData = { ...prev.form_data };
-      if (extractedFields && typeof extractedFields === 'object') {
-        Object.entries(extractedFields).forEach(([k, v]) => {
-          if (v !== null && v !== undefined && k !== 'missing_fields') {
-            updatedFormData[k] = v;
-          }
-        });
+      for (const [key, value] of Object.entries(extractedFields || {})) {
+        const isMetadata = key === 'missing_fields';
+        const isMeaningfulValue = value !== undefined && value !== null && value !== '';
+        const isBlankFormField = updatedFormData[key] === undefined || updatedFormData[key] === null || updatedFormData[key] === '';
+        if (!isMetadata && isMeaningfulValue && isBlankFormField) {
+          updatedFormData[key] = value;
+        }
       }
 
-      return {
+      const updatedSession = {
         ...prev,
         form_data: updatedFormData,
         extracted_data: { ...prev.extracted_data, [docType]: extractedFields },
-        uploaded_files: updatedFiles
+        uploaded_files: updatedFiles,
       };
+      sessionDataRef.current = updatedSession;
+      return updatedSession;
     });
 
     setTimeout(() => {
@@ -202,7 +191,7 @@ export default function App() {
     setConfirmReset(false);
     try {
       setLoading(true);
-      const res = await fetch(`${BACKEND_URL}/api/reset`, { method: 'POST' });
+      const res = await authFetch('/api/reset', { method: 'POST' });
       if (res.ok) {
         fetchSession();
         setActiveTab('dashboard');
@@ -312,7 +301,7 @@ export default function App() {
 
     // Sync form_data to backend
     try {
-      await fetch(`${BACKEND_URL}/api/session`, {
+      await authFetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ form_data: updatedSession.form_data })
@@ -323,7 +312,7 @@ export default function App() {
 
     // Always sync full session (including extracted_data) to backend
     try {
-      await fetch(`${BACKEND_URL}/api/session_sync`, {
+      await authFetch('/api/session_sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedSession)
@@ -359,7 +348,7 @@ export default function App() {
   // Sync session on upload changes - always persist extracted_data
   useEffect(() => {
     if (!loading) {
-      fetch(`${BACKEND_URL}/api/session_sync`, {
+      authFetch('/api/session_sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionData)
@@ -372,7 +361,7 @@ export default function App() {
   const handleGenerateProspectus = async () => {
     setGenerating(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/generate`, { method: 'POST' });
+      const res = await authFetch('/api/generate', { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
         alert(`Generation failed: ${err.detail || res.statusText}`);
@@ -635,6 +624,12 @@ export default function App() {
               <LogOut className="w-3.5 h-3.5" /> Reset workspace
             </button>
           )}
+          <button
+            onClick={onSignOut}
+            className="w-full mt-2 py-2 px-3 rounded-xl text-[11.5px] font-semibold text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Sign out {user?.email ? `(${user.email})` : ''}
+          </button>
         </div>
       </aside>
 
@@ -714,7 +709,7 @@ export default function App() {
                 <Uploader
                   sessionData={sessionData}
                   onUploadSuccess={handleUploadSuccess}
-                  backendUrl={BACKEND_URL}
+                  apiFetch={authFetch}
                   onSimulateDigiLocker={handleSimulateDigiLocker}
                   pullingDigiLocker={pullingDigiLocker}
                   isDigiLockerConnected={isDigiLockerConnected}
@@ -748,7 +743,7 @@ export default function App() {
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
         onApplySuggestion={handleApplySuggestion}
-        backendUrl={BACKEND_URL}
+        apiFetch={authFetch}
       />
     </div>
   );

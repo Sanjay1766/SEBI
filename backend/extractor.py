@@ -225,9 +225,11 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
             2. 'revenue_fy_latest': Total Revenue / Total Income in the latest financial year (in INR Crores, as a float number)
             3. 'pat_fy_latest': Profit After Tax (PAT) / Net Profit in the latest financial year (in INR Crores, as a float number)
             4. 'borrowings_latest': Total short-term and long-term borrowings in the latest financial year (in INR Crores, as a float number)
-            5. 'auditor_name': Name of the statutory auditor or auditing firm
-            6. 'auditor_membership': Auditor membership number or registration number
-            7. 'missing_fields': An array of strings listing any of the above 6 field KEYS that are NOT clearly present in the text.
+            5. 'authorized_capital': Authorized share capital, in INR Crores as a float number
+            6. 'paid_up_capital_pre': Paid-up share capital before the proposed issue, in INR Crores as a float number
+            7. 'auditor_name': Name of the statutory auditor or auditing firm
+            8. 'auditor_membership': Auditor membership number or registration number
+            9. 'missing_fields': An array of strings listing any of the above 8 field KEYS that are NOT clearly present in the text.
 
             CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
             Output format must be valid JSON.
@@ -316,7 +318,7 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
                 raise je
         
         # Clean numeric fields (ensure floats)
-        for key in ["revenue_fy_latest", "pat_fy_latest", "borrowings_latest", "gst_annual_turnover"]:
+        for key in ["revenue_fy_latest", "pat_fy_latest", "borrowings_latest", "gst_annual_turnover", "authorized_capital", "paid_up_capital_pre"]:
             if key in extracted_data and extracted_data[key] is not None:
                 try:
                     # Convert string to float if it came as string

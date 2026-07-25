@@ -2,12 +2,13 @@ import os
 import json
 import logging
 import tempfile
-import threading
 import uuid
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import Depends, FastAPI, Header, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -79,9 +80,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SESSION_FILE = os.path.join(os.path.dirname(__file__), "session_state.json")
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "schema.json")
-SESSION_LOCK = threading.Lock()
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_UPLOADS = {
     ".pdf": b"%PDF-",
@@ -90,58 +89,74 @@ ALLOWED_UPLOADS = {
     ".jpeg": b"\xff\xd8\xff",
 }
 
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+# Supabase now issues publishable/secret keys. The legacy anon/service-role
+# names remain supported for existing projects.
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SECRET_KEY", "")
+
+def empty_session() -> Dict[str, Any]:
+    return {
+        "form_data": {},
+        "extracted_data": {"financials": {}, "gst": {}, "incorporation": {}, "compliance": {}},
+        "uploaded_files": [],
+    }
+
+def require_supabase_config() -> None:
+    if not (SUPABASE_URL and SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY):
+        raise HTTPException(status_code=503, detail="Supabase is not configured on the API server.")
+
+def supabase_request(path: str, method: str = "GET", payload: Optional[Dict[str, Any]] = None, token: Optional[str] = None) -> Any:
+    require_supabase_config()
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = Request(
+        f"{SUPABASE_URL}{path}", method=method, data=body,
+        headers={
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {token or SUPABASE_SERVICE_ROLE_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Prefer": "return=representation",
+        },
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else None
+    except (HTTPError, URLError, json.JSONDecodeError) as exc:
+        logger.error("Supabase request failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Workspace storage is temporarily unavailable.")
+
+def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    require_supabase_config()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authentication token.")
+    access_token = authorization.removeprefix("Bearer ").strip()
+    try:
+        request = Request(
+            f"{SUPABASE_URL}/auth/v1/user", headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {access_token}"}
+        )
+        with urlopen(request, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, json.JSONDecodeError):
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication token.")
+
 def load_schema() -> Dict[str, Any]:
     if not os.path.exists(SCHEMA_FILE):
         return {"sections": []}
     with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def load_session() -> Dict[str, Any]:
-    if not os.path.exists(SESSION_FILE):
-        # Return a blank session state
-        return {
-            "form_data": {},
-            "extracted_data": {
-                "financials": {},
-                "gst": {},
-                "incorporation": {},
-                "compliance": {}
-            },
-            "uploaded_files": []
-        }
-    try:
-        with open(SESSION_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading session: {e}")
-        return {
-            "form_data": {},
-            "extracted_data": {
-                "financials": {},
-                "gst": {},
-                "incorporation": {},
-                "compliance": {}
-            },
-            "uploaded_files": []
-        }
+def load_session(user_id: str) -> Dict[str, Any]:
+    rows = supabase_request(f"/rest/v1/ipo_workspaces?user_id=eq.{user_id}&select=session_data")
+    if rows:
+        return rows[0].get("session_data") or empty_session()
+    session = empty_session()
+    supabase_request("/rest/v1/ipo_workspaces", method="POST", payload={"user_id": user_id, "session_data": session})
+    return session
 
-def save_session(data: Dict[str, Any]):
-    try:
-        # Atomic replacement prevents a partially-written JSON file on interruption.
-        with SESSION_LOCK:
-            directory = os.path.dirname(SESSION_FILE)
-            fd, temporary_path = tempfile.mkstemp(prefix="session-", suffix=".json", dir=directory)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(temporary_path, SESSION_FILE)
-            finally:
-                if os.path.exists(temporary_path):
-                    os.unlink(temporary_path)
-    except Exception as e:
-        logger.error(f"Error saving session: {e}")
+def save_session(user_id: str, data: Dict[str, Any]) -> None:
+    supabase_request(f"/rest/v1/ipo_workspaces?user_id=eq.{user_id}", method="PATCH", payload={"session_data": data})
 
 class FormDataPayload(BaseModel):
     form_data: Dict[str, Any]
@@ -213,8 +228,8 @@ Guidelines for responding:
     return system_prompt
 
 @app.post("/api/copilot")
-def copilot_assistant(payload: CopilotPayload):
-    session = load_session()
+def copilot_assistant(payload: CopilotPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
     schema = load_schema()
     validation = validate_session_data(session, schema)
     
@@ -279,7 +294,7 @@ def copilot_assistant(payload: CopilotPayload):
             }
 
 @app.post("/api/draft")
-def draft_field(payload: DraftPayload):
+def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_user)):
     field_key = payload.field_key
     form_data = payload.form_data
     
@@ -368,46 +383,37 @@ def get_schema():
     return load_schema()
 
 @app.get("/api/session")
-def get_session():
-    return load_session()
+def get_session(user: Dict[str, Any] = Depends(get_current_user)):
+    return load_session(user["id"])
 
 @app.post("/api/session")
-def update_session(payload: FormDataPayload):
-    session = load_session()
+def update_session(payload: FormDataPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
     session["form_data"] = payload.form_data
-    save_session(session)
+    save_session(user["id"], session)
     return {"status": "success", "message": "Session updated successfully"}
 
 @app.post("/api/session_sync")
-def sync_session(payload: FullSessionPayload):
+def sync_session(payload: FullSessionPayload, user: Dict[str, Any] = Depends(get_current_user)):
     session = {
         "form_data": payload.form_data,
         "extracted_data": payload.extracted_data,
         "uploaded_files": payload.uploaded_files
     }
-    save_session(session)
+    save_session(user["id"], session)
     return {"status": "success", "message": "Full session synced successfully"}
 
 
 @app.post("/api/reset")
-def reset_session():
-    session = {
-        "form_data": {},
-        "extracted_data": {
-            "financials": {},
-            "gst": {},
-            "incorporation": {},
-            "compliance": {}
-        },
-        "uploaded_files": []
-    }
-    save_session(session)
+def reset_session(user: Dict[str, Any] = Depends(get_current_user)):
+    save_session(user["id"], empty_session())
     return {"status": "success", "message": "Session reset successfully"}
 
 @app.post("/api/upload")
 async def upload_document(
     doc_type: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    user: Dict[str, Any] = Depends(get_current_user),
 ):
     valid_types = ["financials", "gst", "incorporation", "compliance"]
     if doc_type not in valid_types:
@@ -461,7 +467,7 @@ async def upload_document(
     # ────────────────────────────────────────────────────────────────────────
 
     # Run Groq extraction pipeline
-    session = load_session()
+    session = load_session(user["id"])
     try:
         logger.info(f"Extracting data from {original_filename} for type {doc_type}...")
         extracted = extract_document_data(file_path, doc_type)
@@ -501,7 +507,7 @@ async def upload_document(
         session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
         session["uploaded_files"].append(file_meta)
 
-        save_session(session)
+        save_session(user["id"], session)
         return {
             "status": "success",
             "filename": original_filename,
@@ -524,8 +530,8 @@ async def upload_document(
             logger.warning(f"Could not delete temp file {file_path}: {cleanup_err}")
 
 @app.get("/api/validate")
-def get_validation():
-    session = load_session()
+def get_validation(user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
     schema = load_schema()
     try:
         validation_results = validate_session_data(session, schema)
@@ -535,13 +541,13 @@ def get_validation():
         raise HTTPException(status_code=500, detail=f"Validation engine error: {str(e)}")
 
 @app.api_route("/api/generate", methods=["GET", "POST"])
-async def generate_draft():
-    session = load_session()
+async def generate_draft(user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
     schema = load_schema()
     try:
         # Generate the document
         output_filename = "SME_IPO_Draft_Prospectus.docx"
-        output_path = os.path.join(os.path.dirname(__file__), output_filename)
+        output_path = os.path.join(tempfile.gettempdir(), f"{user['id']}-{uuid.uuid4().hex}-{output_filename}")
         
         generate_draft_docx(session, schema, output_path)
         
@@ -620,9 +626,9 @@ class RedFlagRequest(BaseModel):
     form_data: Optional[Dict[str, Any]] = None
 
 @app.post("/api/nlp/redflag")
-def nlp_redflag_scan(payload: Optional[RedFlagRequest] = None):
+def nlp_redflag_scan(payload: Optional[RedFlagRequest] = None, user: Dict[str, Any] = Depends(get_current_user)):
     """POST /api/nlp/redflag — Scans narrative fields for investor protection red flags."""
-    session = load_session()
+    session = load_session(user["id"])
     form_data = (payload.form_data if payload and payload.form_data else None) or session.get("form_data", {})
     if analyze_prospectus_narratives:
         return analyze_prospectus_narratives(form_data)
@@ -631,9 +637,9 @@ def nlp_redflag_scan(payload: Optional[RedFlagRequest] = None):
 
 
 @app.post("/api/nlp/analyze")
-def nlp_analyze_system():
-    """POST /api/nlp/analyze — Comprehensive NLP text analysis across system session narratives and extracted document texts."""
-    session = load_session()
+def nlp_analyze_system(user: Dict[str, Any] = Depends(get_current_user)):
+    """POST /api/nlp/analyze — Comprehensive NLP text analysis across the user workspace."""
+    session = load_session(user["id"])
     if nlp_analyze_full_session:
         return nlp_analyze_full_session(session)
     else:
@@ -642,7 +648,7 @@ def nlp_analyze_system():
 
 
 @app.post("/api/dpi/digilocker/simulate")
-def digilocker_simulate():
+def digilocker_simulate(user: Dict[str, Any] = Depends(get_current_user)):
     """POST /api/dpi/digilocker/simulate — Simulates DigiLocker OAuth pull and updates session with verified doc metadata."""
     mock_digilocker_docs = [
         {
@@ -687,7 +693,7 @@ def digilocker_simulate():
         }
     ]
 
-    session = load_session()
+    session = load_session(user["id"])
     existing_types = {d["type"] for d in mock_digilocker_docs}
     session["uploaded_files"] = [f for f in session.get("uploaded_files", []) if f.get("type") not in existing_types]
     session["uploaded_files"].extend(mock_digilocker_docs)
@@ -727,7 +733,7 @@ def digilocker_simulate():
     form_data["pat_fy_latest"] = 5.2
     session["form_data"] = form_data
 
-    save_session(session)
+    save_session(user["id"], session)
     return {
         "status": "success",
         "message": "DigiLocker documents successfully pulled and verified against government repositories.",
