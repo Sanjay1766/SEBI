@@ -4,4 +4,6 @@ __pycache__/
 venv/
 *.docx
 session_state.json
+backend/temp_uploads/
+backend/*.docx
 .DS_Store
