@@ -471,6 +471,12 @@ async def upload_document(
         # Merge or update the specific document type's extracted data
         session["extracted_data"][doc_type] = extracted
 
+        # Auto-fill extracted values into form_data so form fields auto-populate immediately
+        if isinstance(extracted, dict):
+            for k, v in extracted.items():
+                if v is not None and k != "missing_fields":
+                    session["form_data"][k] = v
+
         # Build file metadata entry (with blockchain fields + extraction status)
         file_meta = {
             "filename": original_filename,
@@ -707,6 +713,19 @@ def digilocker_simulate():
         "pat_fy_latest": 5.2,
         "net_worth": 18.4,
     }
+
+    # Auto-fill form_data fields so DigiLocker pull populates form fields immediately
+    form_data = session.get("form_data", {})
+    form_data["company_name"] = company_name
+    form_data["cin"] = "L24110RJ2018PLC062145"
+    form_data["incorporation_date"] = "2018-04-12"
+    form_data["gstin"] = "08AAACA1234A1Z5"
+    form_data["gst_annual_turnover"] = 42.5
+    form_data["pan"] = "AAACA1234A"
+    form_data["pan_name"] = company_name
+    form_data["revenue_fy_latest"] = 42.5
+    form_data["pat_fy_latest"] = 5.2
+    session["form_data"] = form_data
 
     save_session(session)
     return {
