@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Home, Upload, FileCheck, RefreshCw, 
   Check, Sparkles, LogOut, Loader2, ShieldCheck,
@@ -8,8 +8,9 @@ import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
+import { API_URL } from './config';
 
-const BACKEND_URL = 'http://127.0.0.1:8000';
+const BACKEND_URL = API_URL;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, basics, general, management, capital, objects, business, disclosures
@@ -30,6 +31,14 @@ export default function App() {
   const [lastSavedTime, setLastSavedTime] = useState(new Date().toLocaleTimeString());
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const sessionDataRef = useRef(sessionData);
+  const saveTimerRef = useRef(null);
+
+  useEffect(() => {
+    sessionDataRef.current = sessionData;
+  }, [sessionData]);
+
+  useEffect(() => () => clearTimeout(saveTimerRef.current), []);
 
   const handleApplySuggestion = (key, value) => {
     handleFormChange(key, value);
@@ -76,54 +85,38 @@ export default function App() {
     }
   };
 
-  const handleFormChange = async (key, value) => {
-    setSaveStatus('saving');
-    
-    // Update local state first
-    const updatedSession = {
-      ...sessionData,
-      form_data: {
-        ...sessionData.form_data,
-        [key]: value
-      }
-    };
-    setSessionData(updatedSession);
-
-    // Sync to backend, then validate
+  const persistFormData = async (formData) => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ form_data: updatedSession.form_data })
+        body: JSON.stringify({ form_data: formData })
       });
-      if (res.ok) {
-        setSaveStatus('saved');
-        // Validate after save completes (no race condition)
-        await validateSession();
-      } else {
-        setSaveStatus('error');
-      }
+      if (!res.ok) throw new Error('Save failed');
+      setSaveStatus('saved');
+      await validateSession();
     } catch (err) {
       console.error('Failed to save session state:', err);
       setSaveStatus('error');
     }
   };
 
-  const handleUploadSuccess = (docType, extractedFields, filename) => {
-    const updatedExtracted = {
-      ...sessionData.extracted_data,
-      [docType]: extractedFields
-    };
-    
-    // Replace any existing file of the same type to update the filename and meta
-    const updatedFiles = sessionData.uploaded_files.filter(f => f.type !== docType);
-    updatedFiles.push({ filename, type: docType, size: 256000 });
+  const handleFormChange = (key, value) => {
+    setSaveStatus('saving');
+    const updatedFormData = { ...sessionDataRef.current.form_data, [key]: value };
+    const updatedSession = { ...sessionDataRef.current, form_data: updatedFormData };
+    sessionDataRef.current = updatedSession;
+    setSessionData(updatedSession);
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => persistFormData(updatedFormData), 500);
+  };
 
-    setSessionData(prev => ({
-      ...prev,
-      extracted_data: updatedExtracted,
-      uploaded_files: updatedFiles
-    }));
+  const handleUploadSuccess = (docType, extractedFields, upload) => {
+    setSessionData(prev => {
+      const updatedFiles = prev.uploaded_files.filter(f => f.type !== docType);
+      updatedFiles.push({ ...upload, type: docType });
+      return { ...prev, extracted_data: { ...prev.extracted_data, [docType]: extractedFields }, uploaded_files: updatedFiles };
+    });
   };
 
   const handleReset = async () => {
