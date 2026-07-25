@@ -1,6 +1,9 @@
 import os
 import json
 import logging
+import tempfile
+import threading
+import uuid
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,17 +51,26 @@ logger = logging.getLogger("sebi-ipo-generator")
 
 app = FastAPI(title="SEBI SME IPO Draft-Generator API")
 
-# Configure CORS for local development
+# Comma-separated list, for example: http://localhost:5173,https://app.example.com
+CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), "session_state.json")
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "schema.json")
+SESSION_LOCK = threading.Lock()
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+ALLOWED_UPLOADS = {
+    ".pdf": b"%PDF-",
+    ".png": b"\x89PNG\r\n\x1a\n",
+    ".jpg": b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+}
 
 def load_schema() -> Dict[str, Any]:
     if not os.path.exists(SCHEMA_FILE):
@@ -97,8 +109,19 @@ def load_session() -> Dict[str, Any]:
 
 def save_session(data: Dict[str, Any]):
     try:
-        with open(SESSION_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        # Atomic replacement prevents a partially-written JSON file on interruption.
+        with SESSION_LOCK:
+            directory = os.path.dirname(SESSION_FILE)
+            fd, temporary_path = tempfile.mkstemp(prefix="session-", suffix=".json", dir=directory)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary_path, SESSION_FILE)
+            finally:
+                if os.path.exists(temporary_path):
+                    os.unlink(temporary_path)
     except Exception as e:
         logger.error(f"Error saving session: {e}")
 
@@ -372,15 +395,31 @@ async def upload_document(
     if doc_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Invalid document type. Must be one of: {valid_types}")
     
-    # Save the file locally temporarily
+    original_filename = os.path.basename(file.filename or "")
+    extension = os.path.splitext(original_filename)[1].lower()
+    if not original_filename or extension not in ALLOWED_UPLOADS:
+        raise HTTPException(status_code=415, detail="Only PDF, PNG, JPG, and JPEG files are supported.")
+
+    # Save to a generated filename. Never trust a client supplied filesystem path.
     temp_dir = os.path.join(os.path.dirname(__file__), "temp_uploads")
     os.makedirs(temp_dir, exist_ok=True)
-    
-    file_path = os.path.join(temp_dir, file.filename)
+    file_path = os.path.join(temp_dir, f"{uuid.uuid4().hex}{extension}")
     try:
         with open(file_path, "wb") as f:
-            f.write(await file.read())
+            total_bytes = 0
+            header = b""
+            while chunk := await file.read(1024 * 1024):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="File exceeds the 10 MB upload limit.")
+                if len(header) < 16:
+                    header += chunk[: 16 - len(header)]
+                f.write(chunk)
+        if not header.startswith(ALLOWED_UPLOADS[extension]):
+            raise HTTPException(status_code=415, detail="The file content does not match its extension.")
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         logger.error(f"Failed to write uploaded file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file locally")
     
@@ -406,17 +445,21 @@ async def upload_document(
     # Run Groq extraction pipeline
     session = load_session()
     try:
-        logger.info(f"Extracting data from {file.filename} for type {doc_type}...")
+        logger.info(f"Extracting data from {original_filename} for type {doc_type}...")
         extracted = extract_document_data(file_path, doc_type)
-        
+        extraction_status = "completed" if extracted else "failed"
+        extraction_error = None if extracted else "No fields could be reliably extracted. Review the document and enter values manually."
+
         # Merge or update the specific document type's extracted data
         session["extracted_data"][doc_type] = extracted
-        
-        # Build file metadata entry (with blockchain fields)
+
+        # Build file metadata entry (with blockchain fields + extraction status)
         file_meta = {
-            "filename": file.filename,
+            "filename": original_filename,
             "type": doc_type,
             "size": os.path.getsize(file_path),
+            "extraction_status": extraction_status,
+            "extraction_error": extraction_error,
         }
         # Attach blockchain proof if anchoring succeeded
         if doc_hash:
@@ -430,26 +473,22 @@ async def upload_document(
                 "network":      blockchain_record.get("network"),
             }
 
-        # Add to uploaded files list if not exists
-        if file.filename not in [f["filename"] for f in session["uploaded_files"]]:
-            session["uploaded_files"].append(file_meta)
-        else:
-            # Update existing entry with blockchain data
-            for entry in session["uploaded_files"]:
-                if entry["filename"] == file.filename:
-                    entry.update(file_meta)
-                    break
-        
+        # Replace any existing file of same type, then append updated entry
+        session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
+        session["uploaded_files"].append(file_meta)
+
         save_session(session)
         return {
             "status": "success",
-            "filename": file.filename,
+            "filename": original_filename,
             "doc_type": doc_type,
             "extracted": extracted,
+            "extraction_status": extraction_status,
+            "extraction_error": extraction_error,
             "blockchain": blockchain_record if blockchain_record else None,
         }
     except Exception as e:
-        logger.error(f"Extraction failed for {file.filename}: {e}")
+        logger.error(f"Extraction failed for {original_filename}: {e}")
         raise HTTPException(status_code=500, detail=f"Data extraction failed: {str(e)}")
     finally:
         # Always clean up the temp file to prevent unbounded disk growth

@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
+import { API_URL } from '../config';
 import { 
   Building2, Users, DollarSign, Briefcase, AlertTriangle, HelpCircle, 
   CheckCircle2, BookOpen, AlertCircle, FileText, ArrowRight, Loader2,
   ChevronRight, ChevronLeft, Info, Sparkles
 } from 'lucide-react';
 
-// Read backend URL from Vite env variable; fall back to localhost for local dev
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+// BACKEND_URL is exported from config.js as API_URL
+
 export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, validationResults, extractedData }) {
   const [draftingFields, setDraftingFields] = useState({});
 
@@ -26,7 +27,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
   const handleAIDraft = async (key) => {
     setDraftingFields(prev => ({ ...prev, [key]: true }));
     try {
-      const response = await fetch(`${BACKEND_URL}/api/draft`, {
+      const response = await fetch(`${API_URL}/api/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field_key: key, form_data: formData })

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Home, Upload, FileCheck, RefreshCw,
   Check, Sparkles, LogOut, Loader2, ShieldCheck,
   ChevronRight, LayoutDashboard, FolderOpen, AlertTriangle
 } from 'lucide-react';
@@ -31,6 +32,14 @@ export default function App() {
   const [lastSavedTime, setLastSavedTime] = useState(new Date().toLocaleTimeString());
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const sessionDataRef = useRef(sessionData);
+  const saveTimerRef = useRef(null);
+
+  useEffect(() => {
+    sessionDataRef.current = sessionData;
+  }, [sessionData]);
+
+  useEffect(() => () => clearTimeout(saveTimerRef.current), []);
 
   const handleApplySuggestion = (key, value) => {
     handleFormChange(key, value);
@@ -114,21 +123,12 @@ export default function App() {
     });
   };
 
-  const handleUploadSuccess = (docType, extractedFields, filename) => {
-    const updatedExtracted = {
-      ...sessionData.extracted_data,
-      [docType]: extractedFields
-    };
-
-    // Replace any existing file of the same type to update the filename and meta
-    const updatedFiles = sessionData.uploaded_files.filter(f => f.type !== docType);
-    updatedFiles.push({ filename, type: docType, size: 256000 });
-
-    setSessionData(prev => ({
-      ...prev,
-      extracted_data: updatedExtracted,
-      uploaded_files: updatedFiles
-    }));
+  const handleUploadSuccess = (docType, extractedFields, upload) => {
+    setSessionData(prev => {
+      const updatedFiles = prev.uploaded_files.filter(f => f.type !== docType);
+      updatedFiles.push({ ...upload, type: docType });
+      return { ...prev, extracted_data: { ...prev.extracted_data, [docType]: extractedFields }, uploaded_files: updatedFiles };
+    });
   };
 
   const handleReset = async () => {
