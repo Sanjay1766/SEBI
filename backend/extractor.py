@@ -60,37 +60,6 @@ def ocr_available() -> dict:
 # Pre-compute at startup for fast API responses
 OCR_STATUS = ocr_available()
 
-# Mock Extracted Data for Demo Safety (if API key is missing or calls fail)
-MOCK_DATA = {
-    "financials": {
-        "fy_years": "FY24, FY25, FY26",
-        "revenue_fy_latest": 45.5,
-        "pat_fy_latest": 3.8,
-        "borrowings_latest": 12.4,
-        "auditor_name": "M/s R.K. Associates & Co.",
-        "auditor_membership": "084532N"
-    },
-    "gst": {
-        "gstin": "27AAACG1234A1Z5",
-        "company_name": "Apex Technochem Pvt Ltd", # intentional mismatch with incorporation name "Apex Technochem Limited"
-        "gst_annual_turnover": 42.8, # GST turnover 42.8 vs P&L revenue 45.5 (triggers warning or matches close enough)
-        "registration_date": "2018-04-12", # intentional mismatch: GST registration predates incorporation date (2018-05-15)
-        "filing_status": "Active"
-    },
-    "incorporation": {
-        "cin": "U74999MH2018PLC312456",
-        "company_name": "Apex Technochem Limited",
-        "incorporation_date": "2018-05-15",
-        "registered_office": "Plot 42, GIDC Industrial Area, Vapi, Gujarat, 396195",
-        "company_type": "Public Limited Company"
-    },
-    "compliance": {
-        "pan": "AAACA1234A",
-        "pan_name": "Apex Technochem Limited",
-        "tan": "MUMA12345B"
-    }
-}
-
 def extract_raw_text(file_path: str) -> str:
     """Attempts to extract text from a file using pdfplumber, falling back to OCR if empty/scanned."""
     if not os.path.exists(file_path):
@@ -159,24 +128,23 @@ def clean_json_string(text: str) -> str:
     return text
 
 def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
-    """Extracts structured fields from raw document text using Groq LLM (JSON Mode), with a demo fallback."""
-    # Check if we should fallback to mock data (if GROQ_API_KEY is not set or placeholder)
+    """Extract structured fields from document text. Empty output means extraction failed."""
     api_key = os.getenv("GROQ_API_KEY", "")
     is_mock = not api_key or "your_groq_api_key" in api_key
     
     if is_mock:
-        logger.info(f"GROQ_API_KEY is unset or placeholder. Falling back to mock extraction for {doc_type}.")
-        return MOCK_DATA.get(doc_type, {})
+        logger.warning("GROQ_API_KEY is unset or placeholder; extraction is unavailable.")
+        return {}
         
     if not Groq:
-        logger.warning("Groq SDK not installed, cannot perform API call. Using mock data.")
-        return MOCK_DATA.get(doc_type, {})
+        logger.warning("groq SDK not installed; extraction is unavailable.")
+        return {}
 
     # Extract text content
     raw_text = extract_raw_text(file_path)
     if not raw_text.strip():
-        logger.warning(f"Could not extract any text from {file_path}. Using mock data for demo robustness.")
-        return MOCK_DATA.get(doc_type, {})
+        logger.warning(f"Could not extract any text from {file_path}.")
+        return {}
         
     # Trim raw text if too long to fit context
     trimmed_text = raw_text[:12000]
@@ -185,8 +153,8 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
     try:
         client = Groq(api_key=api_key)
     except Exception as e:
-        logger.error(f"Failed to initialize Groq client: {e}. Using mock data.")
-        return MOCK_DATA.get(doc_type, {})
+        logger.error(f"Failed to initialize Groq client: {e}.")
+        return {}
 
     # System-level instruction to prevent hallucination across all doc types
     system_instruction = (
@@ -328,5 +296,5 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
 
         return extracted_data
     except Exception as e:
-        logger.error(f"Groq API call failed: {e}. Falling back to mock data for demo safety.")
-        return MOCK_DATA.get(doc_type, {})
+        logger.error(f"Groq API call failed: {e}.")
+        return {}
