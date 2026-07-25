@@ -11,8 +11,14 @@ try:
 except ImportError:
     Groq = None
 
+try:
+    from nlp_analyzer import nlp_semantic_match
+except ImportError:
+    nlp_semantic_match = None
+
 
 # ── Static fallback explanations ────────────────────────────────────────────
+
 
 FALLBACK_EXPLANATIONS = {
     "company_name": (
@@ -114,7 +120,7 @@ def check_company_name_match(
     inc_name: Optional[str],
     pan_name: Optional[str],
 ) -> Optional[Dict[str, Any]]:
-    """Check that the company name is consistent across all documents.
+    """Check that the company name is consistent across all documents using NLP entity matching.
 
     Returns a ConsistencyFlag dict if there is a mismatch, or None if OK.
     """
@@ -129,12 +135,23 @@ def check_company_name_match(
     if len(available) < 2:
         return None
 
-    def _clean(s: str) -> str:
-        return "".join(str(s).lower().split())
+    val_list = list(available.values())
+    mismatch_found = False
+    for i in range(len(val_list)):
+        for j in range(i + 1, len(val_list)):
+            if nlp_semantic_match:
+                res = nlp_semantic_match(str(val_list[i]), str(val_list[j]), threshold=0.75)
+                if not res.get("is_match", False):
+                    mismatch_found = True
+                    break
+            else:
+                if "".join(str(val_list[i]).lower().split()) != "".join(str(val_list[j]).lower().split()):
+                    mismatch_found = True
+                    break
+        if mismatch_found:
+            break
 
-    cleaned = {k: _clean(v) for k, v in available.items()}
-    unique_vals = set(cleaned.values())
-    if len(unique_vals) <= 1:
+    if not mismatch_found:
         return None
 
     exp = get_explanation("company_name", {

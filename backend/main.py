@@ -39,9 +39,17 @@ except ImportError:
     pass
 
 try:
-    from nlp_analyzer import analyze_prospectus_narratives
+    from nlp_analyzer import (
+        analyze_prospectus_narratives,
+        nlp_analyze_full_session,
+        nlp_assess_readability_and_quality,
+        nlp_semantic_match
+    )
 except ImportError:
     analyze_prospectus_narratives = None
+    nlp_analyze_full_session = None
+    nlp_assess_readability_and_quality = None
+    nlp_semantic_match = None
 
 try:
     from consistency_checker import get_explanation
@@ -614,6 +622,17 @@ def nlp_redflag_scan(payload: Optional[RedFlagRequest] = None):
         return analyze_prospectus_narratives(form_data)
     else:
         raise HTTPException(status_code=500, detail="NLP Analyzer module not available")
+
+
+@app.post("/api/nlp/analyze")
+def nlp_analyze_system():
+    """POST /api/nlp/analyze — Comprehensive NLP text analysis across system session narratives and extracted document texts."""
+    session = load_session()
+    if nlp_analyze_full_session:
+        return nlp_analyze_full_session(session)
+    else:
+        raise HTTPException(status_code=500, detail="NLP Analyzer module not available")
+
 
 
 @app.post("/api/dpi/digilocker/simulate")
