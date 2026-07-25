@@ -32,6 +32,10 @@ export default function App() {
   const [lastSavedTime, setLastSavedTime] = useState(new Date().toLocaleTimeString());
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [pullingDigiLocker, setPullingDigiLocker] = useState(false);
+  const [isDigiLockerConnected, setIsDigiLockerConnected] = useState(false);
+  const [scanningRedFlags, setScanningRedFlags] = useState(false);
+  const [redFlagResults, setRedFlagResults] = useState(null);
   const sessionDataRef = useRef(sessionData);
   const saveTimerRef = useRef(null);
 
@@ -83,6 +87,49 @@ export default function App() {
       }
     } catch (err) {
       console.error('Validation engine failed:', err);
+    }
+  };
+
+  const handleSimulateDigiLocker = async () => {
+    setPullingDigiLocker(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/dpi/digilocker/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.session) {
+          setSessionData(data.session);
+        } else {
+          await fetchSession();
+        }
+        setIsDigiLockerConnected(true);
+        await validateSession();
+      }
+    } catch (err) {
+      console.error('DigiLocker simulation failed:', err);
+    } finally {
+      setPullingDigiLocker(false);
+    }
+  };
+
+  const handleScanRedFlags = async () => {
+    setScanningRedFlags(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/nlp/redflag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ form_data: sessionData.form_data }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRedFlagResults(data);
+      }
+    } catch (err) {
+      console.error('Red Flag scan failed:', err);
+    } finally {
+      setScanningRedFlags(false);
     }
   };
 
@@ -638,6 +685,9 @@ export default function App() {
                   onNavigateTab={setActiveTab}
                   onPreFill={handlePreFill}
                   lastSavedTime={lastSavedTime}
+                  onScanRedFlags={handleScanRedFlags}
+                  scanningRedFlags={scanningRedFlags}
+                  redFlagResults={redFlagResults}
                 />
               )}
 
@@ -646,6 +696,9 @@ export default function App() {
                   sessionData={sessionData}
                   onUploadSuccess={handleUploadSuccess}
                   backendUrl={BACKEND_URL}
+                  onSimulateDigiLocker={handleSimulateDigiLocker}
+                  pullingDigiLocker={pullingDigiLocker}
+                  isDigiLockerConnected={isDigiLockerConnected}
                 />
               )}
 
