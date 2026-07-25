@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { 
   CheckCircle2, AlertTriangle, XCircle, FileDown, 
   ChevronDown, ChevronUp, Loader2, Sparkles, FileText, ArrowRight,
-  TrendingUp, Shield, AlertOctagon, BarChart3, Clock, Zap
+  TrendingUp, Shield, AlertOctagon, BarChart3, Clock, Zap,
+  BookOpen, HelpCircle, Lightbulb, Server, IndianRupee, Cpu, ShieldCheck
 } from 'lucide-react';
+import RedFlagScanner from './RedFlagScanner';
 
 const SECTION_TO_TAB = {
   'cover_page': 'basics',
@@ -34,9 +36,21 @@ const TAB_NAMES = {
   'disclosures': 'Risk Disclosures'
 };
 
-export default function Dashboard({ validationResults, onGenerate, generating, onNavigateTab, onPreFill, lastSavedTime }) {
+export default function Dashboard({ 
+  validationResults, 
+  onGenerate, 
+  generating, 
+  onNavigateTab, 
+  onPreFill, 
+  lastSavedTime,
+  onScanRedFlags,
+  scanningRedFlags,
+  redFlagResults,
+}) {
   const [expandedSection, setExpandedSection] = useState(null);
-  
+  const [expandedExplanations, setExpandedExplanations] = useState({});
+  const [expandedFixSteps, setExpandedFixSteps] = useState({});
+
   if (!validationResults) {
     return (
       <div className="card rounded-2xl p-16 text-center flex flex-col items-center justify-center max-w-lg mx-auto shadow-card-md animate-fade-in-up">
@@ -66,6 +80,8 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
   } = validationResults;
 
   const toggleSection = (id) => setExpandedSection(expandedSection === id ? null : id);
+  const toggleExplanation = (id) => setExpandedExplanations(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleFixSteps = (id) => setExpandedFixSteps(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleBadgeClick = (e, sectionId) => {
     e.stopPropagation();
@@ -124,7 +140,6 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
             <p className="text-[11.5px] text-gray-400 font-medium mt-1.5">
               {completed_blocking_fields} <span className="text-gray-300">/</span> {total_blocking_fields} blocking fields
             </p>
-            {/* Secondary metric */}
             <p className="text-[10.5px] text-gray-400 font-semibold mt-1">
               Completeness: {overall_completeness}% ({completed_fields}/{total_fields})
             </p>
@@ -139,7 +154,6 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
               </span>
             )}
           </div>
-          {/* SVG ring */}
           <div className="relative flex items-center justify-center shrink-0">
             <svg className="w-20 h-20 -rotate-90" viewBox="0 0 72 72">
               <circle cx="36" cy="36" r="30" fill="none" stroke="#f1f5f9" strokeWidth="6" />
@@ -179,9 +193,8 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
           </p>
         </div>
 
-        {/* Compiler Card (Download + Load Sample) */}
+        {/* Compiler Card */}
         <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between relative overflow-hidden">
-          {/* Subtle teal glow in corner */}
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-accent-500/8 rounded-full blur-2xl pointer-events-none" />
           <div>
             <p className="text-[10.5px] font-bold uppercase tracking-widest text-accent-600 flex items-center gap-1.5 mb-1">
@@ -214,7 +227,6 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
               </button>
             )}
           </div>
-          {/* Last synced timestamp */}
           {lastSavedTime && (
             <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center gap-1.5 text-[10px] text-gray-400 font-medium select-none">
               <Clock className="w-3 h-3" />
@@ -224,45 +236,131 @@ export default function Dashboard({ validationResults, onGenerate, generating, o
         </div>
       </div>
 
-      {/* ── Inconsistencies Panel ── */}
+      {/* ── Feature 3: Inconsistencies Panel with SEBI Regulation Badges & AI Explanations ── */}
       {inconsistencies.length > 0 && (
-        <div className="space-y-2.5">
-          <h3 className="text-[11.5px] font-bold text-red-600 flex items-center gap-2 px-1">
-            <XCircle className="w-4 h-4" /> Data Mismatches Detected ({inconsistencies.length})
-          </h3>
-          <div className="grid grid-cols-1 gap-2.5">
-            {inconsistencies.map((inc) => (
-              <div key={inc.id}
-                className="bg-white border border-red-200 rounded-xl p-4 flex gap-4 shadow-sm relative overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-l-xl" />
-                <div className="p-2 bg-red-50 text-red-500 rounded-lg h-fit shrink-0 border border-red-100">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h4 className="font-bold text-[13px] text-gray-800">{inc.title}</h4>
-                    <span className="text-[9.5px] uppercase tracking-wider bg-red-50 text-red-600 px-1.5 py-0.5 rounded-md font-mono border border-red-200 font-bold">
-                      {inc.severity}
-                    </span>
-                    {inc.blocking && (
-                      <span className="text-[9px] uppercase tracking-wider bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-md font-mono border border-amber-200 font-bold">
-                        Blocking
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-extrabold text-red-600 flex items-center gap-2">
+              <XCircle className="w-4 h-4" /> SEBI Statutory Mismatches & Conflict Checks ({inconsistencies.length})
+            </h3>
+            <span className="text-[10.5px] text-red-500 font-mono font-bold">SEBI ICDR Audit Engine</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            {inconsistencies.map((inc) => {
+              const showExp = expandedExplanations[inc.id];
+              const showFix = expandedFixSteps[inc.id];
+
+              return (
+                <div key={inc.id}
+                  className="bg-white border border-red-200 rounded-2xl p-5 shadow-card hover:shadow-card-md transition-all relative overflow-hidden flex flex-col gap-3">
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500 rounded-l-2xl" />
+
+                  {/* Top Bar */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pl-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="p-1.5 bg-red-50 text-red-600 rounded-lg border border-red-100">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <h4 className="font-extrabold text-sm text-gray-900">{inc.title}</h4>
+                      
+                      <span className="text-[9.5px] uppercase tracking-wider bg-red-50 text-red-600 px-2 py-0.5 rounded-md font-mono border border-red-200 font-bold">
+                        {inc.severity}
+                      </span>
+                      {inc.blocking && (
+                        <span className="text-[9px] uppercase tracking-wider bg-amber-50 text-amber-600 px-2 py-0.5 rounded-md font-mono border border-amber-200 font-bold">
+                          Blocking Issue
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Clickable SEBI Regulation Badge */}
+                    {inc.sebi_ref && (
+                      <span
+                        title="SEBI ICDR Statutory Regulation Reference"
+                        className="text-[11px] font-extrabold font-mono bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shrink-0 self-start md:self-auto cursor-pointer hover:bg-blue-100 transition-colors"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                        <span>{inc.sebi_ref}</span>
                       </span>
                     )}
                   </div>
-                  <p className="text-[12.5px] text-gray-500 leading-relaxed">{inc.description}</p>
-                  {inc.section_id && SECTION_TO_TAB[inc.section_id] && (
+
+                  {/* Main Description */}
+                  <p className="text-xs text-gray-600 leading-relaxed pl-2 font-medium">{inc.description}</p>
+
+                  {/* Interactive Action Badges */}
+                  <div className="flex items-center gap-2 flex-wrap pt-1 pl-2 border-t border-gray-100">
                     <button
-                      onClick={() => onNavigateTab(SECTION_TO_TAB[inc.section_id])}
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-accent-700 bg-accent-50 hover:bg-accent-100 active:bg-accent-200 rounded-lg border border-accent-200 hover:border-accent-300 transition-all cursor-pointer"
+                      onClick={() => toggleExplanation(inc.id)}
+                      className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>Go to {TAB_NAMES[SECTION_TO_TAB[inc.section_id]] || 'Wizard'}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>{showExp ? 'Hide Plain-English Breakdown' : '📖 What does this mean?'}</span>
                     </button>
+
+                    {inc.fix_steps && inc.fix_steps.length > 0 && (
+                      <button
+                        onClick={() => toggleFixSteps(inc.id)}
+                        className="text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{showFix ? 'Hide Action Steps' : '⚡ How to fix this?'}</span>
+                      </button>
+                    )}
+
+                    {inc.section_id && SECTION_TO_TAB[inc.section_id] && (
+                      <button
+                        onClick={() => onNavigateTab(SECTION_TO_TAB[inc.section_id])}
+                        className="ml-auto text-xs font-bold text-accent-700 bg-accent-50 hover:bg-accent-100 px-3 py-1.5 rounded-lg border border-accent-200 transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span>Go to {TAB_NAMES[SECTION_TO_TAB[inc.section_id]] || 'Wizard'}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Expandable Plain-English Explanation */}
+                  {showExp && (
+                    <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 ml-2 text-xs text-indigo-950 space-y-2 animate-fade-in">
+                      <div className="flex items-center gap-2 font-bold text-indigo-900">
+                        <Sparkles className="w-4 h-4 text-indigo-600" />
+                        <span>Plain-English LLM Founder Explanation:</span>
+                      </div>
+                      <p className="leading-relaxed text-indigo-900 font-medium">
+                        {inc.description || "This compliance rule ensures that numbers stated across MCA, Income Tax, and GST certificates match without contradiction before SEBI filing."}
+                      </p>
+                      {inc.sebi_ref && (
+                        <p className="text-[11px] font-mono text-indigo-700 font-semibold pt-1">
+                          Statutory Mandate: Imposed by SEBI Regulations under {inc.sebi_ref}.
+                        </p>
+                      )}
+                    </div>
                   )}
+
+                  {/* Expandable How-to-Fix Steps */}
+                  {showFix && inc.fix_steps && (
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 ml-2 text-xs text-emerald-950 space-y-2.5 animate-fade-in">
+                      <div className="flex items-center gap-2 font-bold text-emerald-900">
+                        <Lightbulb className="w-4 h-4 text-emerald-600" />
+                        <span>Actionable Resolution Plan for Founder / Lead Banker:</span>
+                      </div>
+                      <ul className="space-y-2">
+                        {inc.fix_steps.map((step, idx) => (
+                          <li key={idx} className="flex items-start gap-2.5 font-medium text-emerald-900">
+                            <span className="w-5 h-5 rounded-full bg-emerald-200 text-emerald-800 font-bold font-mono text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <span className="leading-relaxed">{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -11,8 +11,14 @@ try:
 except ImportError:
     Groq = None
 
+try:
+    from nlp_analyzer import nlp_semantic_match
+except ImportError:
+    nlp_semantic_match = None
+
 
 # ── Static fallback explanations ────────────────────────────────────────────
+
 
 FALLBACK_EXPLANATIONS = {
     "company_name": (
@@ -114,7 +120,7 @@ def check_company_name_match(
     inc_name: Optional[str],
     pan_name: Optional[str],
 ) -> Optional[Dict[str, Any]]:
-    """Check that the company name is consistent across all documents.
+    """Check that the company name is consistent across all documents using NLP entity matching.
 
     Returns a ConsistencyFlag dict if there is a mismatch, or None if OK.
     """
@@ -129,12 +135,23 @@ def check_company_name_match(
     if len(available) < 2:
         return None
 
-    def _clean(s: str) -> str:
-        return "".join(str(s).lower().split())
+    val_list = list(available.values())
+    mismatch_found = False
+    for i in range(len(val_list)):
+        for j in range(i + 1, len(val_list)):
+            if nlp_semantic_match:
+                res = nlp_semantic_match(str(val_list[i]), str(val_list[j]), threshold=0.75)
+                if not res.get("is_match", False):
+                    mismatch_found = True
+                    break
+            else:
+                if "".join(str(val_list[i]).lower().split()) != "".join(str(val_list[j]).lower().split()):
+                    mismatch_found = True
+                    break
+        if mismatch_found:
+            break
 
-    cleaned = {k: _clean(v) for k, v in available.items()}
-    unique_vals = set(cleaned.values())
-    if len(unique_vals) <= 1:
+    if not mismatch_found:
         return None
 
     exp = get_explanation("company_name", {
@@ -149,6 +166,12 @@ def check_company_name_match(
         "description": exp,
         "severity": "high",
         "blocking": True,
+        "sebi_ref": "SEBI ICDR Reg 230(1)(a)",
+        "fix_steps": [
+            "Identify the legally registered name on the MCA Certificate of Incorporation — this is the authoritative source.",
+            "Update the GST registration name via GST portal (Amendment application) if it differs.",
+            "Ensure the PAN card name matches the MCA name exactly (including punctuation).",
+        ],
     }
 
 
@@ -180,6 +203,12 @@ def check_revenue_consistency(
         "description": exp,
         "severity": "high",
         "blocking": True,
+        "sebi_ref": "SEBI ICDR Reg 244(1)(b)",
+        "fix_steps": [
+            "Obtain a GST turnover reconciliation certificate from your CA for the relevant financial year.",
+            "Check if any revenue streams are GST-exempt (e.g. exports, exempt goods) and exclude them from GST turnover for comparison.",
+            "Attach the reconciliation statement as an annexure to the DRHP.",
+        ],
     }
 
 
@@ -205,6 +234,12 @@ def check_date_logic(
         "description": exp,
         "severity": "medium",
         "blocking": False,
+        "sebi_ref": "Companies Act 2013, Sec 7 & GST Act Sec 22",
+        "fix_steps": [
+            "Verify dates on both the Certificate of Incorporation (MCA) and GST Registration Certificate.",
+            "If GST was inherited from a predecessor entity (partnership → company), document the conversion and attach it.",
+            "If it is a data entry error, obtain a corrected GST certificate from the GSTN portal.",
+        ],
     }
 
 
@@ -233,6 +268,12 @@ def check_capital_structure(
                     "description": exp,
                     "severity": "high",
                     "blocking": True,
+                    "sebi_ref": "Companies Act 2013, Sec 61 & SEBI ICDR Reg 231",
+                    "fix_steps": [
+                        "File Form SH-7 with ROC to increase authorized share capital before the IPO.",
+                        "Alternatively, reduce paid-up capital via buy-back (requires shareholder approval).",
+                        "Update the capital structure section in the DRHP after the ROC filing is complete.",
+                    ],
                 })
         except (ValueError, TypeError):
             pass
@@ -252,6 +293,12 @@ def check_capital_structure(
                     "description": exp,
                     "severity": "high",
                     "blocking": True,
+                    "sebi_ref": "SEBI ICDR Reg 229(1)",
+                    "fix_steps": [
+                        "Reduce the issue size so that post-issue paid-up capital stays at or below ₹25 Crores.",
+                        "Alternatively, migrate to the Main Board (BSE/NSE) which has no paid-up capital ceiling for IPOs.",
+                        "Consult your Lead Manager (SEBI-registered Merchant Banker) to restructure the offer.",
+                    ],
                 })
         except (ValueError, TypeError):
             pass
@@ -292,6 +339,12 @@ def check_shareholding_sum(
         "description": exp,
         "severity": "high",
         "blocking": True,
+        "sebi_ref": "SEBI ICDR Reg 236(1) & 236(2)",
+        "fix_steps": [
+            "Reduce the public offer size so that promoters retain at least 20% of the post-issue paid-up capital.",
+            "If promoters are diluting via OFS (Offer for Sale), cap OFS shares to maintain the 20% threshold.",
+            "Obtain a fresh cap table calculation from your CA/merchant banker after adjusting the offer.",
+        ],
     }
 
 
@@ -321,6 +374,12 @@ def check_objects_vs_issue(merged: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "description": exp,
         "severity": "high",
         "blocking": True,
+        "sebi_ref": "SEBI ICDR Reg 247(1) & 247(2)",
+        "fix_steps": [
+            "Re-calculate each object amount (expansion, working capital, debt repayment, general corporate, issue expenses) and ensure they sum exactly to the issue size.",
+            "Issue expenses must be estimated by your Lead Manager and included as a specific line item.",
+            "Any unallocated proceeds must be categorized as 'General Corporate Purposes' and capped at 25% of total proceeds.",
+        ],
     }
 
 
@@ -340,6 +399,12 @@ def check_pan_format(pan: Optional[str]) -> Optional[Dict[str, Any]]:
         "description": exp,
         "severity": "medium",
         "blocking": False,
+        "sebi_ref": "Income Tax Act 1961, Sec 139A",
+        "fix_steps": [
+            "Verify the PAN directly on the Income Tax e-filing portal (www.incometax.gov.in).",
+            "Ensure there are no spaces or special characters — PAN format is exactly: 5 uppercase letters + 4 digits + 1 uppercase letter.",
+            "If OCR extracted the PAN incorrectly, cross-check the physical PAN certificate or the GSTIN (which embeds the PAN in positions 3–12).",
+        ],
     }
 
 
@@ -359,6 +424,12 @@ def check_gstin_format(gstin: Optional[str]) -> Optional[Dict[str, Any]]:
         "description": exp,
         "severity": "medium",
         "blocking": False,
+        "sebi_ref": "GST Act 2017, Sec 25 & CGST Rules, Rule 8",
+        "fix_steps": [
+            "Verify the GSTIN on the GST portal (www.gst.gov.in → Search Taxpayer).",
+            "Standard format: 2-digit state code + 10-char PAN + 1 entity digit + 'Z' + 1 check digit = 15 characters total.",
+            "Contact your GST filing CA to obtain a corrected GST Registration Certificate if needed.",
+        ],
     }
 
 
@@ -393,6 +464,12 @@ def check_price_band_width(price_band: Optional[str]) -> Optional[Dict[str, Any]
         "description": exp,
         "severity": "medium",
         "blocking": False,
+        "sebi_ref": "SEBI ICDR Reg 253(1) & SEBI Circular SEBI/HO/CFD/DIL1/CIR/P/2020/249",
+        "fix_steps": [
+            "Ensure the cap price (upper band) is at most 120% of the floor price (lower band).",
+            "Example: if floor is ₹100, cap must be ≤ ₹120.",
+            "Consult your Lead Manager to adjust the price band before filing the DRHP.",
+        ],
     }
 
 
@@ -462,4 +539,46 @@ def run_all_consistency_checks(
     if flag:
         flags.append(flag)
 
+    # 10. Integrated Narrative Quality & Investor Protection Compliance Check (NLP-driven under the hood)
+    narrative_flags = check_narrative_quality(merged)
+    flags.extend(narrative_flags)
+
+    return flags
+
+
+def check_narrative_quality(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Analyzes narrative text fields for vague language, boilerplate risk disclosures, and missing regulatory declarations."""
+    flags: List[Dict[str, Any]] = []
+    try:
+        from nlp_analyzer import analyze_prospectus_narratives
+        analysis = analyze_prospectus_narratives(merged)
+        red_flags = analysis.get("red_flags", [])
+
+        FIELD_SECTION_MAP = {
+            "business_overview": "business_overview",
+            "risk_factors": "risk_factors",
+            "internal_risks": "risk_factors",
+            "external_risks": "risk_factors",
+            "promoter_experience": "management",
+            "objects_summary": "objects_issue",
+        }
+
+        for rf in red_flags:
+            key = rf.get("field_key", "business_overview")
+            sec_id = FIELD_SECTION_MAP.get(key, "business_overview")
+            flags.append({
+                "id": rf.get("id", f"narrative_{key}"),
+                "section_id": sec_id,
+                "title": f"{rf.get('field_label', 'Narrative')} Disclosure Compliance Issue",
+                "description": rf.get("issue", "Narrative section requires enhanced disclosure clarity."),
+                "severity": rf.get("severity", "MEDIUM").lower(),
+                "blocking": False,
+                "sebi_ref": "SEBI ICDR Schedule VI Part A & Reg 248",
+                "fix_steps": [rf.get("suggestion", "Provide specific quantitative figures and citations.")] if rf.get("suggestion") else [
+                    "Quantify claims with third-party metrics.",
+                    "Ensure disclosures comply with SEBI Chapter IX requirements."
+                ]
+            })
+    except Exception as e:
+        logger.warning(f"Narrative compliance check skipped: {e}")
     return flags
