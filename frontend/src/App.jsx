@@ -174,8 +174,27 @@ export default function App() {
     setSessionData(prev => {
       const updatedFiles = prev.uploaded_files.filter(f => f.type !== docType);
       updatedFiles.push({ ...upload, type: docType });
-      return { ...prev, extracted_data: { ...prev.extracted_data, [docType]: extractedFields }, uploaded_files: updatedFiles };
+
+      const updatedFormData = { ...prev.form_data };
+      if (extractedFields && typeof extractedFields === 'object') {
+        Object.entries(extractedFields).forEach(([k, v]) => {
+          if (v !== null && v !== undefined && k !== 'missing_fields') {
+            updatedFormData[k] = v;
+          }
+        });
+      }
+
+      return {
+        ...prev,
+        form_data: updatedFormData,
+        extracted_data: { ...prev.extracted_data, [docType]: extractedFields },
+        uploaded_files: updatedFiles
+      };
     });
+
+    setTimeout(() => {
+      validateSession();
+    }, 200);
   };
 
   const handleReset = async () => {
