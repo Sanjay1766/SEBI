@@ -213,6 +213,11 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
     doc.add_page_break()
 
     # --- POPULATE REMAINING SECTIONS ---
+    # sec_counter tracks the printed section number.
+    # Sections 1 (Cover Page) and 2 (Table of Contents) were written manually above.
+    # Definitions (Section 3) is handled inside the skip block below.
+    # All subsequent schema sections are numbered 4 – 17 as the counter increments.
+    sec_counter = 3
     for sec in schema.get("sections", []):
         sec_id = sec["id"]
         sec_name = sec["name"]
@@ -247,10 +252,10 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
                 doc.add_paragraph("\n")
             continue
 
-        # Add section heading
+        # Add section heading (counter increments only for sections that are rendered)
+        sec_counter += 1
         h = doc.add_paragraph()
-        sec_num = int(schema["sections"].index(sec)) + 1
-        r = h.add_run(f"{sec_num}. {sec_name.upper()}")
+        r = h.add_run(f"{sec_counter}. {sec_name.upper()}")
         r.font.size = Pt(14)
         r.font.bold = True
         r.font.color.rgb = RGBColor(15, 23, 42)

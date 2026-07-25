@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Home, Upload, FileCheck, RefreshCw, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
   Check, Sparkles, LogOut, Loader2, ShieldCheck,
   ChevronRight, LayoutDashboard, FolderOpen, AlertTriangle
 } from 'lucide-react';
@@ -8,8 +7,10 @@ import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
+// PerformanceReport removed — component not yet implemented
 
-const BACKEND_URL = 'http://127.0.0.1:8000';
+// Read backend URL from Vite env variable; fall back to localhost for local dev
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, basics, general, management, capital, objects, business, disclosures
@@ -76,37 +77,41 @@ export default function App() {
     }
   };
 
-  const handleFormChange = async (key, value) => {
-    setSaveStatus('saving');
-    
-    // Update local state first
-    const updatedSession = {
-      ...sessionData,
-      form_data: {
-        ...sessionData.form_data,
-        [key]: value
-      }
-    };
-    setSessionData(updatedSession);
+  // Ref for the debounce timer — persists across renders without causing re-renders
+  const debounceTimerRef = useRef(null);
 
-    // Sync to backend, then validate
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ form_data: updatedSession.form_data })
-      });
-      if (res.ok) {
-        setSaveStatus('saved');
-        // Validate after save completes (no race condition)
-        await validateSession();
-      } else {
-        setSaveStatus('error');
-      }
-    } catch (err) {
-      console.error('Failed to save session state:', err);
-      setSaveStatus('error');
-    }
+  const handleFormChange = (key, value) => {
+    setSaveStatus('saving');
+
+    // Update local state immediately so the UI stays responsive on every keystroke
+    setSessionData(prev => {
+      const updatedFormData = { ...prev.form_data, [key]: value };
+
+      // Debounce the backend sync: cancel any in-flight timer and start a fresh 500 ms one.
+      // The closure captures updatedFormData so the API call always sends the latest snapshot.
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ form_data: updatedFormData })
+          });
+          if (res.ok) {
+            setSaveStatus('saved');
+            // Validate only after the debounced save completes (no redundant calls)
+            await validateSession();
+          } else {
+            setSaveStatus('error');
+          }
+        } catch (err) {
+          console.error('Failed to save session state:', err);
+          setSaveStatus('error');
+        }
+      }, 500);
+
+      return { ...prev, form_data: updatedFormData };
+    });
   };
 
   const handleUploadSuccess = (docType, extractedFields, filename) => {
@@ -114,7 +119,7 @@ export default function App() {
       ...sessionData.extracted_data,
       [docType]: extractedFields
     };
-    
+
     // Replace any existing file of the same type to update the filename and meta
     const updatedFiles = sessionData.uploaded_files.filter(f => f.type !== docType);
     updatedFiles.push({ filename, type: docType, size: 256000 });
@@ -146,7 +151,7 @@ export default function App() {
   const handlePreFill = async (type) => {
     setSaveStatus('saving');
     setLoading(true);
-    
+
     const sampleForm = {
       company_name: 'Apex Technochem Limited',
       company_acronym: 'APEX',
@@ -293,8 +298,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionData)
       })
-      .then(() => validateSession())
-      .catch(err => console.error('Full session sync failed:', err));
+        .then(() => validateSession())
+        .catch(err => console.error('Full session sync failed:', err));
     }
   }, [sessionData.extracted_data, sessionData.uploaded_files]);
 
@@ -328,13 +333,13 @@ export default function App() {
   };
 
   const steps = [
-    { id: 'basics',      label: 'Cover Page Details',  code: 'Sch VI Pt I'  },
-    { id: 'general',     label: 'General Information', code: 'ICDR Reg 244' },
-    { id: 'management',  label: 'Board & Promoters',   code: 'ICDR Reg 245' },
-    { id: 'capital',     label: 'Capital Structure',   code: 'ICDR Reg 246' },
-    { id: 'objects',     label: 'Objects of the Issue',code: 'ICDR Reg 247' },
-    { id: 'business',    label: 'Business Operations', code: 'ICDR Reg 248' },
-    { id: 'disclosures', label: 'Risk Disclosures',    code: 'ICDR Reg 250' }
+    { id: 'basics', label: 'Cover Page Details', code: 'Sch VI Pt I' },
+    { id: 'general', label: 'General Information', code: 'ICDR Reg 244' },
+    { id: 'management', label: 'Board & Promoters', code: 'ICDR Reg 245' },
+    { id: 'capital', label: 'Capital Structure', code: 'ICDR Reg 246' },
+    { id: 'objects', label: 'Objects of the Issue', code: 'ICDR Reg 247' },
+    { id: 'business', label: 'Business Operations', code: 'ICDR Reg 248' },
+    { id: 'disclosures', label: 'Risk Disclosures', code: 'ICDR Reg 250' }
   ];
 
   const getStepStatus = (stepId) => {
@@ -343,7 +348,7 @@ export default function App() {
     for (const docType of Object.values(sessionData.extracted_data || {})) {
       if (docType && typeof docType === 'object') Object.assign(data, docType);
     }
-    
+
     // Check if this step has inconsistencies first
     const stepInconsistencies = (validationResults?.inconsistencies || []).filter(inc => {
       const stepFields = {
@@ -355,7 +360,7 @@ export default function App() {
         business: ['industry_name', 'products_services', 'business_model', 'key_customers'],
         disclosures: ['internal_risks', 'external_risks', 'litigations_company', 'litigations_promoters', 'rpt_declared', 'material_contracts_desc', 'declaration_signed']
       }[stepId] || [];
-      
+
       return stepFields.some(f => inc.description.toLowerCase().includes(f) || inc.title.toLowerCase().includes(f.replace('_', ' ')));
     });
 
@@ -402,19 +407,19 @@ export default function App() {
   const isWizardTab = ['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab);
   const wizardStepIndex = isWizardTab ? tabOrder.indexOf(activeTab) : -1;
 
-  const pageTitle = activeTab === 'dashboard' 
+  const pageTitle = activeTab === 'dashboard'
     ? 'Filing Dashboard'
-    : activeTab === 'uploads' 
-    ? 'Document Vault'
-    : steps.find(s => s.id === activeTab)?.label || 'Drafting Wizard';
+    : activeTab === 'uploads'
+      ? 'Document Vault'
+      : steps.find(s => s.id === activeTab)?.label || 'Drafting Wizard';
 
   return (
     <div className="min-h-screen flex bg-gray-50 text-gray-900 relative font-sans">
-      
+
       {/* Pinned Top Progress Bar */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-100 z-50">
-        <div 
-          className="h-full bg-accent-500 transition-all duration-700 ease-out rounded-r-full" 
+        <div
+          className="h-full bg-accent-500 transition-all duration-700 ease-out rounded-r-full"
           style={{ width: `${progressPct}%` }}
         />
       </div>
@@ -462,14 +467,13 @@ export default function App() {
             <div className="pb-2 px-3 pt-2 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
               Overview
             </div>
-            
+
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'dashboard'
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${activeTab === 'dashboard'
                   ? 'bg-accent-50 text-accent-700 border-l-[3px] border-accent-500'
                   : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-l-[3px] border-transparent'
-              }`}
+                }`}
             >
               <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'dashboard' ? 'text-accent-500' : 'text-gray-400'}`} />
               <span>Filing Dashboard</span>
@@ -477,11 +481,10 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('uploads')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'uploads'
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${activeTab === 'uploads'
                   ? 'bg-accent-50 text-accent-700 border-l-[3px] border-accent-500'
                   : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-l-[3px] border-transparent'
-              }`}
+                }`}
             >
               <FolderOpen className={`w-4 h-4 shrink-0 ${activeTab === 'uploads' ? 'text-accent-500' : 'text-gray-400'}`} />
               <span>Document Vault</span>
@@ -499,21 +502,19 @@ export default function App() {
                   <button
                     key={step.id}
                     onClick={() => setActiveTab(step.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${
-                      isActive
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${isActive
                         ? 'bg-gray-50 text-gray-900 border-accent-500 shadow-sm'
                         : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-transparent'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {getStatusDot(status)}
                       <span className="truncate">{step.label}</span>
                     </div>
-                    <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${
-                      isActive 
+                    <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${isActive
                         ? 'bg-accent-50 text-accent-600 border border-accent-100'
                         : 'bg-gray-100 text-gray-400 border border-gray-200'
-                    }`}>
+                      }`}>
                       {step.code}
                     </span>
                   </button>
@@ -573,7 +574,7 @@ export default function App() {
 
       {/* ── Main Content Area ── */}
       <main className="flex-grow min-w-0 flex flex-col min-h-screen">
-        
+
         {/* Top Header */}
         <header className="h-14 border-b border-gray-100 bg-white flex justify-between items-center px-7 sticky top-0 z-30 shadow-sm select-none">
           <div className="flex items-center gap-3">
@@ -585,14 +586,14 @@ export default function App() {
             <h2 className="text-[14px] font-bold text-gray-900 tracking-tight">
               {pageTitle}
             </h2>
-            
+
             {isWizardTab && (
               <span className="text-[10.5px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg font-semibold border border-gray-200">
                 Step {wizardStepIndex + 1} / 7
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2.5">
             {/* SEBI compliance badge */}
             <div className="text-[10.5px] text-emerald-700 flex items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-semibold">
@@ -603,11 +604,10 @@ export default function App() {
             {/* Copilot toggle */}
             <button
               onClick={() => setCopilotOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shadow-sm relative ${
-                copilotOpen 
-                  ? 'bg-accent-500 text-white border-accent-500 shadow-accent' 
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shadow-sm relative ${copilotOpen
+                  ? 'bg-accent-500 text-white border-accent-500 shadow-accent'
                   : 'bg-white hover:bg-accent-50 text-gray-600 hover:text-accent-700 border-gray-200 hover:border-accent-200'
-              }`}
+                }`}
             >
               <Sparkles className={`w-3.5 h-3.5 ${copilotOpen ? 'text-white' : 'text-accent-500'}`} />
               <span>AI Copilot</span>
@@ -631,8 +631,8 @@ export default function App() {
           ) : (
             <>
               {activeTab === 'dashboard' && (
-                <Dashboard 
-                  validationResults={validationResults} 
+                <Dashboard
+                  validationResults={validationResults}
                   onGenerate={handleGenerateProspectus}
                   generating={generating}
                   onNavigateTab={setActiveTab}
@@ -642,7 +642,7 @@ export default function App() {
               )}
 
               {activeTab === 'uploads' && (
-                <Uploader 
+                <Uploader
                   sessionData={sessionData}
                   onUploadSuccess={handleUploadSuccess}
                   backendUrl={BACKEND_URL}
@@ -650,7 +650,7 @@ export default function App() {
               )}
 
               {['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab) && (
-                <Wizard 
+                <Wizard
                   formData={sessionData.form_data}
                   extractedData={sessionData.extracted_data}
                   uploadedFiles={sessionData.uploaded_files}
@@ -672,7 +672,7 @@ export default function App() {
         </footer>
       </main>
 
-      <Copilot 
+      <Copilot
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
         onApplySuggestion={handleApplySuggestion}

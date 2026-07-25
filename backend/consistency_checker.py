@@ -363,7 +363,7 @@ def check_gstin_format(gstin: Optional[str]) -> Optional[Dict[str, Any]]:
 
 
 def check_price_band_width(price_band: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Upper band must be ≤ 120% of lower band."""
+    """Upper band must be ≤ 120% of lower band (SEBI requires ≤20% spread on floor price)."""
     if not price_band:
         return None
     try:
@@ -372,7 +372,15 @@ def check_price_band_width(price_band: Optional[str]) -> Optional[Dict[str, Any]
             return None
         lower_p = float(parts[0].strip())
         upper_p = float(parts[1].strip())
-        if lower_p <= 0 or upper_p <= lower_p * 1.20:
+
+        # Guard: invalid / uninitialised values — skip silently
+        if lower_p <= 0 or upper_p <= 0:
+            return None
+        # Guard: inverted band (upper < lower) is a data-entry error, not a width violation
+        if upper_p < lower_p:
+            return None
+        # Core rule: spread must be within 20% of floor price
+        if upper_p <= lower_p * 1.20:
             return None
     except (ValueError, IndexError):
         return None
