@@ -10,24 +10,71 @@ function Root() {
   const [splashDone, setSplashDone] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const handleSplashFinish = useCallback(() => setSplashDone(true), []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || !supabase) {
       setAuthLoading(false);
       return undefined;
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+
+    let sub = null;
+
+    try {
+      supabase.auth.getSession()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Supabase getSession error:", error);
+            setAuthError(error.message);
+          } else {
+            setSession(data?.session || null);
+          }
+        })
+        .catch(err => {
+          console.error("Supabase getSession error:", err);
+          setAuthError(err?.message || "Failed to load session");
+        })
+        .finally(() => {
+          setAuthLoading(false);
+        });
+
+      const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        setSession(nextSession);
+      });
+      sub = data?.subscription;
+    } catch (err) {
+      console.error("Supabase init error:", err);
+      setAuthError(err?.message || "Auth initialization failed");
       setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
-    return () => subscription.unsubscribe();
+    }
+
+    return () => {
+      if (sub && typeof sub.unsubscribe === 'function') {
+        sub.unsubscribe();
+      }
+    };
   }, []);
 
-  if (!isSupabaseConfigured) return <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6 text-center">Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable secure user workspaces.</div>;
-  if (authLoading) return null;
-  if (!session) return <AuthScreen />;
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6 text-center">
+        Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable secure user workspaces.
+      </div>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-400 flex items-center justify-center p-6 text-center text-sm font-medium">
+        Loading authentication...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen authError={authError} />;
+  }
 
   return (
     <>
@@ -43,3 +90,4 @@ createRoot(document.getElementById('root')).render(
     <Root />
   </StrictMode>,
 )
+
