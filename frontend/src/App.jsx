@@ -483,19 +483,20 @@ export default function App({ user, onSignOut }) {
       <aside className="w-64 border-r border-gray-100 bg-white shrink-0 flex flex-col hidden md:flex sticky top-0 h-screen z-40 shadow-sm overflow-hidden">
         <div className="flex flex-col flex-1 min-h-0">
           {/* Brand / Logo */}
-          <div className="px-4 py-4 border-b border-gray-100 flex items-center gap-3">
+          <div className="px-4 py-4 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-r from-[#0d1f2d] via-[#1a3a4a] to-[#0d2b3e] text-white">
             <img
               src="/logo.png"
               alt="IPO Sherpa"
-              className="h-9 w-auto shrink-0 rounded-lg"
+              className="h-9 w-auto shrink-0 rounded-lg drop-shadow-[0_4px_16px_rgba(0,179,134,0.45)]"
             />
             <div>
-              <h1 className="font-display font-700 text-[14.5px] text-gray-900 leading-tight tracking-tight">
-                IPO <span className="text-accent-500">Sherpa</span>
+              <h1 className="font-display font-bold text-[14.5px] text-white leading-tight tracking-tight flex items-center gap-1">
+                IPO <span className="text-[#00b386]">Sherpa</span>
               </h1>
-              <p className="text-[9px] uppercase font-bold tracking-widest text-gray-400 mt-0.5">SEBI IPO Workspace</p>
+              <p className="text-[9px] uppercase font-bold tracking-widest text-emerald-400/80 mt-0.5">SEBI IPO Workspace</p>
             </div>
           </div>
+
 
           {/* Sync status pill */}
           <div className="px-5 py-2.5 border-b border-gray-50 flex items-center justify-between">
