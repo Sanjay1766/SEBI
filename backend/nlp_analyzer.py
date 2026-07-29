@@ -2,8 +2,31 @@ import os
 import json
 import logging
 import re
-import difflib
 from typing import Dict, Any, List, Optional
+
+# ── Sentence-Transformers semantic engine (F2) ───────────────────────────────
+# Loaded once at module startup; all calls share the same model instance.
+# Falls back silently to difflib if the library is not installed so the app
+# continues to work even without torch/sentence-transformers in the environment.
+
+_ST_MODEL = None  # singleton: SentenceTransformer instance
+_ST_UTIL = None   # sentence_transformers.util module
+_ST_AVAILABLE = False
+
+try:
+    from sentence_transformers import SentenceTransformer, util as _st_util
+    _ST_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    _ST_UTIL = _st_util
+    _ST_AVAILABLE = True
+    logging.getLogger("sebi-ipo-generator.nlp_analyzer").info(
+        "[F2] sentence-transformers loaded: all-MiniLM-L6-v2"
+    )
+except Exception as _st_exc:  # ImportError, OSError (model download), etc.
+    import difflib as _difflib_fallback
+    logging.getLogger("sebi-ipo-generator.nlp_analyzer").warning(
+        f"[F2] sentence-transformers unavailable ({_st_exc}). "
+        "Falling back to difflib.SequenceMatcher."
+    )
 
 logger = logging.getLogger("sebi-ipo-generator.nlp_analyzer")
 
@@ -92,7 +115,20 @@ def nlp_normalize_text(text: str) -> str:
 def nlp_semantic_match(str1: str, str2: str, threshold: float = 0.8) -> Dict[str, Any]:
     """Evaluates semantic similarity between two entity strings (e.g. company names, addresses).
 
-    Returns similarity score (0.0 to 1.0) and match boolean.
+    Uses sentence-transformers (all-MiniLM-L6-v2) cosine similarity as the primary
+    engine so that abbreviations, casing differences, and legal suffix variants
+    (e.g. "Ltd" vs "Limited", "Pvt" vs "Private") are resolved correctly.
+
+    Falls back to difflib.SequenceMatcher if sentence-transformers is unavailable.
+
+    Returns a dict with:
+        is_match        (bool)  – True if composite_score >= threshold
+        score           (float) – composite score 0.0–1.0
+        embedding_score (float) – raw cosine similarity (sentence-transformers path)
+        jaccard_score   (float) – token Jaccard overlap
+        method          (str)   – 'sentence_transformers' | 'difflib_fallback'
+        normalized_str1 (str)
+        normalized_str2 (str)
     """
     if not str1 or not str2:
         return {"is_match": False, "score": 0.0, "reason": "Empty string input"}
@@ -100,30 +136,68 @@ def nlp_semantic_match(str1: str, str2: str, threshold: float = 0.8) -> Dict[str
     norm1 = nlp_normalize_text(str1)
     norm2 = nlp_normalize_text(str2)
 
+    # Exact match after normalization — no model call needed
     if norm1 == norm2:
-        return {"is_match": True, "score": 1.0, "normalized_str1": norm1, "normalized_str2": norm2}
+        return {
+            "is_match": True,
+            "score": 1.0,
+            "embedding_score": 1.0,
+            "jaccard_score": 1.0,
+            "method": "exact_match",
+            "normalized_str1": norm1,
+            "normalized_str2": norm2,
+        }
 
-    # Token overlap (Jaccard similarity)
+    # ── Jaccard token overlap (always computed for interpretability) ──────────
     tokens1 = set(norm1.split())
     tokens2 = set(norm2.split())
     intersection = tokens1.intersection(tokens2)
     union = tokens1.union(tokens2)
     jaccard_score = len(intersection) / len(union) if union else 0.0
 
-    # Sequence matcher ratio (Levenshtein edit distance proxy)
-    seq_ratio = difflib.SequenceMatcher(None, norm1, norm2).ratio()
+    # ── Primary path: sentence-transformers cosine similarity ─────────────────
+    if _ST_AVAILABLE and _ST_MODEL is not None:
+        try:
+            embeddings = _ST_MODEL.encode(
+                [str1, str2],  # use original strings (model handles casing internally)
+                convert_to_tensor=True,
+                show_progress_bar=False,
+            )
+            cosine_sim = float(_ST_UTIL.cos_sim(embeddings[0], embeddings[1]).item())
+            cosine_sim = max(0.0, min(1.0, cosine_sim))  # clamp to [0, 1]
 
-    # Combined composite score weighted toward sequence matcher and token containment
-    composite_score = max(seq_ratio, (jaccard_score * 0.4 + seq_ratio * 0.6))
+            # Blend: 85% semantic embedding + 15% token Jaccard
+            composite_score = round(0.85 * cosine_sim + 0.15 * jaccard_score, 4)
+            is_match = composite_score >= threshold
+
+            return {
+                "is_match": is_match,
+                "score": composite_score,
+                "embedding_score": round(cosine_sim, 4),
+                "jaccard_score": round(jaccard_score, 4),
+                "method": "sentence_transformers",
+                "normalized_str1": norm1,
+                "normalized_str2": norm2,
+            }
+        except Exception as e:
+            logger.warning(
+                f"[F2] sentence-transformers inference failed ({e}). Degrading to difflib."
+            )
+
+    # ── Fallback path: difflib.SequenceMatcher ────────────────────────────────
+    seq_ratio = _difflib_fallback.SequenceMatcher(None, norm1, norm2).ratio()
+    composite_score = round(max(seq_ratio, jaccard_score * 0.4 + seq_ratio * 0.6), 4)
     is_match = composite_score >= threshold
 
     return {
         "is_match": is_match,
-        "score": round(composite_score, 4),
+        "score": composite_score,
+        "embedding_score": None,
         "jaccard_score": round(jaccard_score, 4),
         "sequence_score": round(seq_ratio, 4),
+        "method": "difflib_fallback",
         "normalized_str1": norm1,
-        "normalized_str2": norm2
+        "normalized_str2": norm2,
     }
 
 
