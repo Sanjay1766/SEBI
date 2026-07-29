@@ -1,0 +1,32 @@
+# Ignore everything by default, then whitelist what we need.
+# This keeps the Docker image lean and prevents secrets leaking in.
+
+# Ignore all
+**
+
+# Whitelist source files
+!main.py
+!extractor.py
+!nlp_analyzer.py
+!consistency_checker.py
+!generator.py
+!blockchain.py
+!validator.py
+!schema.json
+
+# Whitelist config
+!requirements.txt
+!Dockerfile
+!.env.example
+
+# Always exclude secrets and local state
+.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+temp_uploads/
+session_state.json
+*.docx
+*.pdf
+tests/

@@ -1,0 +1,13 @@
+# Railway deployment configuration
+# Docs: https://docs.railway.app/reference/config-as-code
+
+[build]
+# Railway auto-detects the Dockerfile in backend/
+# Point Railway's root directory to /backend in the dashboard
+
+[deploy]
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
+healthcheckPath = "/health"
+healthcheckTimeout = 60       # seconds — generous for model warm-up
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
