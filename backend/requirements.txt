@@ -15,6 +15,9 @@ web3
 # Semantic entity resolution (F2)
 # all-MiniLM-L6-v2 model (~80MB) downloaded to ~/.cache on first run
 sentence-transformers
+# torch: CPU-only wheel in Docker (~200 MB). Local dev uses full wheel via venv.
+# The --extra-index-url is respected by pip inside the Dockerfile.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch
 # Financial table extraction (F3)
 # camelot-py[cv] uses OpenCV for stream mode (no Ghostscript needed)
