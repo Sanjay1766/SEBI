@@ -698,39 +698,57 @@ def digilocker_simulate(user: Dict[str, Any] = Depends(get_current_user)):
     session["uploaded_files"] = [f for f in session.get("uploaded_files", []) if f.get("type") not in existing_types]
     session["uploaded_files"].extend(mock_digilocker_docs)
 
-    company_name = session.get("form_data", {}).get("company_name") or "Apex Technochem Limited"
-    session["extracted_data"]["incorporation"] = {
-        "company_name": company_name,
-        "cin": "L24110RJ2018PLC062145",
-        "incorporation_date": "2018-04-12",
-    }
-    session["extracted_data"]["gst"] = {
-        "company_name": company_name,
-        "gstin": "08AAACA1234A1Z5",
-        "registration_date": "2018-05-01",
-        "gst_annual_turnover": 42.5,
-    }
-    session["extracted_data"]["compliance"] = {
-        "pan_name": company_name,
-        "pan": "AAACA1234A",
-    }
-    session["extracted_data"]["financials"] = {
-        "revenue_fy_latest": 42.5,
-        "pat_fy_latest": 5.2,
-        "net_worth": 18.4,
-    }
+    # Use whatever company name the user has already entered in the form.
+    # Do NOT fall back to a hardcoded demo company — that would corrupt the session
+    # with a different company's identity for any real user who hasn't typed a name yet.
+    company_name = session.get("form_data", {}).get("company_name") or None
 
-    # Auto-fill form_data fields so DigiLocker pull populates form fields immediately
+    # ── Structural mock extracted data (DigiLocker demo) ─────────────────────
+    # These placeholder IDs are labelled clearly as demo values.
+    # They are only injected if the session has no real extracted data yet,
+    # so an actual document upload always takes precedence.
+    existing_inc = session["extracted_data"].get("incorporation", {})
+    session["extracted_data"]["incorporation"] = {
+        **existing_inc,
+        "company_name": company_name or existing_inc.get("company_name"),
+        # Demo structural identifiers — real uploads will replace these
+        "cin": existing_inc.get("cin") or "DEMO_CIN_NOT_VERIFIED",
+        "incorporation_date": existing_inc.get("incorporation_date"),
+    }
+    existing_gst = session["extracted_data"].get("gst", {})
+    session["extracted_data"]["gst"] = {
+        **existing_gst,
+        "company_name": company_name or existing_gst.get("company_name"),
+        "gstin": existing_gst.get("gstin") or "DEMO_GSTIN_NOT_VERIFIED",
+        "registration_date": existing_gst.get("registration_date"),
+        "gst_annual_turnover": existing_gst.get("gst_annual_turnover"),  # None until doc uploaded
+    }
+    existing_comp = session["extracted_data"].get("compliance", {})
+    session["extracted_data"]["compliance"] = {
+        **existing_comp,
+        "pan_name": company_name or existing_comp.get("pan_name"),
+        "pan": existing_comp.get("pan") or "DEMO_PAN_NOT_VERIFIED",
+    }
+    # Financials: never inject fake figures — leave as-is from real document extraction
+    # (do not touch session["extracted_data"]["financials"] here)
+
+    # ── Auto-fill form_data only for fields the user hasn't already provided ──
     form_data = session.get("form_data", {})
-    form_data["company_name"] = company_name
-    form_data["cin"] = "L24110RJ2018PLC062145"
-    form_data["incorporation_date"] = "2018-04-12"
-    form_data["gstin"] = "08AAACA1234A1Z5"
-    form_data["gst_annual_turnover"] = 42.5
-    form_data["pan"] = "AAACA1234A"
-    form_data["pan_name"] = company_name
-    form_data["revenue_fy_latest"] = 42.5
-    form_data["pat_fy_latest"] = 5.2
+    if company_name:
+        form_data.setdefault("company_name", company_name)
+    # Only copy real (non-demo) values from extracted_data into form_data
+    real_cin = session["extracted_data"]["incorporation"].get("cin")
+    if real_cin and "DEMO" not in real_cin:
+        form_data.setdefault("cin", real_cin)
+    real_inc_date = session["extracted_data"]["incorporation"].get("incorporation_date")
+    if real_inc_date:
+        form_data.setdefault("incorporation_date", real_inc_date)
+    real_gstin = session["extracted_data"]["gst"].get("gstin")
+    if real_gstin and "DEMO" not in real_gstin:
+        form_data.setdefault("gstin", real_gstin)
+    real_pan = session["extracted_data"]["compliance"].get("pan")
+    if real_pan and "DEMO" not in real_pan:
+        form_data.setdefault("pan", real_pan)
     session["form_data"] = form_data
 
     save_session(user["id"], session)

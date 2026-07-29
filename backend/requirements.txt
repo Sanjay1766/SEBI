@@ -12,3 +12,14 @@ pdf2image
 # Run: pip install web3
 # Not strictly required — app runs in mock mode if not installed
 web3
+# Semantic entity resolution (F2)
+# all-MiniLM-L6-v2 model (~80MB) downloaded to ~/.cache on first run
+sentence-transformers
+torch
+# Financial table extraction (F3)
+# camelot-py[cv] uses OpenCV for stream mode (no Ghostscript needed)
+# lattice mode additionally requires Ghostscript binary on PATH
+# tabula-py requires Java JRE >= 8; both degrade gracefully if unavailable
+camelot-py[cv]
+tabula-py
+
