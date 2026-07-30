@@ -547,8 +547,24 @@ def run_all_consistency_checks(
 
 
 def check_narrative_quality(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Analyzes narrative text fields for vague language, boilerplate risk disclosures, and missing regulatory declarations."""
+    """Analyzes narrative text fields for vague language, boilerplate risk disclosures, and missing regulatory declarations.
+
+    Returns an empty list when no narrative fields contain content (e.g. after a workspace reset).
+    """
     flags: List[Dict[str, Any]] = []
+
+    # ── Guard: skip entirely if no narrative fields have content ─────────────
+    narrative_keys = [
+        "business_overview", "risk_factors", "internal_risks",
+        "external_risks", "promoter_experience", "objects_summary",
+    ]
+    has_any_content = any(
+        merged.get(k) and str(merged[k]).strip()
+        for k in narrative_keys
+    )
+    if not has_any_content:
+        return flags
+
     try:
         from nlp_analyzer import analyze_prospectus_narratives
         analysis = analyze_prospectus_narratives(merged)

@@ -4,13 +4,12 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# System deps for camelot (OpenCV headless) and pdf2image
+# System deps for camelot (OpenCV headless) and pdf2image / PaddleOCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libgl1 \
     ghostscript \
     poppler-utils \
-    tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 # Install torch CPU-only FIRST — smaller wheel (~200 MB vs 700 MB GPU)
@@ -29,7 +28,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "\
 from sentence_transformers import SentenceTransformer; \
 SentenceTransformer('all-MiniLM-L6-v2'); \
-print('[Dockerfile] Model cached successfully.')"
+print('[Dockerfile] sentence-transformers model cached.')"
+
+# ── Pre-cache PaddleOCR models at build time ─────────────────────────────────
+# Downloads detection (~10 MB), recognition (~95 MB) and angle-classifier
+# (~1 MB) models to /root/.paddleocr so the first OCR request starts instantly.
+RUN python -c "\
+from paddleocr import PaddleOCR; \
+PaddleOCR(use_angle_cls=True, lang='en', show_log=False); \
+print('[Dockerfile] PaddleOCR models cached.')"
 
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
@@ -43,7 +50,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     ghostscript \
     poppler-utils \
-    tesseract-ocr \
     default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
@@ -53,6 +59,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy pre-cached HuggingFace model
 COPY --from=builder /root/.cache /root/.cache
+
+# Copy pre-cached PaddleOCR models
+COPY --from=builder /root/.paddleocr /root/.paddleocr
 
 # Copy application source
 COPY . .

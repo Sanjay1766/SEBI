@@ -322,7 +322,17 @@ select.form-input-base {
 
 /* ─── Smooth ring progress animation ───────────────────────── */
 circle {
-  transition: stroke-dashoffset 1s ease-out;
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.7s ease;
+}
+
+/* ─── Score bar slide-in (ComplianceScoreMeter sub-scores) ──── */
+.score-bar {
+  transform-origin: left center;
+  animation: score-bar-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes score-bar-in {
+  from { transform: scaleX(0); opacity: 0.4; }
+  to   { transform: scaleX(1); opacity: 1; }
 }
 
 /* ─── Primary button ────────────────────────────────────────── */

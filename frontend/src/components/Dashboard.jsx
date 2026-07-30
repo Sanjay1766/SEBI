@@ -3,9 +3,12 @@ import {
   CheckCircle2, AlertTriangle, XCircle, FileDown, 
   ChevronDown, ChevronUp, Loader2, Sparkles, FileText, ArrowRight,
   TrendingUp, Shield, AlertOctagon, BarChart3, Clock, Zap,
-  BookOpen, HelpCircle, Lightbulb, Server, IndianRupee, Cpu, ShieldCheck
+  BookOpen, HelpCircle, Lightbulb, Server, IndianRupee, Cpu, ShieldCheck,
+  ExternalLink, ScrollText
 } from 'lucide-react';
 import RedFlagScanner from './RedFlagScanner';
+import ComplianceScoreMeter from './ComplianceScoreMeter';
+import { lookupRegulation } from '../data/icdrRegulations';
 
 const SECTION_TO_TAB = {
   'cover_page': 'basics',
@@ -50,6 +53,7 @@ export default function Dashboard({
   const [expandedSection, setExpandedSection] = useState(null);
   const [expandedExplanations, setExpandedExplanations] = useState({});
   const [expandedFixSteps, setExpandedFixSteps] = useState({});
+  const [expandedRegs, setExpandedRegs] = useState({});
 
   if (!validationResults) {
     return (
@@ -82,19 +86,13 @@ export default function Dashboard({
   const toggleSection = (id) => setExpandedSection(expandedSection === id ? null : id);
   const toggleExplanation = (id) => setExpandedExplanations(prev => ({ ...prev, [id]: !prev[id] }));
   const toggleFixSteps = (id) => setExpandedFixSteps(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleReg = (id) => setExpandedRegs(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleBadgeClick = (e, sectionId) => {
     e.stopPropagation();
     const tabId = SECTION_TO_TAB[sectionId];
     if (tabId && onNavigateTab) onNavigateTab(tabId);
   };
-
-  // Primary metric: filing readiness
-  const primaryScore = filing_readiness;
-  const scoreColor = primaryScore >= 80 ? '#10b981' : primaryScore >= 50 ? '#f59e0b' : '#ef4444';
-  const scoreTextColor = primaryScore >= 80 ? 'text-emerald-600' : primaryScore >= 50 ? 'text-amber-500' : 'text-red-500';
-  const scoreBgColor = primaryScore >= 80 ? 'bg-emerald-50 border-emerald-100' : primaryScore >= 50 ? 'bg-amber-50 border-amber-100' : 'bg-red-50 border-red-100';
-  const circumference = 2 * Math.PI * 30;
 
   const getStatusBadge = (status, sectionId) => {
     const base = 'flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-1 rounded-lg shrink-0 select-none cursor-pointer transition-all';
@@ -128,48 +126,12 @@ export default function Dashboard({
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
-      
-      {/* ── Top Stats Row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-        {/* Filing Readiness (primary score) */}
-        <div className={`card rounded-2xl p-6 border ${scoreBgColor} flex items-center justify-between`}>
-          <div>
-            <p className="text-[10.5px] font-bold uppercase tracking-widest text-gray-400 mb-1">Filing Readiness</p>
-            <p className={`text-4xl font-display font-800 tracking-tight ${scoreTextColor}`}>{primaryScore}%</p>
-            <p className="text-[11.5px] text-gray-400 font-medium mt-1.5">
-              {completed_blocking_fields} <span className="text-gray-300">/</span> {total_blocking_fields} blocking fields
-            </p>
-            <p className="text-[10.5px] text-gray-400 font-semibold mt-1">
-              Completeness: {overall_completeness}% ({completed_fields}/{total_fields})
-            </p>
-            {has_blocking_flags && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg mt-2 animate-soft-pulse">
-                <AlertTriangle className="w-3 h-3" /> Capped at 80% — resolve conflicts
-              </span>
-            )}
-            {primaryScore === 100 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg mt-2">
-                <CheckCircle2 className="w-3 h-3" /> IPO-Ready
-              </span>
-            )}
-          </div>
-          <div className="relative flex items-center justify-center shrink-0">
-            <svg className="w-20 h-20 -rotate-90" viewBox="0 0 72 72">
-              <circle cx="36" cy="36" r="30" fill="none" stroke="#f1f5f9" strokeWidth="6" />
-              <circle cx="36" cy="36" r="30" fill="none"
-                stroke={scoreColor} strokeWidth="6"
-                strokeDasharray={circumference}
-                strokeDashoffset={circumference - (circumference * primaryScore) / 100}
-                strokeLinecap="round"
-                style={{ transition: 'stroke-dashoffset 1s ease-out' }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className={`text-[13px] font-bold font-mono ${scoreTextColor}`}>{primaryScore}%</span>
-            </div>
-          </div>
-        </div>
+      {/* ── Compliance Score Meter (full-width centrepiece) ── */}
+      <ComplianceScoreMeter validationResults={validationResults} />
+
+      {/* ── Top Stats Row (2-col: Chapter Status + Compiler) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Chapter Status */}
         <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between">
@@ -250,6 +212,8 @@ export default function Dashboard({
             {inconsistencies.map((inc) => {
               const showExp = expandedExplanations[inc.id];
               const showFix = expandedFixSteps[inc.id];
+              const showReg = expandedRegs[inc.id];
+              const regData = lookupRegulation(inc.sebi_ref);
 
               return (
                 <div key={inc.id}
@@ -309,6 +273,21 @@ export default function Dashboard({
                       </button>
                     )}
 
+                    {/* ICDR Cross-Reference button — only shown if regulation text exists for this ref */}
+                    {regData && (
+                      <button
+                        onClick={() => toggleReg(inc.id)}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          showReg
+                            ? 'bg-blue-100 text-blue-800 border-blue-300'
+                            : 'text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200'
+                        }`}
+                      >
+                        <ScrollText className="w-3.5 h-3.5" />
+                        <span>{showReg ? 'Hide Regulation Text' : '📜 View ICDR Text'}</span>
+                      </button>
+                    )}
+
                     {inc.section_id && SECTION_TO_TAB[inc.section_id] && (
                       <button
                         onClick={() => onNavigateTab(SECTION_TO_TAB[inc.section_id])}
@@ -340,7 +319,7 @@ export default function Dashboard({
 
                   {/* Expandable How-to-Fix Steps */}
                   {showFix && inc.fix_steps && (
-                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 ml-2 text-xs text-emerald-950 space-y-2.5 animate-fade-in">
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 ml-2 text-xs text-emerald-950 space-y-2.5 animate-fade-in-up">
                       <div className="flex items-center gap-2 font-bold text-emerald-900">
                         <Lightbulb className="w-4 h-4 text-emerald-600" />
                         <span>Actionable Resolution Plan for Founder / Lead Banker:</span>
@@ -355,6 +334,55 @@ export default function Dashboard({
                           </li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+
+                  {/* ── ICDR Cross-Reference Panel ── */}
+                  {showReg && regData && (
+                    <div className="border border-blue-200 rounded-xl ml-2 overflow-hidden animate-fade-in-up" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)' }}>
+                      {/* Panel header */}
+                      <div className="px-4 py-3 bg-blue-600 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ScrollText className="w-3.5 h-3.5 text-blue-100 shrink-0" />
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200 leading-none">Statutory Reference</p>
+                            <p className="text-[12px] font-extrabold text-white mt-0.5 font-mono leading-tight">{regData.shortTitle}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-4">
+                          <p className="text-[9.5px] font-bold text-blue-300 leading-none">{regData.chapter}</p>
+                          <p className="text-[10px] font-semibold text-blue-200 mt-0.5 leading-tight">{regData.fullTitle}</p>
+                        </div>
+                      </div>
+
+                      {/* Regulation body — parchment legal-doc feel */}
+                      <div className="px-5 py-4">
+                        <blockquote
+                          className="text-[11.5px] leading-relaxed text-slate-700 whitespace-pre-line border-l-4 border-blue-300 pl-4 py-1"
+                          style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+                        >
+                          {regData.text}
+                        </blockquote>
+
+                        {/* Footer with external link */}
+                        <div className="mt-4 pt-3 border-t border-blue-200 flex items-center justify-between flex-wrap gap-2">
+                          <p className="text-[10px] text-blue-500 font-semibold select-none flex items-center gap-1.5">
+                            <BookOpen className="w-3 h-3" />
+                            Source: SEBI ICDR Regulations 2018 (as amended) / Allied Statutes
+                          </p>
+                          {regData.sebiUrl && (
+                            <a
+                              href={regData.sebiUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 text-[10.5px] font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 border border-blue-300 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              Open on SEBI.gov.in ↗
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
 
