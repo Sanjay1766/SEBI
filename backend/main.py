@@ -62,6 +62,11 @@ except ImportError:
     get_explanation = None
 
 try:
+    from rag_engine import rag_engine
+except ImportError:
+    rag_engine = None
+
+try:
     from groq import Groq
 except ImportError:
     Groq = None
@@ -208,6 +213,9 @@ class FullSessionPayload(BaseModel):
 class DraftPayload(BaseModel):
     field_key: str
     form_data: Dict[str, Any]
+
+class RAGQueryPayload(BaseModel):
+    query: str
 
 class CopilotMessage(BaseModel):
     role: str
@@ -420,6 +428,13 @@ def get_ocr_status():
 @app.get("/api/schema")
 def get_schema():
     return load_schema()
+
+@app.post("/api/rag/query")
+def query_sebi_rag(payload: RAGQueryPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    if not rag_engine:
+        raise HTTPException(status_code=503, detail="SEBI ICDR RAG engine is currently unavailable.")
+    session = load_session(user["id"])
+    return rag_engine.query_rag(payload.query, session)
 
 @app.get("/api/session")
 def get_session(user: Dict[str, Any] = Depends(get_current_user)):
