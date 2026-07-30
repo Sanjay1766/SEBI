@@ -141,29 +141,28 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
     setLoading(true);
 
     try {
-      const historyPayload = newMessages.slice(0, -1).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-
-      const res = await apiFetch('/api/copilot', {
+      const res = await apiFetch('/api/rag/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          history: historyPayload
-        })
+        body: JSON.stringify({ query: text })
       });
 
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       if (res.ok) {
         const data = await res.json();
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: replyTimestamp }]);
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: data.answer, 
+          citations: data.retrieved_citations,
+          confidence: data.overall_confidence,
+          engine: data.rag_engine,
+          timestamp: replyTimestamp 
+        }]);
       } else {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: 'Sorry, I encountered an error connecting to the compliance service. Please check if the backend is running.',
+          content: 'Sorry, I encountered an error connecting to the SEBI RAG statutory service. Please check if the backend is running.',
           timestamp: replyTimestamp
         }]);
       }
@@ -172,7 +171,7 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Error: Could not reach the compliance copilot. Ensure the backend server is operational.',
+        content: 'Error: Could not reach the SEBI ICDR RAG copilot. Ensure the backend server is operational.',
         timestamp: replyTimestamp
       }]);
     } finally {
@@ -278,10 +277,45 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
                     : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
                 }`}
               >
+                {/* RAG Confidence Badge */}
+                {!isUser && msg.confidence && (
+                  <div className="mb-2 pb-2 border-b border-slate-100 flex items-center justify-between gap-2">
+                    <span className="text-[9.5px] font-extrabold font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-600" />
+                      <span>{msg.confidence}% Vector RAG Confidence</span>
+                    </span>
+                    <span className="text-[9px] font-bold font-mono text-slate-400">SEBI ICDR Regulations 2018</span>
+                  </div>
+                )}
+
                 {/* Clean formatted text */}
                 <div className="whitespace-pre-line">
                   {isUser ? cleanText : renderMessageContent(cleanText)}
                 </div>
+
+                {/* SEBI Statutory Citation Cards */}
+                {!isUser && msg.citations && msg.citations.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-purple-100 space-y-2">
+                    <p className="text-[10px] uppercase font-bold text-purple-900 tracking-wider flex items-center gap-1">
+                      <Scale className="w-3.5 h-3.5 text-purple-600" /> Retrieved SEBI Statutory Regulations ({msg.citations.length}):
+                    </p>
+                    <div className="space-y-1.5">
+                      {msg.citations.map((cit, cIdx) => (
+                        <div key={cIdx} className="bg-purple-50/70 border border-purple-200 rounded-lg p-2.5 text-xs text-purple-950 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-purple-900 font-mono text-[11px]">{cit.regulation_no} — {cit.title}</span>
+                            <span className="text-[9px] font-bold font-mono bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded">
+                              {cit.confidence_score}% Match
+                            </span>
+                          </div>
+                          <p className="text-[10.5px] text-purple-900 leading-relaxed font-mono bg-white/80 p-2 rounded border border-purple-100">
+                            "{cit.text}"
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Suggestion Card */}
                 {suggestion && (
