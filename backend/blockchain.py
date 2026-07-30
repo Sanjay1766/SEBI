@@ -114,15 +114,24 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
+def _mask_key(key: str) -> str:
+    """Mask private key for safe logging (e.g. 0x****...1234)."""
+    if not key or len(key) < 10:
+        return "[UNCONFIGURED_OR_EMPTY_KEY]"
+    return key[:4] + "****************" + key[-4:]
+
+
 def _get_config() -> Dict[str, str]:
-    """Read blockchain config from environment variables."""
+    """Read blockchain config from environment variables safely."""
+    raw_pk = os.getenv("BLOCKCHAIN_PRIVATE_KEY", "").strip()
     return {
-        "rpc_url":          os.getenv("POLYGON_RPC_URL", ""),
-        "private_key":      os.getenv("BLOCKCHAIN_PRIVATE_KEY", ""),
-        "contract_address": os.getenv("BLOCKCHAIN_CONTRACT_ADDRESS", ""),
-        "session_id":       os.getenv("BLOCKCHAIN_SESSION_ID", "sebi-ipo-session-v1"),
-        "network_name":     os.getenv("BLOCKCHAIN_NETWORK", "Polygon Amoy Testnet"),
-        "explorer_base":    os.getenv("BLOCKCHAIN_EXPLORER", "https://amoy.polygonscan.com/tx/"),
+        "rpc_url":          os.getenv("POLYGON_RPC_URL", "").strip(),
+        "private_key":      raw_pk,
+        "masked_key":       _mask_key(raw_pk),
+        "contract_address": os.getenv("BLOCKCHAIN_CONTRACT_ADDRESS", "").strip(),
+        "session_id":       os.getenv("BLOCKCHAIN_SESSION_ID", "sebi-ipo-session-v1").strip(),
+        "network_name":     os.getenv("BLOCKCHAIN_NETWORK", "Polygon Amoy Testnet").strip(),
+        "explorer_base":    os.getenv("BLOCKCHAIN_EXPLORER", "https://amoy.polygonscan.com/tx/").strip(),
     }
 
 

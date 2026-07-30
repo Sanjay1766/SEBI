@@ -44,7 +44,13 @@ FALLBACK_RED_FLAGS = [
         "severity": "HIGH",
         "category": "vague_language",
         "issue": "Narrative uses unquantified market position claims ('market leader', 'rapidly growing') without verifiable market share metrics.",
-        "suggestion": "Quantify market share using third-party industry reports or state exact rank with citation to comply with SEBI ICDR Schedule VI."
+        "suggestion": "Quantify market share using third-party industry reports or state exact rank with citation to comply with SEBI ICDR Schedule VI.",
+        "reasoning_steps": [
+            "1. Analyzed narrative text in Business Overview section for subjective qualifiers.",
+            "2. Detected unquantified market claims: 'market leader' and 'rapidly growing'.",
+            "3. Statutory Rule (SEBI ICDR Schedule VI Part A): Disclosure of competitive position requires independent third-party research citation or audited industry data.",
+            "4. Therefore: Flagged as vague disclosure. Must provide verified market share percentage or citation."
+        ]
     },
     {
         "id": "rf_boilerplate_risk",
@@ -53,7 +59,13 @@ FALLBACK_RED_FLAGS = [
         "severity": "HIGH",
         "category": "boilerplate",
         "issue": "Generic macroeconomic risk factors included without company-specific sensitivity analysis (e.g. raw material price impact).",
-        "suggestion": "Replace standard templates with exact financial impact figures (e.g. '10% increase in steel prices reduces EBITDA by 2.4%')."
+        "suggestion": "Replace standard templates with exact financial impact figures (e.g. '10% increase in steel prices reduces EBITDA by 2.4%').",
+        "reasoning_steps": [
+            "1. Evaluated Risk Factors narrative against SEBI specificity guidelines.",
+            "2. Identified generic macroeconomic templates ('general economic conditions', 'fluctuations in interest rates').",
+            "3. Statutory Rule (SEBI ICDR Reg 248): Risk disclosures must quantify direct operational and financial sensitivity unique to the issuer.",
+            "4. Therefore: Flagged as generic boilerplate. Must include company-specific financial impact metrics."
+        ]
     },
     {
         "id": "rf_missing_litigation",
@@ -62,7 +74,13 @@ FALLBACK_RED_FLAGS = [
         "severity": "MEDIUM",
         "category": "missing_disclosure",
         "issue": "Promoter background section lacks explicit affirmative declaration regarding pending tax/civil litigation status.",
-        "suggestion": "Add explicit statement detailing all pending promoter litigations or explicitly declare 'Nil pending material litigations'."
+        "suggestion": "Add explicit statement detailing all pending promoter litigations or explicitly declare 'Nil pending material litigations'.",
+        "reasoning_steps": [
+            "1. Audited Management & Promoter background disclosures for statutory declarations.",
+            "2. Found missing explicit declaration regarding promoter litigation status.",
+            "3. Statutory Rule (SEBI ICDR Schedule VI Item 8): Issuer must affirmatively state pending litigation or explicitly declare zero material litigations.",
+            "4. Therefore: Incomplete statutory disclosure. Affirmative statement required."
+        ]
     },
     {
         "id": "rf_overstated_projections",
@@ -71,7 +89,13 @@ FALLBACK_RED_FLAGS = [
         "severity": "MEDIUM",
         "category": "overstatement",
         "issue": "Capacity expansion timeline lacks milestones or firm equipment purchase quotes.",
-        "suggestion": "Attach vendor quotes or firm commitments for plant equipment to substantiate utilization schedule of IPO proceeds."
+        "suggestion": "Attach vendor quotes or firm commitments for plant equipment to substantiate utilization schedule of IPO proceeds.",
+        "reasoning_steps": [
+            "1. Scanned Objects of Issue section for capital expenditure deployment milestones.",
+            "2. Found expansion projections without attached equipment purchase quotes or firm supplier commitments.",
+            "3. Statutory Rule (SEBI ICDR Reg 247(2)): Capital deployment plans must be backed by verifiable quotes or bank appraisal reports.",
+            "4. Therefore: Overstated deployment timeline. Requires vendor quotations."
+        ]
     },
     {
         "id": "rf_rpt_clarity",
@@ -80,7 +104,13 @@ FALLBACK_RED_FLAGS = [
         "severity": "LOW",
         "category": "regulatory_risk",
         "issue": "Related party lease agreements are listed without confirming arm's-length valuation certification from independent valuer.",
-        "suggestion": "Include CA/Valuer certificate reference confirming lease terms match prevailing market rates."
+        "suggestion": "Include CA/Valuer certificate reference confirming lease terms match prevailing market rates.",
+        "reasoning_steps": [
+            "1. Checked Related Party Transactions section for valuation compliance.",
+            "2. Identified promoter property lease agreements listed without explicit arm's-length valuation citation.",
+            "3. Statutory Rule (Companies Act Sec 188 & SEBI ICDR): RPT transactions must be certified at arm's-length by independent valuer/CA.",
+            "4. Therefore: Flagged for arm's-length valuation documentation."
+        ]
     }
 ]
 

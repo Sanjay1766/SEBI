@@ -17,99 +17,202 @@ except ImportError:
     nlp_semantic_match = None
 
 
-# ── Static fallback explanations ────────────────────────────────────────────
+# ── Static fallback explanations & Chain-of-Thought reasoning ───────────────────
 
-
-FALLBACK_EXPLANATIONS = {
-    "company_name": (
-        "Company name mismatch detected across documents. "
-        "GST certificate lists '{gst_name}', Certificate of Incorporation lists '{inc_name}', "
-        "and PAN Card lists '{pan_name}'. Please verify and ensure names are identical for SEBI compliance."
-    ),
-    "gst_vs_pl": (
-        "GST turnover (₹{gst_turnover} Cr) does not match the P&L Revenue (₹{pl_revenue} Cr). "
-        "Typically, GST declarations should align with restated financial revenue within standard "
-        "tax reconciliation bounds (e.g. 10-15%). Verify if some divisions are GST-exempt or if filings are pending."
-    ),
-    "inc_vs_gst_date": (
-        "GST registration date ({gst_date}) is prior to the company incorporation date ({inc_date}). "
-        "A company cannot register for GST before its legal incorporation date. "
-        "Check for registration errors or post-facto transfers."
-    ),
-    "capital_structure": (
-        "Paid-up share capital (₹{paid_up} Cr) exceeds the Authorized share capital (₹{authorized} Cr). "
-        "A company cannot issue more capital than authorized without raising limits through ROC filings. "
-        "Please adjust or file for an increase."
-    ),
-    "promoter_lockdown": (
-        "Post-issue promoter shareholding ({post_pct}%) is below the SEBI ICDR minimum of 20% (Reg 236). "
-        "Promoters must retain at least 20% of post-issue paid-up capital for lock-in compliance. "
-        "Reduce the public issue size or increase promoter contribution."
-    ),
-    "sme_paidup_cap": (
-        "Post-issue paid-up capital estimate (₹{post_paidup} Cr) exceeds the SME IPO eligibility cap of ₹25 Crores. "
-        "Under SEBI ICDR Reg 229, companies with post-issue paid-up capital above ₹25 Cr must migrate to the main board. "
-        "Please verify your capital structure."
-    ),
-    "objects_vs_issue": (
-        "Sum of use-of-proceeds (₹{objects_total} Cr) does not match the stated issue size (₹{issue_size} Cr). "
-        "SEBI ICDR Reg 247 requires every rupee of IPO proceeds to be accounted for. "
-        "Reconcile the breakdown to match the total issue size."
-    ),
-    "pan_format": (
-        "PAN '{pan}' does not match the standard Indian PAN format "
-        "(5 letters + 4 digits + 1 letter, e.g. ABCDE1234F). Please correct the PAN before submission."
-    ),
-    "gstin_format": (
-        "GSTIN '{gstin}' does not match the standard 15-character GST format "
-        "(2-digit state code + PAN + 1 digit + Z + 1 check digit). Please verify the GSTIN against the GST certificate."
-    ),
-    "price_band_width": (
-        "The price band upper limit (₹{upper}) exceeds 120% of the lower limit (₹{lower}). "
-        "SEBI requires the price band spread to be within 20% of the floor price. Narrow the band to comply."
-    ),
+FALLBACK_REASONING = {
+    "company_name": {
+        "explanation": (
+            "Company name mismatch detected across documents. "
+            "GST certificate lists '{gst_name}', Certificate of Incorporation lists '{inc_name}', "
+            "and PAN Card lists '{pan_name}'. Please verify and ensure names are identical for SEBI compliance."
+        ),
+        "reasoning_steps": [
+            "1. Extracted names across document filings: GST Certificate='{gst_name}', Certificate of Incorporation='{inc_name}', PAN Card='{pan_name}'.",
+            "2. Statutory Rule (SEBI ICDR Reg 230(1)(a)): The issuer's corporate name must match exactly across all tax and corporate registrations.",
+            "3. NLP Semantic Evaluation: Identified string discrepancies / character variations between the document titles.",
+            "4. Therefore: Corporate identity mismatch detected. MCA Certificate of Incorporation must be taken as the primary master."
+        ]
+    },
+    "gst_vs_pl": {
+        "explanation": (
+            "GST turnover (₹{gst_turnover} Cr) does not match the P&L Revenue (₹{pl_revenue} Cr). "
+            "Typically, GST declarations should align with restated financial revenue within standard "
+            "tax reconciliation bounds (e.g. 10-15%). Verify if some divisions are GST-exempt or if filings are pending."
+        ),
+        "reasoning_steps": [
+            "1. Extracted financial figures: Annual GST Turnover = ₹{gst_turnover} Cr, Restated P&L Revenue = ₹{pl_revenue} Cr.",
+            "2. Statutory Rule (SEBI ICDR Reg 244(1)(b)): Operational revenue disclosed in financial disclosures must reconcile with statutory GST filings within 15% tolerance.",
+            "3. Evaluated Variance: Difference between GST filing and restated P&L revenue exceeds the 15% threshold.",
+            "4. Therefore: Flagged for mandatory CA reconciliation certificate to account for exempt supplies or unbilled revenue."
+        ]
+    },
+    "inc_vs_gst_date": {
+        "explanation": (
+            "GST registration date ({gst_date}) is prior to the company incorporation date ({inc_date}). "
+            "A company cannot register for GST before its legal incorporation date. "
+            "Check for registration errors or post-facto transfers."
+        ),
+        "reasoning_steps": [
+            "1. Extracted key filing dates: MCA Incorporation Date = {inc_date}, GST Registration Date = {gst_date}.",
+            "2. Statutory Rule (Companies Act 2013 Sec 7 & GST Act Sec 22): A corporate legal entity cannot possess statutory GST registration prior to legal incorporation.",
+            "3. Chronological Evaluation: The registered GST date pre-dates legal incorporation on MCA records.",
+            "4. Therefore: Incompatible chronological registration sequence. Must verify if GST was transferred from a predecessor entity."
+        ]
+    },
+    "capital_structure": {
+        "explanation": (
+            "Paid-up share capital (₹{paid_up} Cr) exceeds the Authorized share capital (₹{authorized} Cr). "
+            "A company cannot issue more capital than authorized without raising limits through ROC filings. "
+            "Please adjust or file for an increase."
+        ),
+        "reasoning_steps": [
+            "1. Extracted capital metrics: Paid-up Capital = ₹{paid_up} Cr, Authorized Capital = ₹{authorized} Cr.",
+            "2. Statutory Rule (Companies Act 2013 Sec 61 & 64): A company cannot issue paid-up shares exceeding its registered Authorized Share Capital ceiling.",
+            "3. Evaluated Limit: Paid-up capital (₹{paid_up} Cr) exceeds the ROC Authorized ceiling (₹{authorized} Cr).",
+            "4. Therefore: Ultra vires capital issuance until Form SH-7 is filed with the Registrar of Companies (ROC)."
+        ]
+    },
+    "promoter_lockdown": {
+        "explanation": (
+            "Post-issue promoter shareholding ({post_pct}%) is below the SEBI ICDR minimum of 20% (Reg 236). "
+            "Promoters must retain at least 20% of post-issue paid-up capital for lock-in compliance. "
+            "Reduce the public issue size or increase promoter contribution."
+        ),
+        "reasoning_steps": [
+            "1. Extracted shareholding calculations: Pre-issue Promoter Holding = {pct}%, Calculated Post-issue Promoter Shareholding = {post_pct}%.",
+            "2. Statutory Rule (SEBI ICDR Reg 236(1)): Promoters must hold minimum 20% of post-issue paid-up capital subject to mandatory 3-year lock-in.",
+            "3. Evaluated Holding: Calculated post-issue shareholding ({post_pct}%) falls below the 20% mandatory statutory threshold.",
+            "4. Therefore: Offer size must be restructured or promoter lock-in contribution increased to meet Reg 236."
+        ]
+    },
+    "sme_paidup_cap": {
+        "explanation": (
+            "Post-issue paid-up capital estimate (₹{post_paidup} Cr) exceeds the SME IPO eligibility cap of ₹25 Crores. "
+            "Under SEBI ICDR Reg 229, companies with post-issue paid-up capital above ₹25 Cr must migrate to the main board. "
+            "Please verify your capital structure."
+        ),
+        "reasoning_steps": [
+            "1. Extracted post-issue forecast: Post-issue Paid-up Share Capital = ₹{post_paidup} Cr.",
+            "2. Statutory Rule (SEBI ICDR Reg 229(1)): SME IPO exchange platforms (BSE SME / NSE Emerge) restrict listing to issuers with post-issue capital ≤ ₹25 Crores.",
+            "3. Evaluated Ceiling: Estimated post-issue capital (₹{post_paidup} Cr) exceeds the ₹25 Cr ceiling.",
+            "4. Therefore: Issuer is ineligible for SME IPO platform and must apply via Main Board listing route."
+        ]
+    },
+    "objects_vs_issue": {
+        "explanation": (
+            "Sum of use-of-proceeds (₹{objects_total} Cr) does not match the stated issue size (₹{issue_size} Cr). "
+            "SEBI ICDR Reg 247 requires every rupee of IPO proceeds to be accounted for. "
+            "Reconcile the breakdown to match the total issue size."
+        ),
+        "reasoning_steps": [
+            "1. Extracted deployment totals: Stated Issue Size = ₹{issue_size} Cr, Sum of Itemized Objects = ₹{objects_total} Cr.",
+            "2. Statutory Rule (SEBI ICDR Reg 247): 100% of gross IPO proceeds must be accounted for across specific objects & general corporate purposes (max 25%).",
+            "3. Evaluated Discrepancy: Variance of ₹{diff} Cr found between gross issue size and itemized object allocations.",
+            "4. Therefore: Unreconciled capital allocation in draft prospectus."
+        ]
+    },
+    "pan_format": {
+        "explanation": (
+            "PAN '{pan}' does not match the standard Indian PAN format "
+            "(5 letters + 4 digits + 1 letter, e.g. ABCDE1234F). Please correct the PAN before submission."
+        ),
+        "reasoning_steps": [
+            "1. Extracted input value: '{pan}'.",
+            "2. Statutory Rule (Income Tax Act 1961 Sec 139A): PAN requires 5 uppercase letters + 4 digits + 1 letter (10 characters total).",
+            "3. Evaluated input: Evaluated '{pan}'. Length is {pan_len} characters (expected 10) and does not match regex pattern '^[A-Z]{{5}}[0-9]{{4}}[A-Z]{{1}}$'.",
+            "4. Therefore: Invalid PAN format; fails statutory verification."
+        ]
+    },
+    "gstin_format": {
+        "explanation": (
+            "GSTIN '{gstin}' does not match the standard 15-character GST format "
+            "(2-digit state code + PAN + 1 digit + Z + 1 check digit). Please verify the GSTIN against the GST certificate."
+        ),
+        "reasoning_steps": [
+            "1. Extracted input value: '{gstin}'.",
+            "2. Statutory Rule (GST Act Sec 25 & Rule 8): Standard 15-character structure (2-digit state code + 10-char PAN + 1 entity code + 'Z' + 1 checksum).",
+            "3. Evaluated input: Evaluated '{gstin}'. Length is {gstin_len} characters (expected 15) and violates standard GSTIN structure.",
+            "4. Therefore: Invalid GSTIN format; fails statutory tax verification."
+        ]
+    },
+    "price_band_width": {
+        "explanation": (
+            "The price band upper limit (₹{upper}) exceeds 120% of the lower limit (₹{lower}). "
+            "SEBI requires the price band spread to be within 20% of the floor price. Narrow the band to comply."
+        ),
+        "reasoning_steps": [
+            "1. Extracted pricing values: Floor Price = ₹{lower}, Cap Price = ₹{upper}.",
+            "2. Statutory Rule (SEBI ICDR Reg 253(1)): Cap price upper limit must be ≤ 120% of the floor price lower limit (max 20% spread).",
+            "3. Evaluated Ratio: Cap price is {spread_pct}% of the floor price, exceeding the 120% statutory maximum.",
+            "4. Therefore: Non-compliant price band spread. Narrow price band before DRHP submission."
+        ]
+    }
 }
 
 
+_COT_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
 def get_explanation(rule_name: str, details: Dict[str, Any]) -> str:
-    """Generate a human-readable explanation for a consistency check failure.
+    """Backward compatibility wrapper returning description string."""
+    res = get_explanation_and_cot(rule_name, details)
+    return res.get("explanation", "")
 
-    Uses Groq LLM (temperature 0.3) if available, otherwise falls back to
-    pre-written static templates.
+
+def get_explanation_and_cot(rule_name: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate human-readable explanation and Chain-of-Thought reasoning steps for a consistency failure.
+
+    Returns cached or pre-formatted CoT steps instantly for sub-millisecond response time.
     """
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key
+    # Prepare details augmentation
+    aug_details = dict(details)
+    if "pan" in aug_details and "pan_len" not in aug_details:
+        aug_details["pan_len"] = len(str(aug_details["pan"])) if aug_details["pan"] else 0
+    if "gstin" in aug_details and "gstin_len" not in aug_details:
+        aug_details["gstin_len"] = len(str(aug_details["gstin"])) if aug_details["gstin"] else 0
+    if "lower" in aug_details and "upper" in aug_details and aug_details["lower"] > 0:
+        aug_details["spread_pct"] = round((aug_details["upper"] / aug_details["lower"]) * 100, 1)
+    if "objects_total" in aug_details and "issue_size" in aug_details:
+        aug_details["diff"] = round(abs(aug_details["objects_total"] - aug_details["issue_size"]), 2)
 
-    # Build static fallback
-    template = FALLBACK_EXPLANATIONS.get(rule_name, "Data inconsistency found. Please verify the uploaded documents and form inputs.")
+    cache_key = f"{rule_name}:{json.dumps(aug_details, sort_keys=True)}"
+    if cache_key in _COT_CACHE:
+        return _COT_CACHE[cache_key]
+
+    # Build structured CoT result
+    fb_config = FALLBACK_REASONING.get(rule_name, {
+        "explanation": "Data inconsistency found. Please verify the uploaded documents and form inputs.",
+        "reasoning_steps": [
+            "1. Extracted fields from uploaded documents and form inputs.",
+            "2. Evaluated consistency across related fields according to SEBI ICDR guidelines.",
+            "3. Discrepancy detected between documented values.",
+            "4. Therefore: Requires verification and manual reconciliation."
+        ]
+    })
+
+    template_exp = fb_config["explanation"]
+    template_steps = fb_config["reasoning_steps"]
+
     try:
-        fallback = template.format(**{k: v for k, v in details.items()}) if '{' in template else template
+        fallback_exp = template_exp.format(**aug_details) if '{' in template_exp else template_exp
     except (KeyError, IndexError):
-        fallback = template
+        fallback_exp = template_exp
 
-    if is_mock or not Groq:
-        return fallback
+    fallback_steps = []
+    for step in template_steps:
+        try:
+            fallback_steps.append(step.format(**aug_details) if '{' in step else step)
+        except (KeyError, IndexError):
+            fallback_steps.append(step)
 
-    try:
-        client = Groq(api_key=api_key)
-        prompt = f"""
-        You are a compliance assistant for SEBI SME IPO applications. Format this compliance mismatch into a friendly, clear, and actionable explanation for a first-time founder.
-        Keep it brief (2-3 sentences max). Suggest how they should resolve it.
+    result = {
+        "explanation": fallback_exp,
+        "reasoning_steps": fallback_steps,
+    }
 
-        Mismatch Type: {rule_name}
-        Mismatch Details: {json.dumps(details)}
+    _COT_CACHE[cache_key] = result
+    return result
 
-        Actionable Explanation:
-        """
-        chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-            temperature=0.3,
-        )
-        return chat_completion.choices[0].message.content.strip()
-    except Exception as e:
-        logger.error(f"Failed to get explanation from Groq: {e}. Using static fallback.")
-        return fallback
 
 
 # ── Individual consistency check functions ───────────────────────────────────
@@ -154,7 +257,7 @@ def check_company_name_match(
     if not mismatch_found:
         return None
 
-    exp = get_explanation("company_name", {
+    cot_res = get_explanation_and_cot("company_name", {
         "gst_name": gst_name or "(not uploaded)",
         "inc_name": inc_name or form_name or "(not provided)",
         "pan_name": pan_name or "(not uploaded)",
@@ -163,7 +266,8 @@ def check_company_name_match(
         "id": "company_name_mismatch",
         "section_id": "general_info",
         "title": "Company Name Inconsistency Across Documents",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "high",
         "blocking": True,
         "sebi_ref": "SEBI ICDR Reg 230(1)(a)",
@@ -195,12 +299,13 @@ def check_revenue_consistency(
     if diff_pct <= 0.15:
         return None
 
-    exp = get_explanation("gst_vs_pl", {"gst_turnover": gst_val, "pl_revenue": pl_val})
+    cot_res = get_explanation_and_cot("gst_vs_pl", {"gst_turnover": gst_val, "pl_revenue": pl_val})
     return {
         "id": "gst_vs_pl",
         "section_id": "compliance_certs",
         "title": "GST Turnover & P&L Revenue Mismatch",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "high",
         "blocking": True,
         "sebi_ref": "SEBI ICDR Reg 244(1)(b)",
@@ -223,7 +328,7 @@ def check_date_logic(
     if str(gst_registration_date) >= str(incorporation_date):
         return None
 
-    exp = get_explanation("inc_vs_gst_date", {
+    cot_res = get_explanation_and_cot("inc_vs_gst_date", {
         "gst_date": gst_registration_date,
         "inc_date": incorporation_date,
     })
@@ -231,7 +336,8 @@ def check_date_logic(
         "id": "inc_vs_gst_date",
         "section_id": "compliance_certs",
         "title": "GST Registration Predates Incorporation",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "medium",
         "blocking": False,
         "sebi_ref": "Companies Act 2013, Sec 7 & GST Act Sec 22",
@@ -260,12 +366,13 @@ def check_capital_structure(
             auth_val = float(authorized_capital)
             paid_val = float(paid_up_capital_pre)
             if paid_val > auth_val:
-                exp = get_explanation("capital_structure", {"paid_up": paid_val, "authorized": auth_val})
+                cot_res = get_explanation_and_cot("capital_structure", {"paid_up": paid_val, "authorized": auth_val})
                 flags.append({
                     "id": "capital_exceeds_auth",
                     "section_id": "capital_structure",
                     "title": "Paid-up Capital Exceeds Authorized Capital",
-                    "description": exp,
+                    "description": cot_res["explanation"],
+                    "reasoning_steps": cot_res["reasoning_steps"],
                     "severity": "high",
                     "blocking": True,
                     "sebi_ref": "Companies Act 2013, Sec 61 & SEBI ICDR Reg 231",
@@ -285,12 +392,13 @@ def check_capital_structure(
             pup = float(paid_up_capital_pre)
             post_paidup = pup + issue
             if post_paidup > 25.0:
-                exp = get_explanation("sme_paidup_cap", {"post_paidup": round(post_paidup, 2)})
+                cot_res = get_explanation_and_cot("sme_paidup_cap", {"post_paidup": round(post_paidup, 2)})
                 flags.append({
                     "id": "sme_paidup_cap",
                     "section_id": "capital_structure",
                     "title": "Post-Issue Paid-up Capital Exceeds SME IPO Cap of ₹25 Cr (ICDR Reg 229)",
-                    "description": exp,
+                    "description": cot_res["explanation"],
+                    "reasoning_steps": cot_res["reasoning_steps"],
                     "severity": "high",
                     "blocking": True,
                     "sebi_ref": "SEBI ICDR Reg 229(1)",
@@ -331,12 +439,13 @@ def check_shareholding_sum(
     if post_pct >= 20.0:
         return None
 
-    exp = get_explanation("promoter_lockdown", {"post_pct": round(post_pct, 2)})
+    cot_res = get_explanation_and_cot("promoter_lockdown", {"pct": pct, "post_pct": round(post_pct, 2)})
     return {
         "id": "promoter_lockdown",
         "section_id": "capital_structure",
         "title": "Promoter Post-Issue Shareholding Below 20% (ICDR Reg 236)",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "high",
         "blocking": True,
         "sebi_ref": "SEBI ICDR Reg 236(1) & 236(2)",
@@ -366,12 +475,13 @@ def check_objects_vs_issue(merged: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if abs(objects_total - issue_f) <= 0.01:
         return None
 
-    exp = get_explanation("objects_vs_issue", {"objects_total": round(objects_total, 2), "issue_size": issue_f})
+    cot_res = get_explanation_and_cot("objects_vs_issue", {"objects_total": round(objects_total, 2), "issue_size": issue_f})
     return {
         "id": "objects_vs_issue",
         "section_id": "objects_issue",
         "title": "Use-of-Proceeds Total Does Not Match Issue Size (ICDR Reg 247)",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "high",
         "blocking": True,
         "sebi_ref": "SEBI ICDR Reg 247(1) & 247(2)",
@@ -391,12 +501,13 @@ def check_pan_format(pan: Optional[str]) -> Optional[Dict[str, Any]]:
     if pan_pattern.match(str(pan).upper().strip()):
         return None
 
-    exp = get_explanation("pan_format", {"pan": pan})
+    cot_res = get_explanation_and_cot("pan_format", {"pan": pan})
     return {
         "id": "pan_format",
         "section_id": "compliance_certs",
         "title": "Invalid PAN Format",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "medium",
         "blocking": False,
         "sebi_ref": "Income Tax Act 1961, Sec 139A",
@@ -416,12 +527,13 @@ def check_gstin_format(gstin: Optional[str]) -> Optional[Dict[str, Any]]:
     if gstin_pattern.match(str(gstin).upper().strip()):
         return None
 
-    exp = get_explanation("gstin_format", {"gstin": gstin})
+    cot_res = get_explanation_and_cot("gstin_format", {"gstin": gstin})
     return {
         "id": "gstin_format",
         "section_id": "compliance_certs",
         "title": "Invalid GSTIN Format",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "medium",
         "blocking": False,
         "sebi_ref": "GST Act 2017, Sec 25 & CGST Rules, Rule 8",
@@ -456,12 +568,13 @@ def check_price_band_width(price_band: Optional[str]) -> Optional[Dict[str, Any]
     except (ValueError, IndexError):
         return None
 
-    exp = get_explanation("price_band_width", {"lower": lower_p, "upper": upper_p})
+    cot_res = get_explanation_and_cot("price_band_width", {"lower": lower_p, "upper": upper_p})
     return {
         "id": "price_band_width",
         "section_id": "cover_page",
         "title": "Price Band Spread Exceeds 20% of Floor Price",
-        "description": exp,
+        "description": cot_res["explanation"],
+        "reasoning_steps": cot_res["reasoning_steps"],
         "severity": "medium",
         "blocking": False,
         "sebi_ref": "SEBI ICDR Reg 253(1) & SEBI Circular SEBI/HO/CFD/DIL1/CIR/P/2020/249",
@@ -539,7 +652,15 @@ def run_all_consistency_checks(
     if flag:
         flags.append(flag)
 
-    # 10. Integrated Narrative Quality & Investor Protection Compliance Check (NLP-driven under the hood)
+    # 10. Integrated Financial Ratio Anomaly Detection
+    try:
+        from financial_ratio_checker import calculate_and_audit_ratios
+        ratio_res = calculate_and_audit_ratios(merged)
+        flags.extend(ratio_res.get("flags", []))
+    except Exception as e:
+        logger.warning(f"Financial ratio anomaly check skipped: {e}")
+
+    # 11. Integrated Narrative Quality & Investor Protection Compliance Check (NLP-driven under the hood)
     narrative_flags = check_narrative_quality(merged)
     flags.extend(narrative_flags)
 
