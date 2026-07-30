@@ -347,11 +347,43 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
     combined_narrative = " ".join(active_narratives.values())
     nlp_quality = nlp_assess_readability_and_quality(combined_narrative)
 
-    if is_mock or not active_narratives:
+    # ── Early exit: no content to analyse — return zero flags ─────────────────
+    if not active_narratives:
         return {
             "status": "success",
-            "source": "demo_fallback" if is_mock else "rule_based",
-            "scanned_fields": list(active_narratives.keys()) or ["business_overview", "risk_factors", "promoter_experience"],
+            "source": "no_content",
+            "scanned_fields": [],
+            "red_flags": [],
+            "total_flags": 0,
+            "high_severity_count": 0,
+            "investor_protection_score": 100,
+            "nlp_quality": nlp_quality,
+            "scan_summary": "No narrative content to analyse yet."
+        }
+
+    # Only show demo flags when running in mock mode AND there is actual content
+    # (at least one field with >= 50 characters — indicates the user has started writing)
+    MIN_CONTENT_LEN = 50
+    has_substantial_content = any(len(v) >= MIN_CONTENT_LEN for v in active_narratives.values())
+
+    if is_mock or not Groq:
+        if not has_substantial_content:
+            # Content is present but too short to meaningfully assess — no flags
+            return {
+                "status": "success",
+                "source": "no_content",
+                "scanned_fields": list(active_narratives.keys()),
+                "red_flags": [],
+                "total_flags": 0,
+                "high_severity_count": 0,
+                "investor_protection_score": 100,
+                "nlp_quality": nlp_quality,
+                "scan_summary": "Narrative content is too brief for full quality analysis."
+            }
+        return {
+            "status": "success",
+            "source": "demo_fallback",
+            "scanned_fields": list(active_narratives.keys()),
             "red_flags": FALLBACK_RED_FLAGS,
             "total_flags": len(FALLBACK_RED_FLAGS),
             "high_severity_count": sum(1 for f in FALLBACK_RED_FLAGS if f["severity"] == "HIGH"),

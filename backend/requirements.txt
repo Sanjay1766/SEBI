@@ -6,8 +6,10 @@ python-docx
 pydantic
 python-dotenv
 python-multipart
-pytesseract
-pdf2image
+pdf2image          # converts scanned PDF pages to PIL images for PaddleOCR
+# PaddleOCR — 98%+ accuracy on scanned documents (replaces Tesseract)
+paddlepaddle       # CPU build; swap for paddlepaddle-gpu on CUDA hosts
+paddleocr
 # Blockchain anchoring (Polygon Amoy Testnet)
 # Run: pip install web3
 # Not strictly required — app runs in mock mode if not installed
