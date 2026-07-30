@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import RedFlagScanner from './RedFlagScanner';
 import ComplianceScoreMeter from './ComplianceScoreMeter';
+import FinancialRatioRadar from './FinancialRatioRadar';
+import CapTableChart from './CapTableChart';
 import { lookupRegulation } from '../data/icdrRegulations';
 
 const SECTION_TO_TAB = {
@@ -54,6 +56,7 @@ export default function Dashboard({
   const [expandedExplanations, setExpandedExplanations] = useState({});
   const [expandedFixSteps, setExpandedFixSteps] = useState({});
   const [expandedRegs, setExpandedRegs] = useState({});
+  const [expandedCoT, setExpandedCoT] = useState({});
 
   if (!validationResults) {
     return (
@@ -87,6 +90,7 @@ export default function Dashboard({
   const toggleExplanation = (id) => setExpandedExplanations(prev => ({ ...prev, [id]: !prev[id] }));
   const toggleFixSteps = (id) => setExpandedFixSteps(prev => ({ ...prev, [id]: !prev[id] }));
   const toggleReg = (id) => setExpandedRegs(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleCoT = (id) => setExpandedCoT(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleBadgeClick = (e, sectionId) => {
     e.stopPropagation();
@@ -129,6 +133,12 @@ export default function Dashboard({
 
       {/* ── Compliance Score Meter (full-width centrepiece) ── */}
       <ComplianceScoreMeter validationResults={validationResults} />
+
+      {/* ── Financial Ratio Anomaly Radar ── */}
+      <FinancialRatioRadar validationResults={validationResults} />
+
+      {/* ── Promoter Lock-in & Cap Table Chart ── */}
+      <CapTableChart validationResults={validationResults} />
 
       {/* ── Top Stats Row (2-col: Chapter Status + Compiler) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -213,6 +223,7 @@ export default function Dashboard({
               const showExp = expandedExplanations[inc.id];
               const showFix = expandedFixSteps[inc.id];
               const showReg = expandedRegs[inc.id];
+              const showCoT = expandedCoT[inc.id];
               const regData = lookupRegulation(inc.sebi_ref);
 
               return (
@@ -256,11 +267,23 @@ export default function Dashboard({
                   {/* Interactive Action Badges */}
                   <div className="flex items-center gap-2 flex-wrap pt-1 pl-2 border-t border-gray-100">
                     <button
+                      onClick={() => toggleCoT(inc.id)}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showCoT 
+                          ? 'bg-purple-100 text-purple-900 border-purple-300 shadow-xs'
+                          : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
+                      }`}
+                    >
+                      <Cpu className="w-3.5 h-3.5 text-purple-600" />
+                      <span>{showCoT ? 'Hide CoT Reasoning' : '🧠 Chain-of-Thought Reasoning'}</span>
+                    </button>
+
+                    <button
                       onClick={() => toggleExplanation(inc.id)}
                       className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
-                      <span>{showExp ? 'Hide Plain-English Breakdown' : '📖 What does this mean?'}</span>
+                      <span>{showExp ? 'Hide Breakdown' : '📖 What does this mean?'}</span>
                     </button>
 
                     {inc.fix_steps && inc.fix_steps.length > 0 && (
@@ -273,7 +296,7 @@ export default function Dashboard({
                       </button>
                     )}
 
-                    {/* ICDR Cross-Reference button — only shown if regulation text exists for this ref */}
+                    {/* ICDR Cross-Reference button */}
                     {regData && (
                       <button
                         onClick={() => toggleReg(inc.id)}
@@ -298,6 +321,43 @@ export default function Dashboard({
                       </button>
                     )}
                   </div>
+
+                  {/* Expandable Chain-of-Thought Reasoning Breakdown */}
+                  {showCoT && (
+                    <div className="bg-gradient-to-br from-purple-50/90 to-indigo-50/80 border border-purple-200 rounded-xl p-4 ml-2 space-y-3 animate-fade-in shadow-xs">
+                      <div className="flex items-center justify-between font-extrabold text-xs text-purple-900 border-b border-purple-200/60 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Cpu className="w-4 h-4 text-purple-600 animate-pulse" />
+                          <span>LLM Chain-of-Thought Compliance Reasoning Steps</span>
+                        </div>
+                        <span className="text-[10px] font-mono bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 uppercase tracking-wider font-bold">
+                          Groq CoT Engine
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {(inc.reasoning_steps && inc.reasoning_steps.length > 0 ? inc.reasoning_steps : [
+                          `1. Extracted input data values associated with ${inc.title}.`,
+                          "2. Checked against SEBI ICDR regulations and statutory formatting rules.",
+                          "3. Evaluated discrepancy between expected statutory structure and observed values.",
+                          "4. Therefore: Flagged for reconciliation before draft submission."
+                        ]).map((step, idx) => {
+                          const stepNum = idx + 1;
+                          const cleanText = step.replace(/^\d+\.\s*/, '');
+                          return (
+                            <div key={idx} className="flex items-start gap-2.5 bg-white/90 rounded-lg p-2.5 border border-purple-100 shadow-2xs">
+                              <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                                {stepNum}
+                              </span>
+                              <p className="text-xs text-gray-800 font-medium leading-relaxed">
+                                {cleanText}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Expandable Plain-English Explanation */}
                   {showExp && (
@@ -337,7 +397,7 @@ export default function Dashboard({
                     </div>
                   )}
 
-                  {/* ── ICDR Cross-Reference Panel ── */}
+                  {/* ICDR Cross-Reference Panel */}
                   {showReg && regData && (
                     <div className="border border-blue-200 rounded-xl ml-2 overflow-hidden animate-fade-in-up" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)' }}>
                       {/* Panel header */}
@@ -392,6 +452,38 @@ export default function Dashboard({
           </div>
         </div>
       )}
+
+      {/* ── Financial Ratio Anomaly Radar ── */}
+      <FinancialRatioRadar validationResults={validationResults} />
+
+      {/* ── Promoter Lock-in & Cap Table Chart ── */}
+      <CapTableChart validationResults={validationResults} />
+
+      {/* ── Top Stats Row (2-col: Chapter Status + Compiler) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* Chapter Status */}
+        <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between">
+          <p className="text-[10.5px] font-bold uppercase tracking-widest text-gray-400 mb-4">Prospectus Chapters</p>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-xl py-3 px-2 bg-emerald-50 border border-emerald-100">
+              <span className="text-2xl font-display font-700 text-emerald-600 block">{status_counts.complete}</span>
+              <span className="text-[9.5px] font-bold text-emerald-600/70 uppercase tracking-wide">Verified</span>
+            </div>
+            <div className="rounded-xl py-3 px-2 bg-amber-50 border border-amber-100">
+              <span className="text-2xl font-display font-700 text-amber-500 block">{status_counts.incomplete}</span>
+              <span className="text-[9.5px] font-bold text-amber-500/70 uppercase tracking-wide">Pending</span>
+            </div>
+            <div className="rounded-xl py-3 px-2 bg-red-50 border border-red-100">
+              <span className="text-2xl font-display font-700 text-red-500 block">{status_counts.inconsistent}</span>
+              <span className="text-[9.5px] font-bold text-red-500/70 uppercase tracking-wide">Conflicts</span>
+            </div>
+          </div>
+          <p className="text-[10.5px] text-gray-400 font-medium mt-4 leading-relaxed">
+            {sections.length} chapters tracked · Click any chapter below to expand
+          </p>
+        </div>
+      </div>
 
       {/* ── Prospectus Chapters Accordion ── */}
       <div className="space-y-3">

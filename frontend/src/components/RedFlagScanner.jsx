@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   ShieldAlert, AlertOctagon, AlertTriangle, Info, CheckCircle2, 
-  Sparkles, RefreshCw, FileText, Search, ShieldCheck, ChevronRight, HelpCircle
+  Sparkles, RefreshCw, FileText, Search, ShieldCheck, ChevronRight, HelpCircle, Cpu
 } from 'lucide-react';
 
 const CATEGORY_BADGES = {
@@ -20,6 +20,8 @@ const SEVERITY_BADGES = {
 
 export default function RedFlagScanner({ onScan, scanning, scanResults }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [expandedCoT, setExpandedCoT] = useState({});
+  const toggleCoT = (id) => setExpandedCoT(prev => ({ ...prev, [id]: !prev[id] }));
 
   const flags = scanResults?.red_flags || [];
   const score = scanResults?.investor_protection_score ?? 78;
@@ -192,6 +194,43 @@ export default function RedFlagScanner({ onScan, scanning, scanResults }) {
                       <span className="font-bold text-emerald-800">Actionable Suggestion:</span> {flag.suggestion}
                     </div>
                   </div>
+
+                  {flag.reasoning_steps && flag.reasoning_steps.length > 0 && (
+                    <div className="pt-1">
+                      <button
+                        onClick={() => toggleCoT(flag.id)}
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-md border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          expandedCoT[flag.id]
+                            ? 'bg-purple-100 text-purple-900 border-purple-300'
+                            : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
+                        }`}
+                      >
+                        <Cpu className="w-3 h-3 text-purple-600" />
+                        <span>{expandedCoT[flag.id] ? 'Hide CoT Reasoning' : '🧠 Chain-of-Thought Reasoning'}</span>
+                      </button>
+
+                      {expandedCoT[flag.id] && (
+                        <div className="mt-2 bg-gradient-to-br from-purple-50/90 to-indigo-50/80 border border-purple-200 rounded-lg p-3 space-y-2 animate-fade-in">
+                          <p className="text-[11px] font-extrabold text-purple-900 flex items-center gap-1.5 border-b border-purple-200/60 pb-1.5">
+                            <Cpu className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
+                            LLM Chain-of-Thought Reasoning Steps
+                          </p>
+                          <div className="space-y-1.5">
+                            {flag.reasoning_steps.map((step, idx) => (
+                              <div key={idx} className="flex items-start gap-2 bg-white/90 rounded-md p-2 border border-purple-100">
+                                <span className="w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-extrabold flex items-center justify-center shrink-0 mt-0.5">
+                                  {idx + 1}
+                                </span>
+                                <p className="text-[11px] text-gray-800 font-medium leading-relaxed">
+                                  {step.replace(/^\d+\.\s*/, '')}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

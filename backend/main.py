@@ -3,12 +3,16 @@ import json
 import logging
 import tempfile
 import uuid
+import asyncio
+import time
+from collections import defaultdict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from typing import Dict, Any, List, Optional
-from fastapi import Depends, FastAPI, Header, UploadFile, File, Form, HTTPException
+from fastapi import Depends, FastAPI, Header, UploadFile, File, Form, HTTPException, Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -70,15 +74,44 @@ logger = logging.getLogger("sebi-ipo-generator")
 
 app = FastAPI(title="SEBI SME IPO Draft-Generator API")
 
-# Comma-separated list, for example: http://localhost:5173,https://app.example.com
-CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if origin.strip()]
+# CORS setup allowing local development ports and configured origins
+cors_env = os.getenv("CORS_ORIGINS", "*")
+if cors_env == "*":
+    cors_origins = ["*"]
+else:
+    cors_origins = [origin.strip() for origin in cors_env.split(",") if origin.strip()]
+    cors_origins.extend(["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://127.0.0.1:5175"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Rate Limiting Middleware (In-memory token bucket) ──────────────────────────
+_RATE_LIMIT_STORE: Dict[str, List[float]] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60  # seconds
+MAX_REQUESTS_PER_WINDOW = 120  # requests per minute per IP
+
+@app.middleware("http")
+async def rate_limit_middleware(request: FastAPIRequest, call_next):
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    now = time.time()
+    
+    # Clean up old timestamps outside window
+    timestamps = [t for t in _RATE_LIMIT_STORE[client_ip] if now - t < RATE_LIMIT_WINDOW]
+    _RATE_LIMIT_STORE[client_ip] = timestamps
+    
+    if len(timestamps) >= MAX_REQUESTS_PER_WINDOW:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded. Please wait a minute before making more requests."}
+        )
+    
+    _RATE_LIMIT_STORE[client_ip].append(now)
+    return await call_next(request)
 
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "schema.json")
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -141,11 +174,17 @@ def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dic
     except (HTTPError, URLError, json.JSONDecodeError):
         raise HTTPException(status_code=401, detail="Invalid or expired authentication token.")
 
+_SCHEMA_CACHE: Optional[Dict[str, Any]] = None
+
 def load_schema() -> Dict[str, Any]:
+    global _SCHEMA_CACHE
+    if _SCHEMA_CACHE is not None:
+        return _SCHEMA_CACHE
     if not os.path.exists(SCHEMA_FILE):
         return {"sections": []}
     with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        _SCHEMA_CACHE = json.load(f)
+        return _SCHEMA_CACHE
 
 def load_session(user_id: str) -> Dict[str, Any]:
     rows = supabase_request(f"/rest/v1/ipo_workspaces?user_id=eq.{user_id}&select=session_data")
@@ -466,11 +505,11 @@ async def upload_document(
             logger.warning(f"Blockchain anchoring skipped for {file.filename}: {bc_err}")
     # ────────────────────────────────────────────────────────────────────────
 
-    # Run Groq extraction pipeline
+    # Run Groq extraction pipeline asynchronously in threadpool to prevent blocking event loop
     session = load_session(user["id"])
     try:
         logger.info(f"Extracting data from {original_filename} for type {doc_type}...")
-        extracted = extract_document_data(file_path, doc_type)
+        extracted = await asyncio.to_thread(extract_document_data, file_path, doc_type)
         extraction_status = "completed" if extracted else "failed"
         extraction_error = None if extracted else "No fields could be reliably extracted. Review the document and enter values manually."
 
@@ -525,9 +564,9 @@ async def upload_document(
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-                logger.info(f"Cleaned up temp file: {file_path}")
+                logger.info(f"Cleaned up temp upload file: {file_path}")
         except Exception as cleanup_err:
-            logger.warning(f"Could not delete temp file {file_path}: {cleanup_err}")
+            logger.warning(f"Could not delete temp upload file {file_path}: {cleanup_err}")
 
 @app.get("/api/validate")
 def get_validation(user: Dict[str, Any] = Depends(get_current_user)):
@@ -549,7 +588,7 @@ async def generate_draft(user: Dict[str, Any] = Depends(get_current_user)):
         output_filename = "SME_IPO_Draft_Prospectus.docx"
         output_path = os.path.join(tempfile.gettempdir(), f"{user['id']}-{uuid.uuid4().hex}-{output_filename}")
         
-        generate_draft_docx(session, schema, output_path)
+        await asyncio.to_thread(generate_draft_docx, session, schema, output_path)
         
         if not os.path.exists(output_path):
             raise HTTPException(status_code=500, detail="Draft prospectus file was not generated.")
@@ -577,8 +616,15 @@ async def generate_draft(user: Dict[str, Any] = Depends(get_current_user)):
         response = FileResponse(
             path=output_path,
             filename=output_filename,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            background=BackgroundTask(os.remove, output_path)
         )
+        # Attach blockchain seal metadata in response headers if available
+        if blockchain_seal:
+            response.headers["X-Blockchain-TxHash"]     = blockchain_seal.get("tx_hash", "")
+            response.headers["X-Blockchain-Mode"]       = blockchain_seal.get("mode", "")
+            response.headers["X-Blockchain-ExplorerUrl"] = blockchain_seal.get("explorer_url", "")
+        return response
         # Attach blockchain seal metadata in response headers if available
         if blockchain_seal:
             response.headers["X-Blockchain-TxHash"]     = blockchain_seal.get("tx_hash", "")

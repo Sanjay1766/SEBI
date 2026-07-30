@@ -8,7 +8,9 @@ import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
+import CollaboratorBar from './components/CollaboratorBar';
 import { apiFetch } from './api';
+import { supabase } from './supabase';
 
 export default function App({ user, onSignOut }) {
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, basics, general, management, capital, objects, business, disclosures
@@ -33,14 +35,81 @@ export default function App({ user, onSignOut }) {
   const [isDigiLockerConnected, setIsDigiLockerConnected] = useState(false);
   const [scanningRedFlags, setScanningRedFlags] = useState(false);
   const [redFlagResults, setRedFlagResults] = useState(null);
+
+  // Real-time Collaboration States
+  const [collaborators, setCollaborators] = useState([]);
+  const [userRole, setUserRole] = useState('founder');
+  const [realtimeConnected, setRealtimeConnected] = useState(true);
+
   const sessionDataRef = useRef(sessionData);
   const saveTimerRef = useRef(null);
+  const realtimeChannelRef = useRef(null);
 
   useEffect(() => {
     sessionDataRef.current = sessionData;
   }, [sessionData]);
 
   useEffect(() => () => clearTimeout(saveTimerRef.current), []);
+
+  // ── Supabase Realtime Collaboration Setup ─────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    const channelId = `ipo_workspace_${user.id || 'shared'}`;
+    const channel = supabase.channel(channelId, {
+      config: {
+        presence: { key: user.email || 'user' }
+      }
+    });
+
+    realtimeChannelRef.current = channel;
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const activeUsers = [];
+        Object.keys(state).forEach(key => {
+          const presences = state[key];
+          if (presences && presences.length > 0) {
+            const p = presences[0];
+            activeUsers.push({
+              email: p.email || key,
+              role: p.role || 'founder',
+              active_tab: p.active_tab || 'dashboard',
+              is_self: (p.email === user?.email)
+            });
+          }
+        });
+        setCollaborators(activeUsers);
+      })
+      .on('broadcast', { event: 'session_update' }, ({ payload }) => {
+        if (payload && payload.form_data) {
+          sessionDataRef.current = {
+            ...sessionDataRef.current,
+            form_data: { ...sessionDataRef.current.form_data, ...payload.form_data }
+          };
+          setSessionData({ ...sessionDataRef.current });
+          validateSession();
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true);
+          channel.track({
+            email: user.email || 'founder@apex.com',
+            role: userRole,
+            active_tab: activeTab,
+            online_at: new Date().toISOString()
+          });
+        } else {
+          setRealtimeConnected(false);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, userRole, activeTab]);
 
   const handleApplySuggestion = (key, value) => {
     handleFormChange(key, value);
@@ -150,6 +219,14 @@ export default function App({ user, onSignOut }) {
     const updatedSession = { ...sessionDataRef.current, form_data: updatedFormData };
     sessionDataRef.current = updatedSession;
     setSessionData(updatedSession);
+
+    if (realtimeChannelRef.current) {
+      realtimeChannelRef.current.send({
+        type: 'broadcast',
+        event: 'session_update',
+        payload: { form_data: { [key]: value }, updated_by: user?.email }
+      });
+    }
 
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => persistFormData(updatedFormData), 500);
@@ -636,6 +713,18 @@ export default function App({ user, onSignOut }) {
 
       {/* ── Main Content Area ── */}
       <main className="flex-grow min-w-0 flex flex-col min-h-screen">
+
+        {/* Real-time Multi-user Collaboration Bar */}
+        <div className="px-6 pt-3 pb-1 bg-gray-50">
+          <CollaboratorBar 
+            user={user} 
+            collaborators={collaborators} 
+            currentRole={userRole} 
+            onRoleChange={setUserRole} 
+            activeTab={activeTab} 
+            isConnected={realtimeConnected} 
+          />
+        </div>
 
         {/* Top Header */}
         <header className="h-14 border-b border-gray-100 bg-white flex justify-between items-center px-7 sticky top-0 z-30 shadow-sm select-none">
