@@ -538,7 +538,8 @@ def export_compliance_audit_pdf(user: Dict[str, Any] = Depends(get_current_user)
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename="SEBI_SME_IPO_Compliance_Audit_Report.pdf"
+        filename="SEBI_SME_IPO_Compliance_Audit_Report.pdf",
+        headers={"Content-Disposition": 'attachment; filename="SEBI_SME_IPO_Compliance_Audit_Report.pdf"'}
     )
 
 @app.post("/api/upload")
