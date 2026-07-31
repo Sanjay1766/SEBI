@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   BarChart2, TrendingUp, AlertTriangle, ShieldCheck, Cpu, 
-  HelpCircle, ChevronDown, ChevronUp, Scale, Percent, DollarSign, Activity
+  HelpCircle, ChevronDown, ChevronUp, Scale, Percent, DollarSign, Activity, Sparkles
 } from 'lucide-react';
 
 const SECTOR_LABELS = {
@@ -10,7 +10,7 @@ const SECTOR_LABELS = {
   services: 'SME IT & Business Services',
 };
 
-export default function FinancialRatioRadar({ validationResults }) {
+export default function FinancialRatioRadar({ validationResults, onPreFill }) {
   const [expandedCoT, setExpandedCoT] = useState({});
 
   if (!validationResults) return null;
@@ -18,11 +18,10 @@ export default function FinancialRatioRadar({ validationResults }) {
   // Extract inconsistencies and check for ratio anomaly flags
   const inconsistencies = validationResults.inconsistencies || validationResults.consistency_flags || [];
   const ratioFlags = inconsistencies.filter(inc => inc.id && inc.id.startsWith('ratio_'));
+  const calcRatios = validationResults.calculated_ratios || {};
+  const hasCalculatedRatios = Object.keys(calcRatios).length > 0;
 
-  // Calculate frontend estimated ratios from present/inconsistent data if available
-  // Or derive from sample indicators
   const hasRatioAnomalies = ratioFlags.length > 0;
-
   const toggleCoT = (id) => setExpandedCoT(prev => ({ ...prev, [id]: !prev[id] }));
 
   return (
@@ -47,7 +46,12 @@ export default function FinancialRatioRadar({ validationResults }) {
         </div>
 
         <div className="flex items-center gap-2 self-start md:self-auto">
-          {hasRatioAnomalies ? (
+          {!hasCalculatedRatios ? (
+            <span className="text-xs font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <Activity className="w-4 h-4 text-gray-400" />
+              <span>Awaiting Financial Inputs</span>
+            </span>
+          ) : hasRatioAnomalies ? (
             <span className="text-xs font-extrabold text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-pulse">
               <AlertTriangle className="w-4 h-4 text-red-600" />
               <span>{ratioFlags.length} Ratio Anomalies Detected</span>
@@ -61,92 +65,112 @@ export default function FinancialRatioRadar({ validationResults }) {
         </div>
       </div>
 
-      {/* Ratios Cards Summary Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
-            <span>PAT Margin</span>
-            <Percent className="w-3.5 h-3.5 text-indigo-500" />
-          </div>
-          <div className="my-2">
-            <span className="text-xl font-display font-extrabold text-gray-900">
-              {ratioFlags.some(f => f.id === 'ratio_pat_margin_anomaly') ? '38.4%' : '12.5%'}
-            </span>
-            <span className="text-[10px] font-medium text-gray-400 block">Sector Cap: 35.0%</span>
-          </div>
-          <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
-            <span className="text-gray-400">Benchmark: 5-18%</span>
-            {ratioFlags.some(f => f.id === 'ratio_pat_margin_anomaly') ? (
-              <span className="text-red-600 font-extrabold bg-red-50 px-1.5 py-0.5 rounded border border-red-200">ANOMALY HIGH</span>
-            ) : (
-              <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
-            )}
-          </div>
+      {/* Empty State Banner when workspace reset / no data uploaded */}
+      {!hasCalculatedRatios && ratioFlags.length === 0 ? (
+        <div className="bg-gradient-to-r from-purple-50/70 to-indigo-50/70 border border-purple-200/70 rounded-2xl p-6 text-center space-y-3">
+          <Activity className="w-8 h-8 text-purple-500 mx-auto opacity-80" />
+          <h4 className="font-extrabold text-sm text-gray-800">No Financial Statements Uploaded</h4>
+          <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+            Upload your P&L & Balance Sheet documents or fill in Revenue, PAT, and Debt figures to activate real-time ratio anomaly detection.
+          </p>
+          {onPreFill && (
+            <button
+              onClick={() => onPreFill('complete')}
+              className="inline-flex items-center gap-2 text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer mt-1"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Load sample financial data — Apex Technochem Ltd</span>
+            </button>
+          )}
         </div>
+      ) : (
+        /* Ratios Cards Summary Grid */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
+              <span>PAT Margin</span>
+              <Percent className="w-3.5 h-3.5 text-indigo-500" />
+            </div>
+            <div className="my-2">
+              <span className="text-xl font-display font-extrabold text-gray-900">
+                {calcRatios.pat_margin ? `${calcRatios.pat_margin.value}%` : 'N/A'}
+              </span>
+              <span className="text-[10px] font-medium text-gray-400 block">Sector Cap: 35.0%</span>
+            </div>
+            <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
+              <span className="text-gray-400">Benchmark: 5-18%</span>
+              {calcRatios.pat_margin?.status === 'ANOMALY_HIGH' ? (
+                <span className="text-red-600 font-extrabold bg-red-50 px-1.5 py-0.5 rounded border border-red-200">ANOMALY HIGH</span>
+              ) : (
+                <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
+              )}
+            </div>
+          </div>
 
-        <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
-            <span>EBITDA Margin</span>
-            <TrendingUp className="w-3.5 h-3.5 text-purple-500" />
+          <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
+              <span>EBITDA Margin</span>
+              <TrendingUp className="w-3.5 h-3.5 text-purple-500" />
+            </div>
+            <div className="my-2">
+              <span className="text-xl font-display font-extrabold text-gray-900">
+                {calcRatios.ebitda_margin ? `${calcRatios.ebitda_margin.value}%` : 'N/A'}
+              </span>
+              <span className="text-[10px] font-medium text-gray-400 block">Sector Cap: 45.0%</span>
+            </div>
+            <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
+              <span className="text-gray-400">Benchmark: 10-22%</span>
+              {calcRatios.ebitda_margin?.status === 'ANOMALY' ? (
+                <span className="text-amber-600 font-extrabold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">ELEVATED</span>
+              ) : (
+                <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
+              )}
+            </div>
           </div>
-          <div className="my-2">
-            <span className="text-xl font-display font-extrabold text-gray-900">
-              {ratioFlags.some(f => f.id === 'ratio_ebitda_margin_high') ? '48.2%' : '16.8%'}
-            </span>
-            <span className="text-[10px] font-medium text-gray-400 block">Sector Cap: 45.0%</span>
-          </div>
-          <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
-            <span className="text-gray-400">Benchmark: 10-22%</span>
-            {ratioFlags.some(f => f.id === 'ratio_ebitda_margin_high') ? (
-              <span className="text-amber-600 font-extrabold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">ELEVATED</span>
-            ) : (
-              <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
-            )}
-          </div>
-        </div>
 
-        <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
-            <span>Debt-to-Equity</span>
-            <Scale className="w-3.5 h-3.5 text-blue-500" />
+          <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
+              <span>Debt-to-Equity</span>
+              <Scale className="w-3.5 h-3.5 text-blue-500" />
+            </div>
+            <div className="my-2">
+              <span className="text-xl font-display font-extrabold text-gray-900">
+                {calcRatios.de_ratio ? `${calcRatios.de_ratio.value}x` : 'N/A'}
+              </span>
+              <span className="text-[10px] font-medium text-gray-400 block">Cap Limit: 3.0x</span>
+            </div>
+            <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
+              <span className="text-gray-400">Benchmark: 0.2-2.0x</span>
+              {calcRatios.de_ratio?.status === 'HIGH_LEVERAGE' ? (
+                <span className="text-red-600 font-extrabold bg-red-50 px-1.5 py-0.5 rounded border border-red-200">HIGH LEVERAGE</span>
+              ) : (
+                <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
+              )}
+            </div>
           </div>
-          <div className="my-2">
-            <span className="text-xl font-display font-extrabold text-gray-900">
-              {ratioFlags.some(f => f.id === 'ratio_high_leverage') ? '3.45x' : '1.20x'}
-            </span>
-            <span className="text-[10px] font-medium text-gray-400 block">Cap Limit: 3.0x</span>
-          </div>
-          <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
-            <span className="text-gray-400">Benchmark: 0.2-2.0x</span>
-            {ratioFlags.some(f => f.id === 'ratio_high_leverage') ? (
-              <span className="text-red-600 font-extrabold bg-red-50 px-1.5 py-0.5 rounded border border-red-200">HIGH LEVERAGE</span>
-            ) : (
-              <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
-            )}
-          </div>
-        </div>
 
-        <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
-            <span>P/E Multiple</span>
-            <BarChart2 className="w-3.5 h-3.5 text-amber-500" />
-          </div>
-          <div className="my-2">
-            <span className="text-xl font-display font-extrabold text-gray-900">
-              {ratioFlags.some(f => f.id === 'ratio_pe_valuation_anomaly') ? '54.2x' : '22.5x'}
-            </span>
-            <span className="text-[10px] font-medium text-gray-400 block">Sector Cap: 50.0x</span>
-          </div>
-          <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
-            <span className="text-gray-400">Benchmark: 12-30x</span>
-            {ratioFlags.some(f => f.id === 'ratio_pe_valuation_anomaly') ? (
-              <span className="text-amber-600 font-extrabold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">HIGH P/E</span>
-            ) : (
-              <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
-            )}
+          <div className="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 text-[11px] font-bold">
+              <span>P/E Multiple</span>
+              <BarChart2 className="w-3.5 h-3.5 text-amber-500" />
+            </div>
+            <div className="my-2">
+              <span className="text-xl font-display font-extrabold text-gray-900">
+                {calcRatios.pe_ratio ? `${calcRatios.pe_ratio.value}x` : 'N/A'}
+              </span>
+              <span className="text-[10px] font-medium text-gray-400 block">Sector Cap: 50.0x</span>
+            </div>
+            <div className="pt-2 border-t border-gray-200/50 flex items-center justify-between text-[10px] font-bold">
+              <span className="text-gray-400">Benchmark: 12-30x</span>
+              {calcRatios.pe_ratio?.status === 'OVERVALUED' ? (
+                <span className="text-amber-600 font-extrabold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">HIGH P/E</span>
+              ) : (
+                <span className="text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">NORMAL</span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Flagged Ratio Detail Items with Chain-of-Thought Reasoning */}
       {ratioFlags.length > 0 && (

@@ -4,18 +4,20 @@ import {
   CheckCircle2, Info, ArrowUpRight, ChevronRight, Layers, Sparkles
 } from 'lucide-react';
 
-export default function CapTableChart({ validationResults }) {
+export default function CapTableChart({ validationResults, onPreFill }) {
   const [activeTab, setActiveTab] = useState('post'); // 'pre' | 'post'
   const [hoveredSlice, setHoveredSlice] = useState(null);
 
-  // Extract values from validationResults if passed, or default to sample dataset (Apex Technochem)
-  // Default values mirror sample workspace: pre-paidup 8.0 Cr, 75% promoter holding, 4.0 Cr issue size
-  const rawPreCapital = validationResults?.completed_blocking_fields !== undefined ? 8.0 : 8.0;
-  const rawPromoterPct = 75.0;
-  const rawIssueSize = 4.0;
+  // Extract dynamic capital metrics from validationResults
+  const capMetrics = validationResults?.capital_metrics;
+  const hasCapitalData = capMetrics?.has_capital_data;
+
+  const rawPreCapital = hasCapitalData ? (capMetrics.pre_paid_up || 8.0) : 0.0;
+  const rawPromoterPct = hasCapitalData ? (capMetrics.promoter_pct_pre || 75.0) : 0.0;
+  const rawIssueSize = hasCapitalData ? (capMetrics.issue_size || 4.0) : 0.0;
 
   // Calculate Cap Table metrics
-  const prePaidUp = Math.max(0.1, rawPreCapital);
+  const prePaidUp = Math.max(0.001, rawPreCapital);
   const promoterPctPre = Math.min(100, Math.max(0, rawPromoterPct));
   const issueSize = Math.max(0, rawIssueSize);
 
@@ -154,8 +156,27 @@ export default function CapTableChart({ validationResults }) {
         </div>
       </div>
 
-      {/* Main Grid: Interactive Donut Chart + Cap Table Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+      {/* Empty State Banner when workspace reset / no data uploaded */}
+      {!hasCapitalData ? (
+        <div className="bg-gradient-to-r from-emerald-50/70 to-teal-50/70 border border-emerald-200/70 rounded-2xl p-6 text-center space-y-3">
+          <PieIcon className="w-8 h-8 text-emerald-500 mx-auto opacity-80" />
+          <h4 className="font-extrabold text-sm text-gray-800">No Capital Structure Data Entered</h4>
+          <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+            Enter Paid-up Capital, Promoter Shareholding & Issue Size in the Capital & Objectives tab or load sample data to activate real-time Cap Table Radar & SEBI Reg 236 lock-in audit.
+          </p>
+          {onPreFill && (
+            <button
+              onClick={() => onPreFill('complete')}
+              className="inline-flex items-center gap-2 text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer mt-1"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Load sample capital structure — Apex Technochem Ltd</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        /* Main Grid: Interactive Donut Chart + Cap Table Summary */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         
         {/* Left: Donut Chart (5 cols) */}
         <div className="lg:col-span-5 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-50/80 to-emerald-50/20 rounded-2xl border border-gray-100 relative">
@@ -297,10 +318,10 @@ export default function CapTableChart({ validationResults }) {
           </div>
 
         </div>
-
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }
 
 // Helper function: SVG Arc Generator for Donut Slices
