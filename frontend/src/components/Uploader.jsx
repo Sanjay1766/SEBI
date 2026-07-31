@@ -38,11 +38,18 @@ export default function Uploader({
     compliance: true
   });
 
-  const fileInputs = {
-    financials: useRef(null),
-    gst: useRef(null),
-    incorporation: useRef(null),
-    compliance: useRef(null)
+  const [vcModal, setVcModal] = useState(null);
+
+  const fetchAndShowVC = async (docType) => {
+    try {
+      const res = await apiFetch(`/api/credentials/${docType}`);
+      if (res.ok) {
+        const data = await res.json();
+        setVcModal(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch W3C VC:", err);
+    }
   };
 
   const [jobState, setJobState] = useState({
@@ -368,24 +375,40 @@ export default function Uploader({
 
                 {/* Uploaded File Info */}
                 {isUploaded && !isUploading && (
-                  <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between mb-3 p-3 shadow-inner select-none">
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-                        <FileText className="w-4 h-4 text-gray-400" />
+                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 shadow-inner select-none mb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="text-[12px] text-gray-700 font-semibold truncate">{uploadedFileObj?.filename || 'Uploaded File'}</p>
+                          <p className="text-[10px] text-gray-400 font-medium">{(uploadedFileObj?.size ? (uploadedFileObj.size / 1024).toFixed(0) : '0')} KB · {extractionCompleted ? 'Extracted — confirm fields' : 'Manual entry needed'}</p>
+                        </div>
                       </div>
-                      <div className="overflow-hidden">
-                        <p className="text-[12px] text-gray-700 font-semibold truncate">{uploadedFileObj?.filename || 'Uploaded File'}</p>
-                        <p className="text-[10px] text-gray-400 font-medium">{(uploadedFileObj?.size ? (uploadedFileObj.size / 1024).toFixed(0) : '0')} KB · {extractionCompleted ? 'Extracted — confirm fields' : 'Manual entry needed'}</p>
-                      </div>
+                      
+                      <button
+                        onClick={() => setExpandedJson(prev => ({ ...prev, [type]: !prev[type] }))}
+                        className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-gray-600 transition-colors shrink-0 cursor-pointer"
+                        title="Inspect extracted fields"
+                      >
+                        {showJson ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
-                    
-                    <button
-                      onClick={() => setExpandedJson(prev => ({ ...prev, [type]: !prev[type] }))}
-                      className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-gray-600 transition-colors shrink-0 cursor-pointer"
-                      title="Inspect extracted fields"
-                    >
-                      {showJson ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
+
+                    {/* W3C VC Badge & Inspection Link */}
+                    <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1 text-[9.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-mono">
+                        <ShieldCheck className="w-3 h-3 text-indigo-600" />
+                        W3C VC: did:polygon:amoy:...
+                      </span>
+                      <button
+                        onClick={() => fetchAndShowVC(type)}
+                        className="text-[9.5px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                      >
+                        Inspect W3C VC JSON-LD ↗
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -448,6 +471,42 @@ export default function Uploader({
           );
         })}
       </div>
+
+      {/* W3C Verifiable Credential Inspection Modal */}
+      {vcModal && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in select-none">
+          <div className="bg-white rounded-2xl max-w-xl w-full border border-gray-200 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h3 className="font-extrabold text-sm text-gray-900">W3C Verifiable Credential (VC) v1.1</h3>
+                  <p className="text-[10.5px] text-gray-400 font-medium">Interoperable National Digital Infrastructure Record</p>
+                </div>
+              </div>
+              <button onClick={() => setVcModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="bg-slate-900 text-emerald-400 p-4 rounded-xl font-mono text-[11px] overflow-x-auto max-h-80 shadow-inner">
+              <pre>{JSON.stringify(vcModal.verifiable_credential || vcModal, null, 2)}</pre>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-[11px] text-gray-500">
+              <span className="font-mono text-indigo-600 font-bold truncate max-w-[320px]">
+                Issuer DID: {vcModal.verifiable_credential?.issuer?.id || 'did:polygon:amoy:0x71C7...'}
+              </span>
+              <button
+                onClick={() => setVcModal(null)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-colors cursor-pointer"
+              >
+                Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

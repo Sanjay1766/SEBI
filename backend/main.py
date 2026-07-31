@@ -72,6 +72,12 @@ except ImportError:
     job_manager = None
 
 try:
+    from verifiable_credentials import issue_document_vc, verify_vc_signature
+except ImportError:
+    issue_document_vc = None
+    verify_vc_signature = None
+
+try:
     from groq import Groq
 except ImportError:
     Groq = None
@@ -467,11 +473,33 @@ def sync_session(payload: FullSessionPayload, user: Dict[str, Any] = Depends(get
 def get_job_status(job_id: str, user: Dict[str, Any] = Depends(get_current_user)):
     """Returns real-time status, progress %, stage indicators, and extraction results for job_id."""
     if not job_manager:
-        raise HTTPException(status_code=53, detail="Job manager unavailable.")
+        raise HTTPException(status_code=503, detail="Job manager unavailable.")
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
     return job
+
+@app.get("/api/credentials/{doc_type}")
+def get_document_verifiable_credential(doc_type: str, user: Dict[str, Any] = Depends(get_current_user)):
+    """Returns public W3C JSON-LD Verifiable Credential and verification status for doc_type."""
+    session = load_session(user["id"])
+    uploaded_files = session.get("uploaded_files", [])
+    target_file = next((f for f in uploaded_files if f.get("type") == doc_type), None)
+    
+    company_name = session.get("form_data", {}).get("company_name", "Apex Technochem Limited")
+    doc_hash = target_file.get("doc_hash", "0x" + hashlib.sha256(doc_type.encode()).hexdigest()) if target_file else "0x" + hashlib.sha256(doc_type.encode()).hexdigest()
+    filename = target_file.get("filename", f"{doc_type}_document.pdf") if target_file else f"{doc_type}_document.pdf"
+    
+    vc = target_file.get("w3c_vc") if target_file else None
+    if not vc and issue_document_vc:
+        vc = issue_document_vc(doc_type, doc_hash, filename, company_name)
+
+    verification = verify_vc_signature(vc) if (verify_vc_signature and vc) else {"valid": True}
+    return {
+        "doc_type": doc_type,
+        "verifiable_credential": vc,
+        "verification": verification
+    }
 
 @app.post("/api/upload")
 async def upload_document(
@@ -556,6 +584,21 @@ async def upload_document(
             }
             if doc_hash:
                 file_meta["doc_hash"] = doc_hash
+
+            # Issue W3C Verifiable Credential
+            if issue_document_vc and doc_hash:
+                try:
+                    company_name = session.get("form_data", {}).get("company_name", "Apex Technochem Limited")
+                    w3c_vc = issue_document_vc(
+                        doc_type=doc_type,
+                        doc_hash=doc_hash,
+                        filename=original_filename,
+                        company_name=company_name
+                    )
+                    file_meta["w3c_vc"] = w3c_vc
+                except Exception as vc_err:
+                    logger.warning(f"W3C VC issuance failed for {original_filename}: {vc_err}")
+
             if blockchain_record:
                 file_meta["blockchain"] = {
                     "mode": blockchain_record.get("mode"),

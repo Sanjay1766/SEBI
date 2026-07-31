@@ -82,11 +82,41 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
         else:
             status = "incomplete"
 
+        # ── Compute Section AI Risk Score (1–10 scale) ─────────────────────
+        total_sec_req = len(present) + len(missing)
+        sec_comp_pct = (len(present) / total_sec_req * 100) if total_sec_req > 0 else 100
+
+        high_flags_count = sum(1 for f in sec_inconsistencies if f.get("severity") in ("high", "HIGH") or f.get("blocking"))
+        med_flags_count = len(sec_inconsistencies) - high_flags_count
+
+        # Risk Score Formula (1-10 scale):
+        raw_risk = (10 - (sec_comp_pct / 15.0)) + (high_flags_count * 4.0) + (med_flags_count * 2.5) + (len(missing) * 1.5)
+        risk_score = max(1, min(10, int(round(raw_risk))))
+
+        if risk_score <= 3:
+            risk_level = "low"
+            risk_explanation = f"Low Risk ({risk_score}/10): Section disclosures comply with SEBI ICDR requirements."
+        elif risk_score <= 6:
+            risk_level = "medium"
+            if sec_inconsistencies:
+                risk_explanation = f"Moderate Risk ({risk_score}/10): Flagged for compliance review ({sec_inconsistencies[0].get('title', 'Conflict')})."
+            else:
+                risk_explanation = f"Moderate Risk ({risk_score}/10): {len(missing)} required fields incomplete."
+        else:
+            risk_level = "high"
+            if sec_inconsistencies:
+                risk_explanation = f"High Risk ({risk_score}/10): Active statutory conflict ({sec_inconsistencies[0].get('title', 'Critical Conflict')})."
+            else:
+                risk_explanation = f"High Risk ({risk_score}/10): Critical statutory disclosures missing."
+
         sections_results.append({
             "section_id": sec_id,
             "section_name": sec_name,
             "description": sec.get("description", ""),
             "status": status,
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "risk_explanation": risk_explanation,
             "missing_fields": missing,
             "present_fields": present,
             "inconsistencies": sec_inconsistencies,
@@ -115,6 +145,9 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
         if filing_readiness > 85:
             filing_readiness = 85
 
+    # Portfolio Risk Score (weighted average across sections)
+    portfolio_risk_score = max(1, min(10, int(round(sum(s["risk_score"] for s in sections_results) / len(sections_results))))) if sections_results else 1
+
     # Status counts
     status_counts = {
         "complete": sum(1 for s in sections_results if s["status"] == "complete"),
@@ -127,6 +160,8 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
         "filing_readiness": filing_readiness,
         # Secondary metric (all required fields)
         "overall_completeness": overall_completeness,
+        # Portfolio AI Risk Score (1-10)
+        "portfolio_risk_score": portfolio_risk_score,
         # Backward compat: readiness_score mirrors filing_readiness
         "readiness_score": filing_readiness,
         "sections": sections_results,
