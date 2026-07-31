@@ -792,6 +792,7 @@ export default function App({ user, onSignOut }) {
                   onScanRedFlags={handleScanRedFlags}
                   scanningRedFlags={scanningRedFlags}
                   redFlagResults={redFlagResults}
+                  apiFetch={authFetch}
                 />
               )}
 

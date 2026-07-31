@@ -10,7 +10,8 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
     let isMounted = true;
     const fetchAlerts = async () => {
       try {
-        const res = await apiFetch('/api/regulatory_alerts');
+        const fetcher = typeof apiFetch === 'function' ? apiFetch : window.fetch;
+        const res = await fetcher('/api/regulatory_alerts');
         if (res.ok && isMounted) {
           const data = await res.json();
           setAlertsData(data);
