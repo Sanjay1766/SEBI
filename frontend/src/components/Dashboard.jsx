@@ -9,6 +9,7 @@ import {
 import ComplianceScoreMeter from './ComplianceScoreMeter';
 import FinancialRatioRadar from './FinancialRatioRadar';
 import CapTableChart from './CapTableChart';
+import RegulatoryAlertBanner from './RegulatoryAlertBanner';
 import { lookupRegulation } from '../data/icdrRegulations';
 
 const SECTION_TO_TAB = {
@@ -129,6 +130,9 @@ export default function Dashboard({
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
+
+      {/* ── SEBI Regulatory Change Alert Banner ── */}
+      <RegulatoryAlertBanner apiFetch={apiFetch} onNavigateTab={onNavigateTab} />
 
       {/* ── Compliance Score Meter (full-width centrepiece) ── */}
       <ComplianceScoreMeter validationResults={validationResults} />
