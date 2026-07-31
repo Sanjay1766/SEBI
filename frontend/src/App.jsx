@@ -212,6 +212,34 @@ export default function App({ user, onSignOut }) {
     }
   };
 
+  const handleReset = async () => {
+    try {
+      setLoading(true);
+      await authFetch('/api/session/reset', { method: 'POST' });
+      const emptySession = {
+        form_data: {},
+        extracted_data: {
+          financials: {},
+          gst: {},
+          incorporation: {},
+          compliance: {}
+        },
+        uploaded_files: []
+      };
+      sessionDataRef.current = emptySession;
+      setSessionData(emptySession);
+      setValidationResults(null);
+      setRedFlagResults(null);
+      setIsDigiLockerConnected(false);
+      setConfirmReset(false);
+      await validateSession();
+    } catch (err) {
+      console.error('Failed to reset workspace:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const handleFormChange = (key, value) => {
     setSaveStatus('saving');
@@ -261,23 +289,6 @@ export default function App({ user, onSignOut }) {
     setTimeout(() => {
       validateSession();
     }, 200);
-  };
-
-  const handleReset = async () => {
-    // Called after inline confirm is accepted
-    setConfirmReset(false);
-    try {
-      setLoading(true);
-      const res = await authFetch('/api/reset', { method: 'POST' });
-      if (res.ok) {
-        fetchSession();
-        setActiveTab('dashboard');
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handlePreFill = async (type) => {
@@ -714,18 +725,6 @@ export default function App({ user, onSignOut }) {
       {/* ── Main Content Area ── */}
       <main className="flex-grow min-w-0 flex flex-col min-h-screen">
 
-        {/* Real-time Multi-user Collaboration Bar */}
-        <div className="px-6 pt-3 pb-1 bg-gray-50">
-          <CollaboratorBar 
-            user={user} 
-            collaborators={collaborators} 
-            currentRole={userRole} 
-            onRoleChange={setUserRole} 
-            activeTab={activeTab} 
-            isConnected={realtimeConnected} 
-          />
-        </div>
-
         {/* Top Header */}
         <header className="h-14 border-b border-gray-100 bg-white flex justify-between items-center px-7 sticky top-0 z-30 shadow-sm select-none">
           <div className="flex items-center gap-3">
@@ -772,12 +771,19 @@ export default function App({ user, onSignOut }) {
         {/* Content Container */}
         <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-gray-50">
           {loading ? (
-            <div className="h-96 flex flex-col items-center justify-center">
-              <div className="w-16 h-16 rounded-2xl bg-white border border-gray-100 shadow-card flex items-center justify-center mb-5">
-                <Loader2 className="w-7 h-7 text-accent-500 animate-spin" />
+            <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+              <div className="flex flex-col items-center gap-5">
+                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-xl">
+                  <Loader2 className="w-7 h-7 text-emerald-400 animate-spin" />
+                </div>
+                <div className="text-center space-y-1.5">
+                  <p className="text-[14px] font-bold text-white/80 tracking-wide">Preparing your workspace…</p>
+                  <p className="text-[11px] text-white/35 font-medium">Fetching session · Running compliance checks</p>
+                </div>
+                <div className="w-48 h-0.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full animate-pulse" style={{ width: '60%' }} />
+                </div>
               </div>
-              <p className="text-[13px] font-bold text-gray-500 tracking-wide">Loading workspace…</p>
-              <p className="text-[11px] text-gray-400 mt-1.5">Fetching session data and running compliance checks</p>
             </div>
           ) : (
             <>

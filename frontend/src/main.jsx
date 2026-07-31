@@ -79,7 +79,7 @@ function Root() {
   return (
     <>
       {!splashDone && <SplashScreen onFinish={handleSplashFinish} />}
-      {/* Render App beneath splash so it's loaded and ready when splash exits */}
+      {/* App pre-renders beneath splash; dark loading screen in App covers any flash */}
       <App user={session.user} onSignOut={() => supabase.auth.signOut()} />
     </>
   );

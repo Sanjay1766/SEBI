@@ -52,6 +52,13 @@ export default function Uploader({
     }
   };
 
+  const fileInputs = {
+    financials: useRef(null),
+    gst: useRef(null),
+    incorporation: useRef(null),
+    compliance: useRef(null),
+  };
+
   const [jobState, setJobState] = useState({
     financials: null,
     gst: null,

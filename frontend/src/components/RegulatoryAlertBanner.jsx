@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, ShieldAlert, ExternalLink, ChevronDown, ChevronUp, AlertCircle, FileText, ArrowRight } from 'lucide-react';
+import { Bell, ShieldAlert, ExternalLink, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+
+const SEBI_CIRCULARS_URL = 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=7&smid=0';
 
 export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
   const [alertsData, setAlertsData] = useState(null);
@@ -17,7 +19,7 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
           setAlertsData(data);
         }
       } catch (err) {
-        console.error("Failed to fetch regulatory alerts:", err);
+        console.error('Failed to fetch regulatory alerts:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -33,6 +35,7 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
 
   const impactedAlerts = alertsData.alerts.filter(a => a.is_session_impacted);
   const primaryAlert = impactedAlerts.length > 0 ? impactedAlerts[0] : alertsData.alerts[0];
+  const liveCount = alertsData.alerts.filter(a => a.is_live).length;
 
   return (
     <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-900/5 border border-amber-200/80 rounded-2xl p-4 shadow-sm animate-fade-in select-none">
@@ -50,6 +53,12 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
               <span className="text-[10px] font-bold text-gray-400 font-mono">
                 {alertsData.alerts.length} Active Circulars
               </span>
+              {liveCount > 0 && (
+                <span className="flex items-center gap-1 text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-mono">
+                  <Radio className="w-2.5 h-2.5" />
+                  {liveCount} Live from SEBI
+                </span>
+              )}
             </div>
             <h4 className="font-bold text-[13px] text-gray-800 truncate mt-0.5">
               {primaryAlert.title}
@@ -58,8 +67,9 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 ml-auto">
+          {/* Open specific circular or SEBI listing page */}
           <a
-            href={primaryAlert.sebi_url}
+            href={primaryAlert.sebi_url || SEBI_CIRCULARS_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[11px] font-bold text-amber-800 bg-amber-100/80 hover:bg-amber-200/80 border border-amber-300 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
@@ -81,6 +91,21 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
       {/* Expandable Circular Details */}
       {expanded && (
         <div className="mt-4 pt-4 border-t border-amber-200/60 space-y-3.5 animate-fade-in">
+
+          {/* Link to full SEBI circulars page */}
+          <a
+            href={SEBI_CIRCULARS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between w-full px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-all group"
+          >
+            <div className="flex items-center gap-2">
+              <Radio className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+              <span className="text-[12px] font-bold text-blue-800">View all SEBI Circulars on sebi.gov.in</span>
+            </div>
+            <ExternalLink className="w-3.5 h-3.5 text-blue-500 group-hover:translate-x-0.5 transition-transform" />
+          </a>
+
           {alertsData.alerts.map((circ) => (
             <div
               key={circ.id}
@@ -92,11 +117,17 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
             >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-[10.5px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-md">
-                    {circ.circular_no}
-                  </span>
+                  {circ.is_live ? (
+                    <span className="flex items-center gap-1 font-mono text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md">
+                      <Radio className="w-2.5 h-2.5" /> LIVE
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10.5px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-md">
+                      {circ.circular_no}
+                    </span>
+                  )}
                   <span className="text-[10px] text-gray-500 font-semibold font-mono">
-                    Dated: {circ.date}
+                    {circ.date}
                   </span>
                   {circ.is_session_impacted && (
                     <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-md animate-pulse">
@@ -104,19 +135,21 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
                     </span>
                   )}
                 </div>
-                
+
                 <a
-                  href={circ.sebi_url}
+                  href={circ.sebi_url || SEBI_CIRCULARS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10.5px] font-bold text-amber-700 hover:text-amber-900 underline flex items-center gap-1 shrink-0"
                 >
-                  Official PDF <ExternalLink className="w-3 h-3" />
+                  {circ.is_live ? 'Read Circular' : 'Official PDF'} <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
 
               <h5 className="font-bold text-[13px] text-gray-900 mb-1">{circ.title}</h5>
-              <p className="text-[11.5px] text-gray-600 leading-relaxed font-medium mb-2">{circ.summary}</p>
+              {!circ.is_live && (
+                <p className="text-[11.5px] text-gray-600 leading-relaxed font-medium mb-2">{circ.summary}</p>
+              )}
 
               {circ.is_session_impacted && (
                 <div className="mt-2.5 p-3 rounded-lg bg-red-50/90 border border-red-200 text-[11.5px] text-red-900 font-medium space-y-1">

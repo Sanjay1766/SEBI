@@ -28,8 +28,41 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
     # 2. Override with form data (user manual entries take priority)
     merged.update(form_data)
 
+    # ── Run financial ratio audit ──
+    try:
+        from financial_ratio_checker import calculate_and_audit_ratios
+        ratio_audit = calculate_and_audit_ratios(merged)
+        ratio_ratios = ratio_audit.get("calculated_ratios", {})
+        ratio_flags = ratio_audit.get("flags", [])
+    except Exception as e:
+        logger.warning(f"Financial ratio audit failed: {e}")
+        ratio_ratios = {}
+        ratio_flags = []
+
+    # ── Calculate dynamic Cap Table metrics ──
+    def _parse_float(val):
+        if val is None:
+            return None
+        try:
+            return float(str(val).replace("₹", "").replace(",", "").strip())
+        except (ValueError, TypeError):
+            return None
+
+    raw_pre_capital = _parse_float(merged.get("paid_up_capital_pre") or merged.get("pre_issue_paidup") or merged.get("paid_up_capital"))
+    raw_promoter_pct = _parse_float(merged.get("promoter_shareholding_pre_pct") or merged.get("promoter_pct") or merged.get("promoter_shareholding"))
+    raw_issue_size = _parse_float(merged.get("issue_size") or merged.get("fresh_issue_size"))
+
+    has_capital_data = (raw_pre_capital is not None and raw_pre_capital > 0) or (raw_promoter_pct is not None and raw_promoter_pct > 0) or (raw_issue_size is not None and raw_issue_size > 0)
+    capital_metrics = {
+        "has_capital_data": has_capital_data,
+        "pre_paid_up": raw_pre_capital if raw_pre_capital is not None else 0.0,
+        "promoter_pct_pre": raw_promoter_pct if raw_promoter_pct is not None else 0.0,
+        "issue_size": raw_issue_size if raw_issue_size is not None else 0.0,
+    }
+
     # ── Run consistency checks via dedicated module ──────────────────────────
     consistency_flags = run_all_consistency_checks(merged, extracted_data)
+    consistency_flags.extend(ratio_flags)
 
     # ── Completeness checks for each schema section ─────────────────────────
     sections_results = []
@@ -174,4 +207,6 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
         "completed_blocking_fields": completed_blocking_fields,
         "total_blocking_fields": total_blocking_fields,
         "has_blocking_flags": has_blocking_flag,
+        "calculated_ratios": ratio_ratios,
+        "capital_metrics": capital_metrics,
     }

@@ -473,6 +473,13 @@ def sync_session(payload: FullSessionPayload, user: Dict[str, Any] = Depends(get
     save_session(user["id"], session)
     return {"status": "success", "message": "Full session synced successfully"}
 
+@app.post("/api/session/reset")
+@app.delete("/api/session")
+def reset_session(user: Dict[str, Any] = Depends(get_current_user)):
+    empty = empty_session()
+    save_session(user["id"], empty)
+    return {"status": "success", "message": "Session reset successfully"}
+
 
 @app.get("/api/jobs/{job_id}/status")
 def get_job_status(job_id: str, user: Dict[str, Any] = Depends(get_current_user)):
