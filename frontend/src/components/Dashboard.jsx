@@ -521,7 +521,20 @@ export default function Dashboard({
                       <p className="text-[11.5px] text-gray-400 truncate mt-0.5 font-medium leading-relaxed">{sec.description}</p>
                     </div>
                   </div>
+                  {/* Section Header & Risk Badge */}
                   <div className="flex items-center gap-3 shrink-0 ml-5">
+                    {sec.risk_score && (
+                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border font-mono select-none flex items-center gap-1 ${
+                        sec.risk_level === 'high' 
+                          ? 'bg-red-50 text-red-700 border-red-200' 
+                          : sec.risk_level === 'medium' 
+                          ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
+                        <span>Risk: {sec.risk_score}/10</span>
+                        <span className="opacity-75 uppercase text-[9px]">({sec.risk_level})</span>
+                      </span>
+                    )}
                     {getStatusBadge(sec.status, sec.section_id)}
                     {isExpanded
                       ? <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -532,7 +545,24 @@ export default function Dashboard({
 
                 {/* Accordion Content */}
                 {isExpanded && (
-                  <div className="px-6 pb-6 pt-3 bg-gray-50 border-t border-gray-100 space-y-4">
+                    <div className="px-6 pb-6 pt-3 bg-gray-50 border-t border-gray-100 space-y-4">
+                      
+                      {/* AI Risk Explanation Box */}
+                      {sec.risk_explanation && (
+                        <div className={`p-3 rounded-xl border text-[11.5px] font-medium flex items-start gap-2.5 shadow-2xs ${
+                          sec.risk_level === 'high' 
+                            ? 'bg-red-50/80 border-red-200 text-red-800' 
+                            : sec.risk_level === 'medium' 
+                            ? 'bg-amber-50/80 border-amber-200 text-amber-800' 
+                            : 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+                        }`}>
+                          <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-extrabold uppercase text-[10px] tracking-wider block mb-0.5">Section AI Risk Assessment</span>
+                            {sec.risk_explanation}
+                          </div>
+                        </div>
+                      )}
                     
                     {/* Conflicts */}
                     {sec.inconsistencies?.length > 0 && (
