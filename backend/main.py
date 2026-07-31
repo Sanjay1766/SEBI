@@ -78,6 +78,11 @@ except ImportError:
     verify_vc_signature = None
 
 try:
+    from sebi_circulars import fetch_sebi_regulatory_alerts
+except ImportError:
+    fetch_sebi_regulatory_alerts = None
+
+try:
     from groq import Groq
 except ImportError:
     Groq = None
@@ -500,6 +505,14 @@ def get_document_verifiable_credential(doc_type: str, user: Dict[str, Any] = Dep
         "verifiable_credential": vc,
         "verification": verification
     }
+
+@app.get("/api/regulatory_alerts")
+def get_regulatory_alerts(user: Dict[str, Any] = Depends(get_current_user)):
+    """Returns active SEBI regulatory circular alerts and session impact analysis."""
+    session = load_session(user["id"])
+    if fetch_sebi_regulatory_alerts:
+        return fetch_sebi_regulatory_alerts(session)
+    return {"status": "success", "total_alerts": 0, "alerts": []}
 
 @app.post("/api/upload")
 async def upload_document(
