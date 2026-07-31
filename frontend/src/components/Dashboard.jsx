@@ -138,80 +138,6 @@ export default function Dashboard({
       {/* ── Compliance Score Meter (full-width centrepiece) ── */}
       <ComplianceScoreMeter validationResults={validationResults} />
 
-      {/* ── Financial Ratio Anomaly Radar ── */}
-      <FinancialRatioRadar validationResults={validationResults} />
-
-      {/* ── Promoter Lock-in & Cap Table Chart ── */}
-      <CapTableChart validationResults={validationResults} />
-
-      {/* ── Top Stats Row (2-col: Chapter Status + Compiler) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {/* Chapter Status */}
-        <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between">
-          <p className="text-[10.5px] font-bold uppercase tracking-widest text-gray-400 mb-4">Prospectus Chapters</p>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-xl py-3 px-2 bg-emerald-50 border border-emerald-100">
-              <span className="text-2xl font-display font-700 text-emerald-600 block">{status_counts.complete}</span>
-              <span className="text-[9.5px] font-bold text-emerald-600/70 uppercase tracking-wide">Verified</span>
-            </div>
-            <div className="rounded-xl py-3 px-2 bg-amber-50 border border-amber-100">
-              <span className="text-2xl font-display font-700 text-amber-500 block">{status_counts.incomplete}</span>
-              <span className="text-[9.5px] font-bold text-amber-500/70 uppercase tracking-wide">Pending</span>
-            </div>
-            <div className="rounded-xl py-3 px-2 bg-red-50 border border-red-100">
-              <span className="text-2xl font-display font-700 text-red-500 block">{status_counts.inconsistent}</span>
-              <span className="text-[9.5px] font-bold text-red-500/70 uppercase tracking-wide">Conflicts</span>
-            </div>
-          </div>
-          <p className="text-[10.5px] text-gray-400 font-medium mt-4 leading-relaxed">
-            {sections.length} chapters tracked · Click any chapter below to expand
-          </p>
-        </div>
-
-        {/* Compiler Card */}
-        <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute -top-6 -right-6 w-24 h-24 bg-accent-500/8 rounded-full blur-2xl pointer-events-none" />
-          <div>
-            <p className="text-[10.5px] font-bold uppercase tracking-widest text-accent-600 flex items-center gap-1.5 mb-1">
-              <Zap className="w-3.5 h-3.5" /> Prospectus Compiler
-            </p>
-            <p className="text-[12.5px] text-gray-500 leading-relaxed">
-              Compile form data into a SEBI-formatted <code className="text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded-md text-[10.5px] font-mono">.docx</code> draft.
-            </p>
-          </div>
-          <div className="space-y-2 mt-5">
-            <button
-              onClick={onGenerate}
-              disabled={generating}
-              className="w-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700 text-white rounded-xl py-2.5 px-4 text-[12.5px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-accent disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generating ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
-              ) : (
-                <><FileDown className="w-4 h-4" /><span>Download Draft Prospectus (.docx)</span></>
-              )}
-            </button>
-            {onPreFill && (
-              <button
-                onClick={() => onPreFill('complete')}
-                className="w-full bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 rounded-xl py-2 px-4 text-[11px] font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-gray-200 hover:border-gray-300"
-                title="Load all form fields with sample data for Apex Technochem Limited"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-accent-400" />
-                <span>Load sample — Apex Technochem Ltd</span>
-              </button>
-            )}
-          </div>
-          {lastSavedTime && (
-            <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center gap-1.5 text-[10px] text-gray-400 font-medium select-none">
-              <Clock className="w-3 h-3" />
-              <span>Last synced: {lastSavedTime}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* ── Feature 3: Inconsistencies Panel with SEBI Regulation Badges & AI Explanations ── */}
       {inconsistencies.length > 0 && (
         <div className="space-y-3">
@@ -486,6 +412,48 @@ export default function Dashboard({
           <p className="text-[10.5px] text-gray-400 font-medium mt-4 leading-relaxed">
             {sections.length} chapters tracked · Click any chapter below to expand
           </p>
+        </div>
+
+        {/* Compiler Card */}
+        <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-accent-500/8 rounded-full blur-2xl pointer-events-none" />
+          <div>
+            <p className="text-[10.5px] font-bold uppercase tracking-widest text-accent-600 flex items-center gap-1.5 mb-1">
+              <Zap className="w-3.5 h-3.5" /> Prospectus Compiler
+            </p>
+            <p className="text-[12.5px] text-gray-500 leading-relaxed">
+              Compile form data into a SEBI-formatted <code className="text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded-md text-[10.5px] font-mono">.docx</code> draft.
+            </p>
+          </div>
+          <div className="space-y-2 mt-5">
+            <button
+              onClick={onGenerate}
+              disabled={generating}
+              className="w-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700 text-white rounded-xl py-2.5 px-4 text-[12.5px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generating ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
+              ) : (
+                <><FileDown className="w-4 h-4" /><span>Download Draft Prospectus (.docx)</span></>
+              )}
+            </button>
+            {onPreFill && (
+              <button
+                onClick={() => onPreFill('complete')}
+                className="w-full bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 rounded-xl py-2 px-4 text-[11px] font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-gray-200 hover:border-gray-300"
+                title="Load all form fields with sample data for Apex Technochem Limited"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-accent-400" />
+                <span>Load sample — Apex Technochem Ltd</span>
+              </button>
+            )}
+          </div>
+          {lastSavedTime && (
+            <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center gap-1.5 text-[10px] text-gray-400 font-medium select-none">
+              <Clock className="w-3 h-3" />
+              <span>Last synced: {lastSavedTime}</span>
+            </div>
+          )}
         </div>
       </div>
 
