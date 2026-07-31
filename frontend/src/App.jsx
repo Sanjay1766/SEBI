@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Home, Upload, FileCheck, RefreshCw,
+  Upload, RefreshCw, FolderOpen,
   Check, Sparkles, LogOut, Loader2, ShieldCheck,
-  ChevronRight, LayoutDashboard, FolderOpen, AlertTriangle
+  ChevronRight, LayoutDashboard, AlertTriangle
 } from 'lucide-react';
 import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
@@ -287,23 +287,23 @@ export default function App({ user, onSignOut }) {
     const sampleForm = {
       company_name: 'Apex Technochem Limited',
       company_acronym: 'APEX',
-      authorized_capital: 15.0,
-      paid_up_capital_pre: 10.5,
+      authorized_capital: 25.0,
+      paid_up_capital_pre: 8.0,
       promoter_shareholding_pre_pct: 78.5,
       promoters_names: 'Rajesh Kumar, Sunita Kumar',
       directors_names: 'Rajesh Kumar, Sunita Kumar, Anil Sharma (Independent), Dr. Priya Vyas (Non-Executive)',
-      promoter_experience: 'Mr. Rajesh Kumar has over 22 years of experience in the industrial solvents and speciality chemicals manufacturing industry. Mrs. Sunita Kumar holds a Masters in Chemical Engineering and manages quality assurance operations at our Vapi plant.',
+      promoter_experience: 'Mr. Rajesh Kumar has over 22 years of experience in the industrial solvents and speciality chemicals manufacturing industry. Mrs. Sunita Kumar manages quality assurance operations at our Vapi plant.',
       auditor_name: 'M/s R.K. Associates & Co.',
       auditor_membership: '084532N',
-      issue_size: 25.0,
+      issue_size: 12.0,
       price_band: '110 - 115',
       lead_manager: 'BlueSky Capital Advisors Limited',
       registrar: 'Link Intime India Private Limited',
-      expansion_amount: 8.5,
-      working_capital_amount: 10.0,
-      debt_repayment_amount: 3.0,
-      general_corp_amount: 2.0,
-      issue_expenses: 1.5,
+      expansion_amount: 4.5,
+      working_capital_amount: 4.5,
+      debt_repayment_amount: 1.5,
+      general_corp_amount: 1.0,
+      issue_expenses: 0.5,
       industry_name: 'Speciality Chemicals',
       products_services: 'Manufacturing of high-grade industrial solvents, thinners, and customised chemical blends for paint, automotive, and packaging industries.',
       business_model: 'Direct B2B institutional sales through contracts and regional distributor networks. Operating one primary manufacturing site at GIDC Vapi with 12,000 MT capacity.',
@@ -347,7 +347,7 @@ export default function App({ user, onSignOut }) {
         },
         gst: {
           gstin: '27AAACG1234A1Z5',
-          company_name: 'Apex Technochem Pvt Ltd',
+          company_name: 'Apex Technochem Limited',
           gst_annual_turnover: 42.8,
           registration_date: '2018-04-12',
           filing_status: 'Active'

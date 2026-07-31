@@ -67,6 +67,11 @@ except ImportError:
     rag_engine = None
 
 try:
+    from job_manager import job_manager
+except ImportError:
+    job_manager = None
+
+try:
     from groq import Groq
 except ImportError:
     Groq = None
@@ -458,10 +463,15 @@ def sync_session(payload: FullSessionPayload, user: Dict[str, Any] = Depends(get
     return {"status": "success", "message": "Full session synced successfully"}
 
 
-@app.post("/api/reset")
-def reset_session(user: Dict[str, Any] = Depends(get_current_user)):
-    save_session(user["id"], empty_session())
-    return {"status": "success", "message": "Session reset successfully"}
+@app.get("/api/jobs/{job_id}/status")
+def get_job_status(job_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    """Returns real-time status, progress %, stage indicators, and extraction results for job_id."""
+    if not job_manager:
+        raise HTTPException(status_code=53, detail="Job manager unavailable.")
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return job
 
 @app.post("/api/upload")
 async def upload_document(
@@ -501,87 +511,93 @@ async def upload_document(
         logger.error(f"Failed to write uploaded file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save uploaded file locally")
     
-    # ── Blockchain: compute SHA-256 BEFORE extraction/cleanup ───────────────
-    blockchain_record = {}
-    doc_hash = None
-    if BLOCKCHAIN_AVAILABLE:
+    # Create background job
+    job_id = job_manager.create_job(doc_type, original_filename) if job_manager else f"job_{uuid.uuid4().hex[:12]}"
+    user_id = user["id"]
+
+    # Background worker task function
+    async def process_extraction_job():
         try:
-            doc_hash = compute_sha256_file(file_path)
-            logger.info(f"SHA-256 of {file.filename}: {doc_hash[:18]}...")
-            blockchain_record = anchor_document_hash(
-                doc_hash=doc_hash,
-                doc_type=doc_type,
-            )
-            logger.info(
-                f"Blockchain anchor [{blockchain_record.get('mode','?')}] "
-                f"tx={blockchain_record.get('tx_hash','N/A')[:18]}..."
-            )
-        except Exception as bc_err:
-            logger.warning(f"Blockchain anchoring skipped for {file.filename}: {bc_err}")
-    # ────────────────────────────────────────────────────────────────────────
+            if job_manager:
+                job_manager.update_job(job_id, progress=20, stage="Validating document integrity & computing SHA-256 hash...")
+            
+            # ── Blockchain anchoring ──
+            blockchain_record = {}
+            doc_hash = None
+            if BLOCKCHAIN_AVAILABLE:
+                try:
+                    doc_hash = compute_sha256_file(file_path)
+                    blockchain_record = anchor_document_hash(doc_hash=doc_hash, doc_type=doc_type)
+                except Exception as bc_err:
+                    logger.warning(f"Blockchain anchoring skipped: {bc_err}")
 
-    # Run Groq extraction pipeline asynchronously in threadpool to prevent blocking event loop
-    session = load_session(user["id"])
-    try:
-        logger.info(f"Extracting data from {original_filename} for type {doc_type}...")
-        extracted = await asyncio.to_thread(extract_document_data, file_path, doc_type)
-        extraction_status = "completed" if extracted else "failed"
-        extraction_error = None if extracted else "No fields could be reliably extracted. Review the document and enter values manually."
+            if job_manager:
+                job_manager.update_job(job_id, progress=45, stage="Performing OCR text extraction & tabular analysis...")
+            
+            extracted = await asyncio.to_thread(extract_document_data, file_path, doc_type)
 
-        # Merge or update the specific document type's extracted data
-        session["extracted_data"][doc_type] = extracted
+            if job_manager:
+                job_manager.update_job(job_id, progress=75, stage="Structuring entities & SEBI ICDR compliance fields...")
 
-        # Auto-fill extracted values into form_data so form fields auto-populate immediately
-        if isinstance(extracted, dict):
-            for k, v in extracted.items():
-                if v is not None and k != "missing_fields":
-                    session["form_data"][k] = v
+            session = load_session(user_id)
+            session["extracted_data"][doc_type] = extracted or {}
 
-        # Build file metadata entry (with blockchain fields + extraction status)
-        file_meta = {
-            "filename": original_filename,
-            "type": doc_type,
-            "size": os.path.getsize(file_path),
-            "extraction_status": extraction_status,
-            "extraction_error": extraction_error,
-        }
-        # Attach blockchain proof if anchoring succeeded
-        if doc_hash:
-            file_meta["doc_hash"] = doc_hash
-        if blockchain_record:
-            file_meta["blockchain"] = {
-                "mode":         blockchain_record.get("mode"),
-                "status":       blockchain_record.get("status"),
-                "tx_hash":      blockchain_record.get("tx_hash"),
-                "explorer_url": blockchain_record.get("explorer_url"),
-                "network":      blockchain_record.get("network"),
+            if isinstance(extracted, dict):
+                for k, v in extracted.items():
+                    if v is not None and k != "missing_fields":
+                        session["form_data"][k] = v
+
+            file_meta = {
+                "filename": original_filename,
+                "type": doc_type,
+                "size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                "extraction_status": "completed" if extracted else "failed",
+                "extraction_error": None if extracted else "No fields could be reliably extracted.",
             }
+            if doc_hash:
+                file_meta["doc_hash"] = doc_hash
+            if blockchain_record:
+                file_meta["blockchain"] = {
+                    "mode": blockchain_record.get("mode"),
+                    "status": blockchain_record.get("status"),
+                    "tx_hash": blockchain_record.get("tx_hash"),
+                    "explorer_url": blockchain_record.get("explorer_url"),
+                    "network": blockchain_record.get("network"),
+                }
 
-        # Replace any existing file of same type, then append updated entry
-        session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
-        session["uploaded_files"].append(file_meta)
+            session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
+            session["uploaded_files"].append(file_meta)
 
-        save_session(user["id"], session)
-        return {
-            "status": "success",
-            "filename": original_filename,
-            "doc_type": doc_type,
-            "extracted": extracted,
-            "extraction_status": extraction_status,
-            "extraction_error": extraction_error,
-            "blockchain": blockchain_record if blockchain_record else None,
-        }
-    except Exception as e:
-        logger.error(f"Extraction failed for {original_filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Data extraction failed: {str(e)}")
-    finally:
-        # Always clean up the temp file to prevent unbounded disk growth
-        try:
+            save_session(user_id, session)
+
+            if job_manager:
+                job_manager.update_job(
+                    job_id,
+                    status="completed",
+                    progress=100,
+                    stage="Extraction complete! Workspace updated.",
+                    extracted_data=extracted or {}
+                )
+        except Exception as err:
+            logger.error(f"Job {job_id} failed: {err}")
+            if job_manager:
+                job_manager.update_job(job_id, status="failed", progress=100, stage="Extraction failed.", error=str(err))
+        finally:
             if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Cleaned up temp upload file: {file_path}")
-        except Exception as cleanup_err:
-            logger.warning(f"Could not delete temp upload file {file_path}: {cleanup_err}")
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+
+    asyncio.create_task(process_extraction_job())
+
+    return {
+        "status": "processing",
+        "job_id": job_id,
+        "filename": original_filename,
+        "doc_type": doc_type,
+        "message": "Document queued for OCR & LLM background extraction."
+    }
 
 @app.get("/api/validate")
 def get_validation(user: Dict[str, Any] = Depends(get_current_user)):
@@ -634,12 +650,6 @@ async def generate_draft(user: Dict[str, Any] = Depends(get_current_user)):
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             background=BackgroundTask(os.remove, output_path)
         )
-        # Attach blockchain seal metadata in response headers if available
-        if blockchain_seal:
-            response.headers["X-Blockchain-TxHash"]     = blockchain_seal.get("tx_hash", "")
-            response.headers["X-Blockchain-Mode"]       = blockchain_seal.get("mode", "")
-            response.headers["X-Blockchain-ExplorerUrl"] = blockchain_seal.get("explorer_url", "")
-        return response
         # Attach blockchain seal metadata in response headers if available
         if blockchain_seal:
             response.headers["X-Blockchain-TxHash"]     = blockchain_seal.get("tx_hash", "")

@@ -101,10 +101,19 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
     if total_blocking_fields > 0:
         filing_readiness = int((completed_blocking_fields / total_blocking_fields) * 100)
 
-    # Cap filing_readiness at 80% if any BLOCKING consistency flag is active
+    # Cap filing_readiness when consistency flags are active:
+    # - Blocking conflicts cap readiness at 75%
+    # - Non-blocking conflicts (e.g. medium severity statutory/narrative checks) cap readiness at 85%
+    # - Readiness can ONLY reach 100% when zero conflicts exist.
     has_blocking_flag = any(f.get("blocking", False) for f in consistency_flags)
-    if has_blocking_flag and filing_readiness > 80:
-        filing_readiness = 80
+    has_any_flag = len(consistency_flags) > 0
+
+    if has_blocking_flag:
+        if filing_readiness > 75:
+            filing_readiness = 75
+    elif has_any_flag:
+        if filing_readiness > 85:
+            filing_readiness = 85
 
     # Status counts
     status_counts = {

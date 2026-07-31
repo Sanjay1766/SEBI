@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { 
   CheckCircle2, AlertTriangle, XCircle, FileDown, 
   ChevronDown, ChevronUp, Loader2, Sparkles, FileText, ArrowRight,
-  TrendingUp, Shield, AlertOctagon, BarChart3, Clock, Zap,
-  BookOpen, HelpCircle, Lightbulb, Server, IndianRupee, Cpu, ShieldCheck,
+  Shield, BarChart3, Clock, Zap,
+  BookOpen, HelpCircle, Lightbulb, Cpu, ShieldCheck,
   ExternalLink, ScrollText
 } from 'lucide-react';
-import RedFlagScanner from './RedFlagScanner';
 import ComplianceScoreMeter from './ComplianceScoreMeter';
 import FinancialRatioRadar from './FinancialRatioRadar';
 import CapTableChart from './CapTableChart';
