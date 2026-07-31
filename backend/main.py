@@ -83,11 +83,6 @@ except ImportError:
     fetch_sebi_regulatory_alerts = None
 
 try:
-    from audit_report_pdf import generate_compliance_audit_pdf
-except ImportError:
-    generate_compliance_audit_pdf = None
-
-try:
     from groq import Groq
 except ImportError:
     Groq = None
@@ -518,29 +513,6 @@ def get_regulatory_alerts(user: Dict[str, Any] = Depends(get_current_user)):
     if fetch_sebi_regulatory_alerts:
         return fetch_sebi_regulatory_alerts(session)
     return {"status": "success", "total_alerts": 0, "alerts": []}
-
-@app.get("/api/export_audit_pdf")
-def export_compliance_audit_pdf(user: Dict[str, Any] = Depends(get_current_user)):
-    """Generates and downloads a branded SEBI Compliance Audit Report PDF."""
-    session = load_session(user["id"])
-    validation_results = validate_session_data(session)
-    
-    out_dir = tempfile.gettempdir()
-    pdf_filename = f"SEBI_SME_IPO_Compliance_Audit_Report_{user['id']}.pdf"
-    pdf_path = os.path.join(out_dir, pdf_filename)
-    
-    if generate_compliance_audit_pdf:
-        generate_compliance_audit_pdf(session, validation_results, pdf_path)
-    else:
-        with open(pdf_path, "w", encoding="utf-8") as f:
-            f.write("SEBI Compliance Audit Report")
-            
-    return FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        filename="SEBI_SME_IPO_Compliance_Audit_Report.pdf",
-        headers={"Content-Disposition": 'attachment; filename="SEBI_SME_IPO_Compliance_Audit_Report.pdf"'}
-    )
 
 @app.post("/api/upload")
 async def upload_document(
