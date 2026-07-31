@@ -51,6 +51,7 @@ export default function Dashboard({
   onScanRedFlags,
   scanningRedFlags,
   redFlagResults,
+  apiFetch,
 }) {
   const [expandedSection, setExpandedSection] = useState(null);
   const [expandedExplanations, setExpandedExplanations] = useState({});
@@ -188,9 +189,18 @@ export default function Dashboard({
               {generating ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
               ) : (
-                <><FileDown className="w-4 h-4" /><span>Download Draft Prospectus</span></>
+                <><FileDown className="w-4 h-4" /><span>Download Draft Prospectus (.docx)</span></>
               )}
             </button>
+            <a
+              href="/api/export_audit_pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-2.5 px-4 text-[12.5px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+            >
+              <FileText className="w-4 h-4 text-emerald-400" />
+              <span>Export Audit Report (PDF)</span>
+            </a>
             {onPreFill && (
               <button
                 onClick={() => onPreFill('complete')}
