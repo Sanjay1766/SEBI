@@ -45,11 +45,22 @@ export default function Uploader({
     compliance: useRef(null)
   };
 
+  const [jobState, setJobState] = useState({
+    financials: null,
+    gst: null,
+    incorporation: null,
+    compliance: null
+  });
+
   const handleUpload = async (docType, file) => {
     if (!file) return;
     
     setUploading(prev => ({ ...prev, [docType]: true }));
     setError(prev => ({ ...prev, [docType]: '' }));
+    setJobState(prev => ({
+      ...prev,
+      [docType]: { progress: 15, stage: 'Validating document integrity & hash...', status: 'processing', filename: file.name }
+    }));
 
     const formData = new FormData();
     formData.append('doc_type', docType);
@@ -67,13 +78,64 @@ export default function Uploader({
       }
 
       const result = await response.json();
-      onUploadSuccess(docType, result.extracted, { filename: result.filename, size: file.size, extraction_status: result.extraction_status, extraction_error: result.extraction_error });
-      if (result.extraction_status !== 'completed') setError(prev => ({ ...prev, [docType]: result.extraction_error || 'Extraction needs manual review.' }));
+      const jobId = result.job_id;
+
+      if (!jobId) {
+        onUploadSuccess(docType, result.extracted, { filename: result.filename, size: file.size, extraction_status: result.extraction_status, extraction_error: result.extraction_error });
+        setUploading(prev => ({ ...prev, [docType]: false }));
+        setJobState(prev => ({ ...prev, [docType]: null }));
+        return;
+      }
+
+      // Poll background job status endpoint (/api/jobs/{id}/status)
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await apiFetch(`/api/jobs/${jobId}/status`);
+          if (statusRes.ok) {
+            const jobData = await statusRes.json();
+            setJobState(prev => ({
+              ...prev,
+              [docType]: {
+                progress: jobData.progress || 15,
+                stage: jobData.stage || 'Processing document...',
+                status: jobData.status,
+                filename: file.name
+              }
+            }));
+
+            if (jobData.status === 'completed') {
+              clearInterval(pollInterval);
+              onUploadSuccess(
+                docType,
+                jobData.extracted_data || {},
+                {
+                  filename: file.name,
+                  size: file.size,
+                  extraction_status: 'completed',
+                  extraction_error: null
+                }
+              );
+              setTimeout(() => {
+                setUploading(prev => ({ ...prev, [docType]: false }));
+                setJobState(prev => ({ ...prev, [docType]: null }));
+              }, 1200);
+            } else if (jobData.status === 'failed') {
+              clearInterval(pollInterval);
+              setError(prev => ({ ...prev, [docType]: jobData.error || 'Extraction failed.' }));
+              setUploading(prev => ({ ...prev, [docType]: false }));
+              setJobState(prev => ({ ...prev, [docType]: null }));
+            }
+          }
+        } catch (pollErr) {
+          console.error("Polling job status error:", pollErr);
+        }
+      }, 750);
+
     } catch (err) {
       console.error(err);
       setError(prev => ({ ...prev, [docType]: err.message || 'An error occurred.' }));
-    } finally {
       setUploading(prev => ({ ...prev, [docType]: false }));
+      setJobState(prev => ({ ...prev, [docType]: null }));
     }
   };
 
@@ -252,16 +314,38 @@ export default function Uploader({
                   </div>
                 )}
 
-                {/* Uploading State */}
+                {/* Uploading State with Animated Progress Bar */}
                 {isUploading && (
-                  <div className="border border-gray-100 bg-gray-50 rounded-xl p-8 text-center flex flex-col items-center justify-center select-none">
-                    <div className="relative mb-3">
-                      <div className="w-10 h-10 rounded-full border-2 border-accent-100 flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 text-accent-500 animate-spin" />
+                  <div className="border border-accent-200 bg-gradient-to-b from-accent-50/40 to-white rounded-xl p-4 select-none space-y-2.5 animate-fade-in-up shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 text-accent-600 animate-spin" />
+                        <span className="text-[12.5px] font-bold text-gray-800 truncate max-w-[200px]">
+                          {jobState[type]?.filename || 'Processing Document'}
+                        </span>
                       </div>
+                      <span className="text-[11px] font-extrabold text-accent-700 bg-accent-100/80 border border-accent-200 px-2 py-0.5 rounded-md font-mono">
+                        {jobState[type]?.progress || 15}%
+                      </span>
                     </div>
-                    <p className="text-[12.5px] font-bold text-gray-700">Extracting data…</p>
-                    <p className="text-[10.5px] text-gray-400 mt-1 font-medium">Running OCR & schema parser</p>
+
+                    {/* Smooth Progress Bar */}
+                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden p-0.5 border border-gray-200">
+                      <div 
+                        className="bg-gradient-to-r from-accent-500 via-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300 shadow-sm"
+                        style={{ width: `${jobState[type]?.progress || 15}%` }}
+                      />
+                    </div>
+
+                    {/* Stage Label & Steps Indicator */}
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
+                      <p className="truncate max-w-[260px] text-accent-800 font-semibold text-[11px]">
+                        {jobState[type]?.stage || 'Scanning document text...'}
+                      </p>
+                      <span className="text-[10px] text-gray-400 font-mono shrink-0 ml-2">
+                        Stage {(jobState[type]?.progress || 15) >= 100 ? '4/4' : (jobState[type]?.progress || 15) >= 75 ? '3/4' : (jobState[type]?.progress || 15) >= 45 ? '2/4' : '1/4'}
+                      </span>
+                    </div>
                   </div>
                 )}
 
