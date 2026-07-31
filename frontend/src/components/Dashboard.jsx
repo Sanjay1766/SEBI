@@ -58,30 +58,6 @@ export default function Dashboard({
   const [expandedFixSteps, setExpandedFixSteps] = useState({});
   const [expandedRegs, setExpandedRegs] = useState({});
   const [expandedCoT, setExpandedCoT] = useState({});
-  const [exportingPdf, setExportingPdf] = useState(false);
-
-  const handleExportPdf = async () => {
-    setExportingPdf(true);
-    try {
-      const fetcher = typeof apiFetch === 'function' ? apiFetch : window.fetch;
-      const res = await fetcher('/api/export_audit_pdf');
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "SEBI_SME_IPO_Compliance_Audit_Report.pdf";
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (err) {
-      console.error("PDF export error:", err);
-    } finally {
-      setExportingPdf(false);
-    }
-  };
 
   if (!validationResults) {
     return (
@@ -214,17 +190,6 @@ export default function Dashboard({
                 <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
               ) : (
                 <><FileDown className="w-4 h-4" /><span>Download Draft Prospectus (.docx)</span></>
-              )}
-            </button>
-            <button
-              onClick={handleExportPdf}
-              disabled={exportingPdf}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-2.5 px-4 text-[12.5px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            >
-              {exportingPdf ? (
-                <><Loader2 className="w-4 h-4 text-emerald-400 animate-spin" /><span>Generating PDF…</span></>
-              ) : (
-                <><FileText className="w-4 h-4 text-emerald-400" /><span>Export Audit Report (PDF)</span></>
               )}
             </button>
             {onPreFill && (
