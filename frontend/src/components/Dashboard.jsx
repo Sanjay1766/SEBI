@@ -82,30 +82,6 @@ export default function Dashboard({
       setExportingPdf(false);
     }
   };
-  const [exportingPdf, setExportingPdf] = useState(false);
-
-  const handleExportPdf = async () => {
-    setExportingPdf(true);
-    try {
-      const fetcher = typeof apiFetch === 'function' ? apiFetch : window.fetch;
-      const res = await fetcher('/api/export_audit_pdf');
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "SEBI_SME_IPO_Compliance_Audit_Report.pdf";
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (err) {
-      console.error("PDF export error:", err);
-    } finally {
-      setExportingPdf(false);
-    }
-  };
 
   if (!validationResults) {
     return (
