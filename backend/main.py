@@ -16,6 +16,12 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+load_dotenv()
+
+# Configure logging early
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("sebi-ipo-generator")
+
 # Import blockchain anchoring service (graceful mock if web3 not installed)
 try:
     from blockchain import (
@@ -30,8 +36,7 @@ try:
     BLOCKCHAIN_AVAILABLE = True
 except ImportError:
     BLOCKCHAIN_AVAILABLE = False
-    logger_tmp = logging.getLogger("sebi-ipo-generator")
-    logger_tmp.warning("blockchain.py not found — blockchain features disabled.")
+    logger.warning("blockchain.py not found — blockchain features disabled.")
 
 # Import our custom modules
 try:
@@ -40,7 +45,6 @@ try:
     from generator import generate_draft_docx
 except ImportError:
     OCR_STATUS = {"ocr_available": False, "paddleocr_available": False, "poppler_available": False}
-    # Fallbacks in case modules are written later or are in paths
     pass
 
 try:
@@ -88,21 +92,15 @@ try:
     from version_tracker import get_version_history_summary, create_version_snapshot
     from exporter import create_efiling_package_zip
 except ImportError as err:
-    logger_tmp = logging.getLogger("sebi-ipo-generator")
-    logger_tmp.warning(f"Enterprise modules import warning: {err}")
+    logger.warning(f"Enterprise modules import warning: {err}")
 
 try:
     from groq import Groq
 except ImportError:
     Groq = None
 
-load_dotenv()
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("sebi-ipo-generator")
-
 app = FastAPI(title="SEBI SME IPO Draft-Generator API")
+
 
 # CORS setup allowing local development ports and configured origins
 cors_env = os.getenv("CORS_ORIGINS", "*")
@@ -249,6 +247,15 @@ class CopilotMessage(BaseModel):
 class CopilotPayload(BaseModel):
     message: str
     history: List[CopilotMessage] = []
+
+class GenerateRiskFactorsPayload(BaseModel):
+
+    company_name: Optional[str] = "Apex Technochem Limited"
+    industry_name: Optional[str] = "Specialty Chemicals"
+    revenue: Optional[str] = "45.0"
+    issue_size: Optional[str] = "18.5"
+    business_overview: Optional[str] = ""
+
 
 def build_copilot_system_prompt(session: Dict[str, Any], validation: Dict[str, Any]) -> str:
     form_data = session.get("form_data", {})
@@ -529,6 +536,22 @@ def get_regulatory_alerts(user: Dict[str, Any] = Depends(get_current_user)):
     if fetch_sebi_regulatory_alerts:
         return fetch_sebi_regulatory_alerts(session)
     return {"status": "success", "total_alerts": 0, "alerts": []}
+
+@app.post("/api/generate-risk-factors")
+def generate_risk_factors_endpoint(payload: GenerateRiskFactorsPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    """Generates SEBI ICDR Chapter IX compliant Internal & External Risk Factors."""
+    from nlp_analyzer import generate_sebi_risk_factors
+    session = load_session(user["id"])
+    form_data = session.get("form_data", {})
+    return generate_sebi_risk_factors(
+        company_name=payload.company_name or form_data.get("company_name", "Apex Technochem Limited"),
+        industry_name=payload.industry_name or form_data.get("industry_name", "Specialty Chemicals"),
+        revenue=payload.revenue or str(form_data.get("revenue_fy_latest", "45.0")),
+        issue_size=payload.issue_size or str(form_data.get("issue_size", "18.5")),
+        business_overview=payload.business_overview or form_data.get("business_overview", "")
+    )
+
+
 
 @app.post("/api/upload")
 async def upload_document(

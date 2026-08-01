@@ -12,6 +12,7 @@ import DueDiligenceManager from './DueDiligenceManager';
 import { lookupRegulation } from '../data/icdrRegulations';
 
 const SECTION_TO_TAB = {
+
   'cover_page': 'basics',
   'definitions': 'basics',
   'risk_factors': 'disclosures',
@@ -24,7 +25,6 @@ const SECTION_TO_TAB = {
   'management': 'management',
   'rpt': 'management',
   'financials': 'general',
-  'legal_disclosures': 'disclosures',
   'compliance_certs': 'general',
   'material_contracts': 'disclosures',
   'declaration': 'disclosures'
@@ -47,10 +47,8 @@ export default function Dashboard({
   generating, 
   onNavigateTab, 
   onPreFill, 
+  onFormChange,
   lastSavedTime,
-  onScanRedFlags,
-  scanningRedFlags,
-  redFlagResults,
   apiFetch,
 }) {
   const [expandedSection, setExpandedSection] = useState(null);
@@ -158,6 +156,8 @@ export default function Dashboard({
       <ComplianceScoreMeter validationResults={validationResults} />
 
       {/* ── Top Stats Row (2-col: Chapter Status + Compiler) ── */}
+
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Chapter Status */}
@@ -290,76 +290,61 @@ export default function Dashboard({
                   </div>
 
                   {/* Main Description */}
-                  <p className="text-xs text-gray-600 leading-relaxed pl-2 font-medium">{inc.description}</p>
+                  <p className="text-xs text-gray-700 leading-relaxed pl-2 font-medium">{inc.description}</p>
 
-                  {/* Interactive Action Badges */}
-                  <div className="flex items-center gap-2 flex-wrap pt-1 pl-2 border-t border-gray-100">
+                  {/* Clean Actionable Fix Steps (Visible directly) */}
+                  {inc.fix_steps && inc.fix_steps.length > 0 && (
+                    <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 pl-3.5 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-900">
+                        <Lightbulb className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Recommended Resolution Steps:</span>
+                      </div>
+                      <ul className="space-y-1 pl-1">
+                        {inc.fix_steps.map((step, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-[11.5px] font-medium text-emerald-900">
+                            <span className="text-emerald-600 font-bold shrink-0">•</span>
+                            <span className="leading-relaxed">{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Clean Action Bar (Only 1 Details Toggle + 1 Primary Jump Button) */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
                     <button
                       onClick={() => toggleCoT(inc.id)}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`text-[11.5px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
                         showCoT 
-                          ? 'bg-purple-100 text-purple-900 border-purple-300 shadow-xs'
+                          ? 'bg-purple-100 text-purple-900 border-purple-300'
                           : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
                       }`}
                     >
                       <Cpu className="w-3.5 h-3.5 text-purple-600" />
-                      <span>{showCoT ? 'Hide CoT Reasoning' : '🧠 Chain-of-Thought Reasoning'}</span>
+                      <span>{showCoT ? 'Hide Technical Audit Details' : '🧠 Technical CoT & ICDR Text'}</span>
                     </button>
-
-                    <button
-                      onClick={() => toggleExplanation(inc.id)}
-                      className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      <span>{showExp ? 'Hide Breakdown' : '📖 What does this mean?'}</span>
-                    </button>
-
-                    {inc.fix_steps && inc.fix_steps.length > 0 && (
-                      <button
-                        onClick={() => toggleFixSteps(inc.id)}
-                        className="text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-all cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Lightbulb className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{showFix ? 'Hide Action Steps' : '⚡ How to fix this?'}</span>
-                      </button>
-                    )}
-
-                    {/* ICDR Cross-Reference button */}
-                    {regData && (
-                      <button
-                        onClick={() => toggleReg(inc.id)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
-                          showReg
-                            ? 'bg-blue-100 text-blue-800 border-blue-300'
-                            : 'text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200'
-                        }`}
-                      >
-                        <ScrollText className="w-3.5 h-3.5" />
-                        <span>{showReg ? 'Hide Regulation Text' : '📜 View ICDR Text'}</span>
-                      </button>
-                    )}
 
                     {inc.section_id && SECTION_TO_TAB[inc.section_id] && (
                       <button
                         onClick={() => onNavigateTab(SECTION_TO_TAB[inc.section_id])}
-                        className="ml-auto text-xs font-bold text-accent-700 bg-accent-50 hover:bg-accent-100 px-3 py-1.5 rounded-lg border border-accent-200 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-accent-500 hover:bg-accent-600 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
                       >
-                        <span>Go to {TAB_NAMES[SECTION_TO_TAB[inc.section_id]] || 'Wizard'}</span>
+                        <span>Fix in {TAB_NAMES[SECTION_TO_TAB[inc.section_id]] || 'Wizard'}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
 
-                  {/* Expandable Chain-of-Thought Reasoning Breakdown */}
+                  {/* Expandable Technical Details (CoT Reasoning + Statutory Reference) */}
                   {showCoT && (
-                    <div className="bg-gradient-to-br from-purple-50/90 to-indigo-50/80 border border-purple-200 rounded-xl p-4 ml-2 space-y-3 animate-fade-in shadow-xs">
+                    <div className="bg-gradient-to-br from-purple-50/90 to-indigo-50/80 border border-purple-200 rounded-xl p-4 space-y-4 animate-fade-in shadow-xs">
                       <div className="flex items-center justify-between font-extrabold text-xs text-purple-900 border-b border-purple-200/60 pb-2">
                         <div className="flex items-center gap-2">
                           <Cpu className="w-4 h-4 text-purple-600 animate-pulse" />
-                          <span>LLM Chain-of-Thought Compliance Reasoning Steps</span>
+                          <span>Audit Engine Chain-of-Thought Reasoning</span>
                         </div>
                         <span className="text-[10px] font-mono bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 uppercase tracking-wider font-bold">
-                          Groq CoT Engine
+                          SEBI Rules Engine
                         </span>
                       </div>
 
@@ -384,93 +369,22 @@ export default function Dashboard({
                           );
                         })}
                       </div>
-                    </div>
-                  )}
 
-                  {/* Expandable Plain-English Explanation */}
-                  {showExp && (
-                    <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 ml-2 text-xs text-indigo-950 space-y-2 animate-fade-in">
-                      <div className="flex items-center gap-2 font-bold text-indigo-900">
-                        <Sparkles className="w-4 h-4 text-indigo-600" />
-                        <span>Plain-English LLM Founder Explanation:</span>
-                      </div>
-                      <p className="leading-relaxed text-indigo-900 font-medium">
-                        {inc.description || "This compliance rule ensures that numbers stated across MCA, Income Tax, and GST certificates match without contradiction before SEBI filing."}
-                      </p>
-                      {inc.sebi_ref && (
-                        <p className="text-[11px] font-mono text-indigo-700 font-semibold pt-1">
-                          Statutory Mandate: Imposed by SEBI Regulations under {inc.sebi_ref}.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Expandable How-to-Fix Steps */}
-                  {showFix && inc.fix_steps && (
-                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 ml-2 text-xs text-emerald-950 space-y-2.5 animate-fade-in-up">
-                      <div className="flex items-center gap-2 font-bold text-emerald-900">
-                        <Lightbulb className="w-4 h-4 text-emerald-600" />
-                        <span>Actionable Resolution Plan for Founder / Lead Banker:</span>
-                      </div>
-                      <ul className="space-y-2">
-                        {inc.fix_steps.map((step, idx) => (
-                          <li key={idx} className="flex items-start gap-2.5 font-medium text-emerald-900">
-                            <span className="w-5 h-5 rounded-full bg-emerald-200 text-emerald-800 font-bold font-mono text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-                              {idx + 1}
-                            </span>
-                            <span className="leading-relaxed">{step}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* ICDR Cross-Reference Panel */}
-                  {showReg && regData && (
-                    <div className="border border-blue-200 rounded-xl ml-2 overflow-hidden animate-fade-in-up" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)' }}>
-                      {/* Panel header */}
-                      <div className="px-4 py-3 bg-blue-600 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <ScrollText className="w-3.5 h-3.5 text-blue-100 shrink-0" />
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200 leading-none">Statutory Reference</p>
-                            <p className="text-[12px] font-extrabold text-white mt-0.5 font-mono leading-tight">{regData.shortTitle}</p>
+                      {/* ICDR Statutory Text embedded cleanly */}
+                      {regData && (
+                        <div className="border border-blue-200 rounded-xl overflow-hidden mt-3">
+                          <div className="px-3.5 py-2.5 bg-blue-600 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <ScrollText className="w-3.5 h-3.5 text-blue-100" />
+                              <span className="text-[11px] font-extrabold text-white font-mono">{regData.shortTitle}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-200">{regData.chapter}</span>
+                          </div>
+                          <div className="px-4 py-3 bg-blue-50/60 text-[11.5px] leading-relaxed text-slate-800 font-serif italic">
+                            "{regData.text}"
                           </div>
                         </div>
-                        <div className="text-right shrink-0 ml-4">
-                          <p className="text-[9.5px] font-bold text-blue-300 leading-none">{regData.chapter}</p>
-                          <p className="text-[10px] font-semibold text-blue-200 mt-0.5 leading-tight">{regData.fullTitle}</p>
-                        </div>
-                      </div>
-
-                      {/* Regulation body — parchment legal-doc feel */}
-                      <div className="px-5 py-4">
-                        <blockquote
-                          className="text-[11.5px] leading-relaxed text-slate-700 whitespace-pre-line border-l-4 border-blue-300 pl-4 py-1"
-                          style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
-                        >
-                          {regData.text}
-                        </blockquote>
-
-                        {/* Footer with external link */}
-                        <div className="mt-4 pt-3 border-t border-blue-200 flex items-center justify-between flex-wrap gap-2">
-                          <p className="text-[10px] text-blue-500 font-semibold select-none flex items-center gap-1.5">
-                            <BookOpen className="w-3 h-3" />
-                            Source: SEBI ICDR Regulations 2018 (as amended) / Allied Statutes
-                          </p>
-                          {regData.sebiUrl && (
-                            <a
-                              href={regData.sebiUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-[10.5px] font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 border border-blue-300 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Open on SEBI.gov.in ↗
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                      )}
                     </div>
                   )}
 

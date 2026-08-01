@@ -8,8 +8,8 @@ import Wizard from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
-import CollaboratorBar from './components/CollaboratorBar';
 import { apiFetch } from './api';
+
 import { supabase } from './supabase';
 
 export default function App({ user, onSignOut }) {
@@ -31,10 +31,9 @@ export default function App({ user, onSignOut }) {
   const [lastSavedTime, setLastSavedTime] = useState(new Date().toLocaleTimeString());
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [pullingDigiLocker, setPullingDigiLocker] = useState(false);
-  const [isDigiLockerConnected, setIsDigiLockerConnected] = useState(false);
   const [scanningRedFlags, setScanningRedFlags] = useState(false);
   const [redFlagResults, setRedFlagResults] = useState(null);
+
 
   // Real-time Collaboration States
   const [collaborators, setCollaborators] = useState([]);
@@ -174,26 +173,7 @@ export default function App({ user, onSignOut }) {
     }
   };
 
-  const handleSimulateDigiLocker = async () => {
-    setPullingDigiLocker(true);
-    try {
-      const res = await authFetch('/api/dpi/digilocker/simulate', { method: 'POST' });
-      if (!res.ok) throw new Error('DigiLocker simulation failed');
-      const data = await res.json();
-      if (data.session) {
-        sessionDataRef.current = data.session;
-        setSessionData(data.session);
-      } else {
-        await fetchSession();
-      }
-      setIsDigiLockerConnected(true);
-      await validateSession();
-    } catch (err) {
-      console.error('DigiLocker simulation failed:', err);
-    } finally {
-      setPullingDigiLocker(false);
-    }
-  };
+
 
   const handleScanRedFlags = async () => {
     setScanningRedFlags(true);
@@ -771,6 +751,8 @@ export default function App({ user, onSignOut }) {
         {/* Content Container */}
         <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-gray-50">
           {loading ? (
+
+
             <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
               <div className="flex flex-col items-center gap-5">
                 <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-xl">
@@ -795,24 +777,21 @@ export default function App({ user, onSignOut }) {
                   generating={generating}
                   onNavigateTab={setActiveTab}
                   onPreFill={handlePreFill}
+                  onFormChange={handleFormChange}
                   lastSavedTime={lastSavedTime}
-                  onScanRedFlags={handleScanRedFlags}
-                  scanningRedFlags={scanningRedFlags}
-                  redFlagResults={redFlagResults}
                   apiFetch={authFetch}
                 />
               )}
+
 
               {activeTab === 'uploads' && (
                 <Uploader
                   sessionData={sessionData}
                   onUploadSuccess={handleUploadSuccess}
                   apiFetch={authFetch}
-                  onSimulateDigiLocker={handleSimulateDigiLocker}
-                  pullingDigiLocker={pullingDigiLocker}
-                  isDigiLockerConnected={isDigiLockerConnected}
                 />
               )}
+
 
               {['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab) && (
                 <Wizard
