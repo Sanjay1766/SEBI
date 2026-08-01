@@ -83,6 +83,15 @@ except ImportError:
     fetch_sebi_regulatory_alerts = None
 
 try:
+    from due_diligence import get_due_diligence_summary, generate_form_a_certificate
+    from peer_comparison import calculate_peer_comparison_and_valuation
+    from version_tracker import get_version_history_summary, create_version_snapshot
+    from exporter import create_efiling_package_zip
+except ImportError as err:
+    logger_tmp = logging.getLogger("sebi-ipo-generator")
+    logger_tmp.warning(f"Enterprise modules import warning: {err}")
+
+try:
     from groq import Groq
 except ImportError:
     Groq = None
@@ -960,6 +969,97 @@ def get_market_stats():
             "sebi_mandate": "Automated Investor Protection & ICDR Compliance Scan"
         }
     }
+
+
+# ── Enterprise Product Endpoints ──────────────────────────────────────────
+
+@app.get("/api/due_diligence")
+def get_due_diligence_api(user: dict = Depends(get_current_user)):
+    """GET /api/due_diligence — Returns SEBI Form A Certificate & Statutory Clearances Status."""
+    session = load_session(user["id"])
+    return get_due_diligence_summary(session)
+
+
+class PeerValuationRequest(BaseModel):
+    custom_peers: Optional[List[Dict[str, Any]]] = None
+    proposed_price_lower: Optional[float] = 65.0
+    proposed_price_upper: Optional[float] = 70.0
+
+@app.post("/api/peer_comparison")
+def post_peer_comparison_api(payload: PeerValuationRequest, user: dict = Depends(get_current_user)):
+    """POST /api/peer_comparison — Calculates SEBI Schedule VI Peer Accounting Ratios & Valuation metrics."""
+    session = load_session(user["id"])
+    return calculate_peer_comparison_and_valuation(
+        session,
+        custom_peers=payload.custom_peers,
+        proposed_price_lower=payload.proposed_price_lower or 65.0,
+        proposed_price_upper=payload.proposed_price_upper or 70.0
+    )
+
+
+@app.get("/api/version_tracker")
+def get_version_tracker_api(user: dict = Depends(get_current_user)):
+    """GET /api/version_tracker — Returns workspace revision history & active SEBI Observation query logs."""
+    session = load_session(user["id"])
+    return get_version_history_summary(session)
+
+
+class VersionSnapshotRequest(BaseModel):
+    version_tag: str
+    comment: str
+
+@app.post("/api/version_tracker/snapshot")
+def create_version_snapshot_api(payload: VersionSnapshotRequest, user: dict = Depends(get_current_user)):
+    """POST /api/version_tracker/snapshot — Creates a version snapshot of current DRHP workspace state."""
+    session = load_session(user["id"])
+    snapshot = create_version_snapshot(session, payload.version_tag, payload.comment)
+    history = session.get("version_history", [])
+    history.insert(0, snapshot)
+    session["version_history"] = history
+    save_session(user["id"], session)
+    return {"status": "success", "message": f"Version {payload.version_tag} saved successfully.", "snapshot": snapshot}
+
+
+class ApprovalRequest(BaseModel):
+    section_id: str
+    action: str # approve, reject, lock
+    role: Optional[str] = "merchant_banker"
+    notes: Optional[str] = ""
+
+@app.post("/api/approvals")
+def update_section_approval_api(payload: ApprovalRequest, user: dict = Depends(get_current_user)):
+    """POST /api/approvals — Sets section sign-off & lock status across workflow roles."""
+    session = load_session(user["id"])
+    approvals = session.get("approvals", {})
+    approvals[payload.section_id] = {
+        "status": payload.action,
+        "role": payload.role,
+        "notes": payload.notes,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    session["approvals"] = approvals
+    save_session(user["id"], session)
+    return {"status": "success", "approvals": approvals}
+
+
+@app.get("/api/export/package")
+def export_efiling_package_api(user: dict = Depends(get_current_user)):
+    """GET /api/export/package — Downloads complete e-Filing Zip bundle containing DRHP DOCX, Form A, and VC logs."""
+    session = load_session(user["id"])
+    company_name = session.get("form_data", {}).get("company_name", "Issuer_Company")
+    safe_name = "".join(c if c.isalnum() else "_" for c in company_name)
+    
+    temp_dir = tempfile.mkdtemp()
+    zip_filename = f"{safe_name}_SEBI_SME_IPO_Efiling_Package.zip"
+    zip_path = os.path.join(temp_dir, zip_filename)
+    
+    create_efiling_package_zip(session, zip_path)
+    
+    return FileResponse(
+        zip_path,
+        filename=zip_filename,
+        media_type="application/zip"
+    )
 
 if __name__ == "__main__":
     import uvicorn

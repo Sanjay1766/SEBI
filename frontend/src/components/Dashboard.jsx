@@ -7,8 +7,8 @@ import {
   ExternalLink, ScrollText
 } from 'lucide-react';
 import ComplianceScoreMeter from './ComplianceScoreMeter';
-
 import RegulatoryAlertBanner from './RegulatoryAlertBanner';
+import DueDiligenceManager from './DueDiligenceManager';
 import { lookupRegulation } from '../data/icdrRegulations';
 
 const SECTION_TO_TAB = {
@@ -42,6 +42,7 @@ const TAB_NAMES = {
 
 export default function Dashboard({ 
   validationResults, 
+  sessionData,
   onGenerate, 
   generating, 
   onNavigateTab, 
@@ -57,6 +58,25 @@ export default function Dashboard({
   const [expandedFixSteps, setExpandedFixSteps] = useState({});
   const [expandedRegs, setExpandedRegs] = useState({});
   const [expandedCoT, setExpandedCoT] = useState({});
+
+  const handleExportZipPackage = async () => {
+    try {
+      const fetcher = typeof apiFetch === 'function' ? apiFetch : window.fetch;
+      const res = await fetcher('/api/export/package');
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'SEBI_SME_IPO_Efiling_Package.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch (err) {
+      console.error('Failed to export e-filing package:', err);
+    }
+  };
 
   if (!validationResults) {
     return (
@@ -174,17 +194,28 @@ export default function Dashboard({
             </p>
           </div>
           <div className="space-y-2 mt-5">
-            <button
-              onClick={onGenerate}
-              disabled={generating}
-              className="w-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700 text-white rounded-xl py-2.5 px-4 text-[12.5px] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-accent disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generating ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
-              ) : (
-                <><FileDown className="w-4 h-4" /><span>Download Draft Prospectus (.docx)</span></>
-              )}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={onGenerate}
+                disabled={generating}
+                className="w-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700 text-white rounded-xl py-2.5 px-3 text-[12px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
+                ) : (
+                  <><FileDown className="w-4 h-4" /><span>DOCX Prospectus</span></>
+                )}
+              </button>
+
+              <button
+                onClick={handleExportZipPackage}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-2.5 px-3 text-[12px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              >
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span>e-Filing Bundle (.zip)</span>
+              </button>
+            </div>
+
             {onPreFill && (
               <button
                 onClick={() => onPreFill('complete')}
@@ -606,6 +637,15 @@ export default function Dashboard({
           })}
         </div>
       </div>
+
+      {/* ── Enterprise Product Modules (Live & Reactive) ── */}
+      {/* 1. Lead Manager Due Diligence & Form A Audit */}
+      <DueDiligenceManager
+        apiFetch={apiFetch}
+        validationResults={validationResults}
+        sessionData={sessionData}
+        onPreFill={onPreFill}
+      />
     </div>
   );
 }
