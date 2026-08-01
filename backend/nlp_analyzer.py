@@ -483,3 +483,91 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
             "scan_summary": "5 potential investor-protection risks detected across narrative sections."
         }
 
+
+def generate_sebi_risk_factors(
+
+    company_name: str = "Apex Technochem Limited",
+    industry_name: str = "Specialty Chemicals",
+    revenue: str = "45.0",
+    issue_size: str = "18.5",
+    business_overview: str = "",
+) -> Dict[str, Any]:
+    """Generates structured, company-specific Internal & External Risk Factors conforming to SEBI ICDR Schedule VI Part A."""
+    api_key = os.getenv("GROQ_API_KEY", "")
+    is_mock = not api_key or "your_groq_api_key" in api_key or Groq is None
+
+    if is_mock or not Groq:
+        internal = [
+            f"Raw Material Price Volatility: Key chemical input prices (accounting for ~64% of cost of sales for {company_name}) fluctuate based on global petrochemical crude trends. Unhedged price spikes could reduce EBITDA margin.",
+            f"Working Capital Intensity: {company_name} requires significant working capital. Trade receivables stood at ₹12.4 Cr as of FY23. Delays in customer payments may constrain operating cash flows.",
+            f"Customer Concentration: Top 5 clients account for ~42% of total operational revenue. Loss of key accounts or contract non-renewal would adversely affect business operations.",
+            f"Capacity Utilization & Environmental Compliance: Operations at Unit-II facility require active State Pollution Control Board (SPCB) consent-to-operate renewals. Non-compliance could lead to temporary disruption."
+        ]
+        external = [
+            "Regulatory & Environmental Norms: Changes in statutory Indian chemical manufacturing regulations (e.g. REACH/CPCB norms) may increase ongoing compliance expenditure.",
+            "Macroeconomic & Interest Rate Risk: Fluctuations in RBI repo rates may increase borrowing costs on existing working capital term loans.",
+            "Equity Market Volatility: Post-listing share prices on BSE SME / NSE Emerge platforms are subject to market liquidity and macroeconomic trends."
+        ]
+        combined = "### INTERNAL RISK FACTORS\n\n" + "\n\n".join(f"{idx+1}. {r}" for idx, r in enumerate(internal)) + "\n\n### EXTERNAL RISK FACTORS\n\n" + "\n\n".join(f"{idx+1}. {r}" for idx, r in enumerate(external))
+
+        return {
+            "status": "success",
+            "source": "fallback_generator",
+            "internal_risks": internal,
+            "external_risks": external,
+            "formatted_text": combined
+        }
+
+    try:
+        client = Groq(api_key=api_key)
+        prompt = f"""
+You are an expert SEBI IPO Legal Advisor. Generate company-specific, quantified Internal and External Risk Factors for an SME IPO prospectus under SEBI ICDR Chapter IX & Schedule VI Part A.
+
+Company: {company_name}
+Industry: {industry_name}
+Annual Revenue: ₹{revenue} Cr
+Proposed Issue Size: ₹{issue_size} Cr
+Business Context: {business_overview or 'Specialty chemical manufacturer with expanding plant capacities'}
+
+Instructions:
+1. Provide 4 specific Internal Risk Factors (operational, customer concentration, raw material, working capital, compliance).
+2. Provide 3 specific External Risk Factors (industry regulations, interest rates, equity market liquidity).
+3. Include realistic percentage figures, sensitivity estimates, and statutory references where relevant.
+4. DO NOT use generic boilerplate text.
+
+Return strictly a valid JSON object:
+{{
+  "internal_risks": ["Risk 1...", "Risk 2...", "Risk 3...", "Risk 4..."],
+  "external_risks": ["Risk 1...", "Risk 2...", "Risk 3..."],
+  "formatted_text": "Markdown formatted risk factors section for DRHP..."
+}}
+"""
+        completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
+            temperature=0.3,
+        )
+        content = completion.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+
+        parsed = json.loads(content.strip())
+        return {
+            "status": "success",
+            "source": "groq_llm_generator",
+            "internal_risks": parsed.get("internal_risks", []),
+            "external_risks": parsed.get("external_risks", []),
+            "formatted_text": parsed.get("formatted_text", "")
+        }
+    except Exception as e:
+        logger.error(f"Risk factor generation failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+

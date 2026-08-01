@@ -43,6 +43,43 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     }
   };
 
+
+  const [generatingRisks, setGeneratingRisks] = useState(false);
+
+
+  const handleGenerateRiskFactors = async () => {
+    setGeneratingRisks(true);
+    try {
+      const res = await apiFetch('/api/generate-risk-factors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_name: formData.company_name || 'Apex Technochem Limited',
+          industry_name: formData.industry_name || 'Specialty Chemicals',
+          revenue: String(formData.revenue_fy_latest || '45.0'),
+          issue_size: String(formData.issue_size || '18.5'),
+          business_overview: formData.business_model || ''
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.internal_risks && data.internal_risks.length > 0) {
+          const internalStr = data.internal_risks.map((r, i) => `${i + 1}. ${r}`).join('\n\n');
+          onChange('internal_risks', internalStr);
+        }
+        if (data.external_risks && data.external_risks.length > 0) {
+          const externalStr = data.external_risks.map((r, i) => `${i + 1}. ${r}`).join('\n\n');
+          onChange('external_risks', externalStr);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to generate SEBI risk factors:', err);
+    } finally {
+      setGeneratingRisks(false);
+    }
+  };
+
+
   const renderTooltip = (regText) => (
     <div className="group relative inline-block ml-1.5 cursor-pointer align-middle select-none">
       <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-accent-500 transition-colors" />
@@ -447,8 +484,43 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           {/* ─ DISCLOSURES ─ */}
           {activeTab === 'disclosures' && (
             <div>
+              {/* Auto-Generate Risk Factors AI Banner */}
+              <div className="mb-5 p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-purple-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <Sparkles className="w-5 h-5 text-amber-300" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-purple-950">SEBI ICDR Risk Factor AI Generator</h4>
+                    <p className="text-[11.5px] text-purple-700 mt-0.5 leading-relaxed">
+                      Auto-generate company-specific, quantified Internal and External Risk Factors conforming to Chapter IX & Schedule VI Part A.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateRiskFactors}
+                  disabled={generatingRisks}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  {generatingRisks ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-200" />
+                      <span>Drafting SEBI Risks...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>⚡ Auto-Generate Risk Factors</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
               {renderInput('internal_risks', 'Internal Risk Factors', 'textarea', 'SEBI ICDR Sch VI Part C — Specific company operational risks, customer dependencies, and key-person risks.', 'List key internal risks, e.g.:\n1. Dependency on key raw materials…\n2. Customer concentration risk…')}
               {renderInput('external_risks', 'External Risk Factors', 'textarea', 'SEBI ICDR Sch VI Part C — Sector legal rules, economic, currency, and market risks affecting the business.', 'List external risks, e.g.:\n1. Regulatory changes (pollution control norms)…\n2. Foreign exchange fluctuation…')}
+
 
               <SubGroupHeader icon={AlertTriangle} label="Litigation Disclosures" />
               {renderInput('litigations_company', 'Litigations Against the Issuer', 'textarea', 'SEBI ICDR Reg 250(1) — Pending corporate civil, criminal, or tax suits. Material litigation threshold applies.', 'e.g. No material litigations are pending against the Company as of date. — OR — describe pending cases.')}

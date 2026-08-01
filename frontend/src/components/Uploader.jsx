@@ -1,15 +1,12 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck } from 'lucide-react';
-import DigiLockerPanel from './DigiLockerPanel';
 
 export default function Uploader({
   sessionData,
   onUploadSuccess,
   apiFetch,
-  onSimulateDigiLocker,
-  pullingDigiLocker,
-  isDigiLockerConnected,
 }) {
+
   const [uploading, setUploading] = useState({
     financials: false,
     gst: false,
@@ -253,18 +250,12 @@ export default function Uploader({
       <div className="mb-2">
         <h2 className="text-xl font-display font-700 text-gray-900">Document Vault</h2>
         <p className="text-[12.5px] text-gray-400 font-medium mt-1 leading-normal">
-          Upload statutory certificates and financial documents manually or fetch directly via DigiLocker DPI.
+          Upload statutory certificates and financial documents for OCR extraction and compliance auditing.
         </p>
       </div>
 
-      {/* DigiLocker DPI Integration Panel */}
-      <DigiLockerPanel
-        onSimulatePull={onSimulateDigiLocker}
-        pulling={pullingDigiLocker}
-        isConnected={isDigiLockerConnected}
-      />
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
         {Object.entries(docConfig).map(([type, config]) => {
           const isUploading = uploading[type];
           const hasError = error[type];

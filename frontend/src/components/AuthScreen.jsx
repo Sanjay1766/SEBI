@@ -280,8 +280,9 @@ export default function AuthScreen({ authError }) {
                 <Layers className="w-5 h-5" />
               </div>
               <h3 className="text-sm font-bold text-white mb-1 tracking-tight">
-                DigiLocker & Multi-Doc Ingestion
+                OCR & Multi-Doc Ingestion
               </h3>
+
               <p className="text-xs text-slate-400 leading-relaxed">
                 OCR extracts data directly from PAN, GST, Financial Statements & Corporate Records.
               </p>
