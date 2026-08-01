@@ -790,6 +790,7 @@ export default function App({ user, onSignOut }) {
               {activeTab === 'dashboard' && (
                 <Dashboard
                   validationResults={validationResults}
+                  sessionData={sessionData}
                   onGenerate={handleGenerateProspectus}
                   generating={generating}
                   onNavigateTab={setActiveTab}
