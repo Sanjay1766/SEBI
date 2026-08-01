@@ -637,6 +637,17 @@ async def upload_document(
                     "network": blockchain_record.get("network"),
                 }
 
+            completion_blockchain = {
+                "enabled": BLOCKCHAIN_AVAILABLE,
+                "network": blockchain_record.get("network"),
+                "status": blockchain_record.get(
+                    "status", "disabled" if not BLOCKCHAIN_AVAILABLE else "unavailable"
+                ),
+                "transaction_hash": blockchain_record.get("tx_hash"),
+                "block_number": blockchain_record.get("block_number"),
+                "explorer_url": blockchain_record.get("explorer_url"),
+            }
+
             session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
             session["uploaded_files"].append(file_meta)
 
@@ -648,7 +659,8 @@ async def upload_document(
                     status="completed",
                     progress=100,
                     stage="Extraction complete! Workspace updated.",
-                    extracted_data=extracted or {}
+                    extracted_data=extracted or {},
+                    blockchain=completion_blockchain
                 )
         except Exception as err:
             logger.error(f"Job {job_id} failed: {err}")

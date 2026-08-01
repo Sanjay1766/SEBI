@@ -24,7 +24,7 @@ try:
     from paddleocr import PaddleOCR as _PaddleOCR
     import numpy as _np
     # Instantiate once at module load; model weights are cached to ~/.paddleocr
-    _paddle_ocr = _PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+    _paddle_ocr = _PaddleOCR(use_angle_cls=True, lang="en", show_log=True)
     _PADDLE_AVAILABLE = True
     logger.info("PaddleOCR initialised successfully.")
 except ImportError:

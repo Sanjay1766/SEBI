@@ -35,7 +35,7 @@ print('[Dockerfile] sentence-transformers model cached.')"
 # (~1 MB) models to /root/.paddleocr so the first OCR request starts instantly.
 RUN python -c "\
 from paddleocr import PaddleOCR; \
-PaddleOCR(use_angle_cls=True, lang='en', show_log=False); \
+PaddleOCR(use_angle_cls=True, lang='en', show_log=True); \
 print('[Dockerfile] PaddleOCR models cached.')"
 
 

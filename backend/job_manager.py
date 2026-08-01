@@ -29,6 +29,7 @@ class JobManager:
             "stage": "Validating uploaded document structure...",
             "doc_type": doc_type,
             "filename": filename,
+            "blockchain": None,
             "extracted_data": None,
             "error": None,
             "created_at": now,
@@ -46,6 +47,7 @@ class JobManager:
         progress: Optional[int] = None,
         stage: Optional[str] = None,
         extracted_data: Optional[Dict[str, Any]] = None,
+        blockchain: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None
     ) -> None:
         """Updates job progress, stage, status, or completion payload."""
@@ -61,6 +63,8 @@ class JobManager:
                 job["stage"] = stage
             if extracted_data is not None:
                 job["extracted_data"] = extracted_data
+            if blockchain is not None:
+                job["blockchain"] = blockchain
             if error is not None:
                 job["error"] = error
             job["updated_at"] = time.time()

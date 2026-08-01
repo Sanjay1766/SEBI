@@ -252,12 +252,22 @@ def anchor_document_hash(
         w3, contract, account = _get_web3_and_contract()
         hash_bytes = _hex_to_bytes32(doc_hash)
 
+        # Estimate gas dynamically with a fallback and buffer
+        try:
+            estimated_gas = contract.functions.anchorDocument(
+                hash_bytes, doc_type, sid
+            ).estimate_gas({"from": account.address})
+            gas_limit = int(estimated_gas * 1.15)
+        except Exception as est_err:
+            logger.warning(f"Gas estimation failed for anchorDocument, falling back to 120,000: {est_err}")
+            gas_limit = 120_000
+
         tx = contract.functions.anchorDocument(
             hash_bytes, doc_type, sid
         ).build_transaction({
             "from":     account.address,
             "nonce":    w3.eth.get_transaction_count(account.address),
-            "gas":      120_000,
+            "gas":      gas_limit,
             "gasPrice": w3.eth.gas_price,
         })
 
