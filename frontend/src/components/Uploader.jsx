@@ -172,55 +172,61 @@ export default function Uploader({
 
   const docConfig = {
     financials: {
-      title: 'Audited Financials',
+      title: 'Financial Statements',
       desc: 'Restated financial statements for the past 3 fiscal years (PDF/Image).',
       accentColor: 'text-blue-600',
-      accentBg: 'bg-blue-50',
-      accentBorder: 'border-blue-200',
-      iconBg: 'bg-blue-100',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: '📊',
       extractedKeys: {
-        revenue_fy_latest: 'Latest FY Revenue (Cr)',
-        pat_fy_latest: 'Latest FY PAT (Cr)',
-        net_worth: 'Company Net Worth (Cr)'
+        fy_years: 'Fiscal Years',
+        revenue_fy_latest: 'Latest Revenue',
+        pat_fy_latest: 'Latest Net Profit',
+        borrowings_latest: 'Outstanding Borrowings',
+        auditor_name: 'Statutory Auditor',
+        auditor_membership: 'Auditor Membership'
       }
     },
     gst: {
       title: 'GST Registration & Returns',
       desc: 'GSTR-3B summary or GSTIN Certificate.',
       accentColor: 'text-emerald-600',
-      accentBg: 'bg-emerald-50',
-      accentBorder: 'border-emerald-200',
-      iconBg: 'bg-emerald-100',
+      accentBg: 'bg-emerald-50/60',
+      accentBorder: 'border-emerald-200/80',
+      iconBg: 'bg-emerald-100/80',
       icon: '🧾',
       extractedKeys: {
-        gstin: 'GSTIN Registration No.',
-        company_name: 'Name on GST Certificate',
-        gst_annual_turnover: 'Annual GST Turnover (Cr)',
-        registration_date: 'GST Registration Date'
+        gstin: 'GSTIN Registration',
+        company_name: 'Taxpayer Legal Name',
+        gst_annual_turnover: 'GST Turnover',
+        registration_date: 'Registration Date',
+        filing_status: 'Filing Status'
       }
     },
     incorporation: {
-      title: 'Certificate of Incorporation',
-      desc: 'MCA Incorporation Cert or Memorandum of Association (MoA).',
-      accentColor: 'text-purple-600',
-      accentBg: 'bg-purple-50',
-      accentBorder: 'border-purple-200',
-      iconBg: 'bg-purple-100',
+      title: 'Incorporation Docs',
+      desc: 'Certificate of Incorporation Issued by Registrar of Companies (PDF/Image).',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: '📜',
       extractedKeys: {
-        cin: 'Corporate Identity No. (CIN)',
-        company_name: 'Name on Incorporation Cert',
-        incorporation_date: 'Date of Incorporation'
+        cin: 'RoC Corporate ID (CIN)',
+        company_name: 'RoC Registered Name',
+        incorporation_date: 'Incorporation Date',
+        registered_office: 'Registered Office Address',
+        company_type: 'Company Category'
       }
     },
     compliance: {
-      title: 'PAN Card & Tax Filings',
-      desc: 'Company PAN Card or ITR Verification Acknowledgement.',
+      title: 'PAN & TAN Licenses',
+      desc: 'Statutory company PAN, TAN or local operating licenses (PDF/Image).',
       accentColor: 'text-amber-600',
-      accentBg: 'bg-amber-50',
-      accentBorder: 'border-amber-200',
-      iconBg: 'bg-amber-100',
+      accentBg: 'bg-amber-50/60',
+      accentBorder: 'border-amber-200/80',
+      iconBg: 'bg-amber-100/80',
       icon: '🪪',
       extractedKeys: {
         pan: 'Company PAN No.',
@@ -411,7 +417,7 @@ export default function Uploader({
                 )}
 
                 {/* Extracted Properties */}
-                {isUploaded && showJson && (
+                {isUploaded && (
                   <div className={`mt-2 p-3.5 rounded-xl ${config.accentBg} border ${config.accentBorder} animate-fade-in-up`}>
                     <h4 className={`text-[9.5px] uppercase font-bold tracking-wider ${config.accentColor} mb-3 flex items-center gap-1.5`}>
                       <CheckCircle2 className="w-3 h-3" /> Extracted Properties

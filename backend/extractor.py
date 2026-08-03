@@ -32,13 +32,24 @@ except ImportError:
     _np = None
     _paddle_ocr = None
     _PADDLE_AVAILABLE = False
-    logger.warning("paddleocr not installed. OCR will be unavailable.")
+    logger.warning("paddleocr not installed. OCR fallback chain will check pytesseract.")
 except Exception as _paddle_init_err:
     _PaddleOCR = None
     _np = None
     _paddle_ocr = None
     _PADDLE_AVAILABLE = False
-    logger.warning(f"PaddleOCR failed to initialise: {_paddle_init_err}. OCR will be unavailable.")
+    logger.warning(f"PaddleOCR failed to initialise: {_paddle_init_err}. Checking pytesseract fallback.")
+
+try:
+    import pytesseract
+    from PIL import Image as _PILImage
+    _PYTESSERACT_AVAILABLE = True
+    logger.info("pytesseract initialised successfully.")
+except ImportError:
+    pytesseract = None
+    _PILImage = None
+    _PYTESSERACT_AVAILABLE = False
+    logger.warning("pytesseract not installed.")
 
 try:
     from groq import Groq
@@ -83,22 +94,23 @@ _GS_AVAILABLE = _ghostscript_available()
 
 
 def ocr_available() -> dict:
-    """Check whether PaddleOCR and Poppler (pdf2image) are available on this system."""
+    """Check whether PaddleOCR/pytesseract and Poppler (pdf2image) are available on this system."""
     import subprocess
-    result = {"ocr_available": False, "paddleocr_available": False, "poppler_available": False}
+    result = {"ocr_available": False, "paddleocr_available": False, "pytesseract_available": False, "poppler_available": False}
 
-    # Check PaddleOCR Python package
     if _PADDLE_AVAILABLE:
         result["ocr_available"] = True
         result["paddleocr_available"] = True
 
-    # Check Poppler (pdf2image needs pdftoppm from Poppler to convert PDF pages)
+    if _PYTESSERACT_AVAILABLE:
+        result["ocr_available"] = True
+        result["pytesseract_available"] = True
+
     try:
         proc = subprocess.run(
             ["pdftoppm", "-v"],
             capture_output=True, timeout=3
         )
-        # pdftoppm writes version to stderr
         if proc.returncode == 0 or b"Poppler" in proc.stderr or b"pdftoppm" in proc.stderr:
             result["poppler_available"] = True
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -129,24 +141,36 @@ def extract_raw_text(file_path: str) -> str:
             except Exception as e:
                 logger.error(f"pdfplumber extraction failed: {e}")
         
-        # Fallback to PaddleOCR if pdfplumber returned nothing (scanned / image-only PDF)
-        if not text.strip() and convert_from_path and _PADDLE_AVAILABLE:
-            logger.info("PDF appears to be scanned or image-only. Attempting PaddleOCR...")
-            try:
-                # Convert PDF pages to PIL images, then to NumPy arrays for PaddleOCR
-                images = convert_from_path(file_path)
-                for i, img in enumerate(images):
-                    logger.info(f"PaddleOCR — processing page {i+1}/{len(images)}...")
-                    img_array = _np.array(img)
-                    result = _paddle_ocr.ocr(img_array, cls=True)
-                    if result and result[0]:
-                        page_text = "\n".join(
-                            line[1][0] for line in result[0] if line and line[1]
-                        )
-                        text += page_text + "\n"
-                logger.info(f"PaddleOCR extracted {len(text)} characters from scanned PDF.")
-            except Exception as e:
-                logger.error(f"PaddleOCR extraction failed: {e}. Ensure paddleocr and Poppler are installed.")
+        # Fallback to OCR if pdfplumber returned nothing (scanned / image-only PDF)
+        if not text.strip() and convert_from_path:
+            if _PADDLE_AVAILABLE:
+                logger.info("PDF appears to be scanned or image-only. Attempting PaddleOCR...")
+                try:
+                    images = convert_from_path(file_path)
+                    for i, img in enumerate(images):
+                        logger.info(f"PaddleOCR — processing page {i+1}/{len(images)}...")
+                        img_array = _np.array(img)
+                        result = _paddle_ocr.ocr(img_array, cls=True)
+                        if result and result[0]:
+                            page_text = "\n".join(
+                                line[1][0] for line in result[0] if line and line[1]
+                            )
+                            text += page_text + "\n"
+                    logger.info(f"PaddleOCR extracted {len(text)} characters from scanned PDF.")
+                except Exception as e:
+                    logger.error(f"PaddleOCR extraction failed: {e}")
+            
+            if not text.strip() and _PYTESSERACT_AVAILABLE:
+                logger.info("Attempting pytesseract OCR on scanned PDF...")
+                try:
+                    images = convert_from_path(file_path)
+                    for i, img in enumerate(images):
+                        page_text = pytesseract.image_to_string(img)
+                        if page_text:
+                            text += page_text + "\n"
+                    logger.info(f"pytesseract extracted {len(text)} characters from scanned PDF.")
+                except Exception as e:
+                    logger.error(f"pytesseract OCR extraction failed: {e}")
                 
     elif file_ext in [".png", ".jpg", ".jpeg"]:
         if _PADDLE_AVAILABLE:
@@ -161,8 +185,17 @@ def extract_raw_text(file_path: str) -> str:
                 logger.info(f"PaddleOCR extracted {len(text)} characters from image.")
             except Exception as e:
                 logger.error(f"PaddleOCR image extraction failed: {e}")
-        else:
-            logger.warning("PaddleOCR is not available for image parsing.")
+        
+        if not text.strip() and _PYTESSERACT_AVAILABLE:
+            try:
+                from PIL import Image
+                text = pytesseract.image_to_string(Image.open(file_path))
+                logger.info(f"pytesseract extracted {len(text)} characters from image.")
+            except Exception as e:
+                logger.error(f"pytesseract image extraction failed: {e}")
+        
+        if not text.strip():
+            logger.warning("No OCR engine was available or succeeded for image parsing.")
             
     else:
         # For text or csv files, read directly
