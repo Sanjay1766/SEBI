@@ -12,11 +12,7 @@ from docx.oxml.ns import nsdecls, qn
 # Configure logger
 logger = logging.getLogger("sebi-ipo-generator.generator")
 
-# Try to import groq for narrative generation
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
+from llm_client import get_llm_client
 
 # Custom XML styling helpers for python-docx (shading, borders)
 def set_cell_background(cell, hex_color: str):
@@ -142,15 +138,14 @@ def generate_deterministic_section(section_key: str, session: Dict[str, Any]) ->
 
 
 def generate_narrative_text(section_id: str, data: Dict[str, Any], prompt_desc: str) -> Dict[str, Any]:
-    """Generates section narrative via Groq LLM with HallucinationGuard retries & template fallback."""
+    """Generates section narrative via the configured LLM with HallucinationGuard retries & template fallback."""
     from hallucination_guard import HallucinationGuard
 
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key
+    llm = get_llm_client()
     guard = HallucinationGuard()
 
-    # If mock mode or Groq missing -> deterministic fallback
-    if is_mock or not Groq:
+    # If no LLM provider is configured -> deterministic fallback
+    if not llm.is_available():
         tmpl = generate_deterministic_section(section_id, data)
         return {
             "section": section_id,
@@ -167,7 +162,6 @@ def generate_narrative_text(section_id: str, data: Dict[str, Any], prompt_desc: 
     max_attempts = 3
     last_violations = []
 
-    client = Groq(api_key=api_key)
     company_name = data.get("company_name", "[Company Name]")
 
     while attempt < max_attempts:
@@ -185,12 +179,10 @@ def generate_narrative_text(section_id: str, data: Dict[str, Any], prompt_desc: 
             Keep under 250 words. Formal corporate tone.{extra_prompt}
             """
 
-            chat = client.chat.completions.create(
+            output_text = llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
                 temperature=0.3,
             )
-            output_text = chat.choices[0].message.content.strip()
 
             # Run HallucinationGuard
             check_res = guard.check(output_text, data)
@@ -209,7 +201,7 @@ def generate_narrative_text(section_id: str, data: Dict[str, Any], prompt_desc: 
                 last_violations = check_res.violations
                 logger.warning(f"HallucinationGuard attempt {attempt} found violations: {last_violations}")
         except Exception as e:
-            logger.error(f"Groq generation failed attempt {attempt}: {e}")
+            logger.error(f"LLM ({llm.provider}) generation failed attempt {attempt}: {e}")
             break
 
     # Fallback to template after 3 attempts or exception

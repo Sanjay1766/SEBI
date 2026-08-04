@@ -27,6 +27,7 @@ import os
 import json
 import hashlib
 import logging
+import time
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("sebi-ipo-generator.blockchain")
@@ -209,6 +210,140 @@ def _get_web3_and_contract():
     return w3, contract, account
 
 
+# ── Dynamic gas pricing ───────────────────────────────────────────────────────
+# Gas limit and gas price are both derived from live network conditions at
+# send time rather than fixed constants — a hardcoded gas limit sized for a
+# short company name will underflow on a longer one, and a hardcoded (or
+# unbuffered) gas price can leave a transaction stuck as "underpriced" during
+# network congestion.
+
+GAS_LIMIT_BUFFER_PCT = 0.25  # +25% safety margin over the raw eth_estimateGas result
+GAS_PRICE_BUFFER_PCT = 0.20  # +20% over the network's current suggested gas price
+
+# Used only if eth_estimateGas itself fails (e.g. RPC hiccup) — a conservative
+# ceiling, not the per-call gas actually used, which is now estimated live.
+_FALLBACK_GAS_LIMIT = {
+    "anchorDocument": 150_000,
+    "sealProspectus": 180_000,
+    "logAudit": 130_000,
+}
+
+
+def _estimate_gas_limit(fn_call, from_address: str, fn_name: str) -> int:
+    """Estimates gas for a specific contract call and adds a safety margin.
+
+    Calling eth_estimateGas per-transaction (instead of one fixed limit for
+    every call) means gas scales correctly with actual input size — e.g.
+    sealProspectus with a long company_name string costs more gas than one
+    with a short name, and a static limit sized for the short case would
+    revert as "out of gas" on the long one.
+    """
+    try:
+        raw_estimate = fn_call.estimate_gas({"from": from_address})
+        return int(raw_estimate * (1 + GAS_LIMIT_BUFFER_PCT))
+    except Exception as e:
+        fallback = _FALLBACK_GAS_LIMIT.get(fn_name, 150_000)
+        logger.warning(
+            f"eth_estimateGas failed for {fn_name} ({e}); using fallback ceiling {fallback}."
+        )
+        return fallback
+
+
+def _dynamic_gas_price(w3) -> int:
+    """Returns the network's current suggested gas price plus a buffer.
+
+    Polygon gas prices fluctuate with network load; querying eth_gasPrice at
+    send time (instead of a fixed value) tracks real conditions, and the
+    buffer absorbs the gap between quote time and block inclusion so
+    transactions don't get stuck as underpriced.
+    """
+    base = w3.eth.gas_price
+    return int(base * (1 + GAS_PRICE_BUFFER_PCT))
+
+
+# ── Transient RPC error retry ─────────────────────────────────────────────────
+# Public RPC endpoints (the free tier used for Polygon Amoy) intermittently
+# return 429 (rate limited), 5xx, or drop the connection under load — none of
+# these mean the transaction itself is invalid. Retrying the whole build→sign→
+# send→confirm sequence (with a fresh connection, nonce, and gas quote each
+# attempt) can turn a transient RPC hiccup into a brief delay instead of a
+# permanently unanchored document — but blockchain anchoring is a best-effort
+# side-feature on top of the core upload/extraction flow (already wrapped in
+# try/except by callers), not something worth making a user wait on. Default
+# is a single attempt with no retry; raise BLOCKCHAIN_MAX_RETRIES in .env if
+# you're on a more reliable (e.g. paid) RPC endpoint and want retries back.
+MAX_TX_RETRIES = max(1, int(os.getenv("BLOCKCHAIN_MAX_RETRIES", "1")))
+RETRY_BACKOFF_BASE_SECONDS = float(os.getenv("BLOCKCHAIN_RETRY_BACKOFF_SECONDS", "2"))
+
+_TRANSIENT_ERROR_MARKERS = (
+    "429", "too many requests",
+    "500", "internal server error",
+    "502", "bad gateway",
+    "503", "service unavailable",
+    "504", "gateway timeout",
+    "timed out", "timeout",
+    "connection", "cannot connect to rpc",
+    "econnreset", "connection reset",
+)
+
+
+def _is_transient_rpc_error(exc: Exception) -> bool:
+    """Heuristic: retry on rate-limit/connectivity/server errors, not on
+    definitive on-chain rejections (e.g. insufficient funds, reverted call)."""
+    return any(marker in str(exc).lower() for marker in _TRANSIENT_ERROR_MARKERS)
+
+
+def _build_sign_send_wait(build_fn_call, cfg: Dict[str, str], fn_name: str):
+    """
+    Builds, signs, sends, and confirms a contract transaction, retrying the
+    entire sequence on transient RPC errors with exponential backoff.
+
+    Args:
+        build_fn_call : callable(contract) -> bound ContractFunction to invoke
+                        (e.g. lambda contract: contract.functions.anchorDocument(...))
+        cfg           : config dict from _get_config() (needs 'private_key')
+        fn_name       : contract function name, used for gas fallback lookup + logging
+
+    Returns (w3, tx_hex, receipt). Raises the last exception if every attempt
+    fails or a non-transient error occurs.
+
+    Note: a fresh nonce and gas quote are fetched on every retry since network
+    state may have advanced between attempts. If a receipt-wait specifically
+    times out after the transaction was already broadcast, a retry sends a
+    second, independent transaction rather than re-checking the first — an
+    accepted tradeoff for this anchoring use case (idempotent-in-effect: the
+    contract just records another anchor of the same hash) over the added
+    complexity of tracking in-flight tx hashes across retries.
+    """
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, MAX_TX_RETRIES + 1):
+        try:
+            w3, contract, account = _get_web3_and_contract()
+            fn_call = build_fn_call(contract)
+            tx = fn_call.build_transaction({
+                "from":     account.address,
+                "nonce":    w3.eth.get_transaction_count(account.address),
+                "gas":      _estimate_gas_limit(fn_call, account.address, fn_name),
+                "gasPrice": _dynamic_gas_price(w3),
+            })
+            signed  = w3.eth.account.sign_transaction(tx, cfg["private_key"])
+            tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=90)
+            return w3, w3.to_hex(tx_hash), receipt
+        except Exception as e:
+            last_exc = e
+            if attempt < MAX_TX_RETRIES and _is_transient_rpc_error(e):
+                wait_s = RETRY_BACKOFF_BASE_SECONDS ** attempt
+                logger.warning(
+                    f"{fn_name} attempt {attempt}/{MAX_TX_RETRIES} hit a transient RPC "
+                    f"error ({e}); retrying in {wait_s}s..."
+                )
+                time.sleep(wait_s)
+                continue
+            raise
+    raise last_exc  # pragma: no cover — loop always returns or raises above
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def anchor_document_hash(
@@ -249,23 +384,11 @@ def anchor_document_hash(
         }
 
     try:
-        w3, contract, account = _get_web3_and_contract()
         hash_bytes = _hex_to_bytes32(doc_hash)
-
-        tx = contract.functions.anchorDocument(
-            hash_bytes, doc_type, sid
-        ).build_transaction({
-            "from":     account.address,
-            "nonce":    w3.eth.get_transaction_count(account.address),
-            "gas":      120_000,
-            "gasPrice": w3.eth.gas_price,
-        })
-
-        signed  = w3.eth.account.sign_transaction(tx, cfg["private_key"])
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=90)
-
-        tx_hex = w3.to_hex(tx_hash)
+        w3, tx_hex, receipt = _build_sign_send_wait(
+            lambda contract: contract.functions.anchorDocument(hash_bytes, doc_type, sid),
+            cfg, "anchorDocument",
+        )
         logger.info(
             f"[LIVE] Document anchored on {cfg['network_name']} | "
             f"type={doc_type} | block={receipt.blockNumber} | tx={tx_hex[:18]}..."
@@ -325,23 +448,11 @@ def seal_prospectus(
         }
 
     try:
-        w3, contract, account = _get_web3_and_contract()
         hash_bytes = _hex_to_bytes32(draft_hash)
-
-        tx = contract.functions.sealProspectus(
-            hash_bytes, sid, company_name
-        ).build_transaction({
-            "from":     account.address,
-            "nonce":    w3.eth.get_transaction_count(account.address),
-            "gas":      120_000,
-            "gasPrice": w3.eth.gas_price,
-        })
-
-        signed  = w3.eth.account.sign_transaction(tx, cfg["private_key"])
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=90)
-
-        tx_hex = w3.to_hex(tx_hash)
+        w3, tx_hex, receipt = _build_sign_send_wait(
+            lambda contract: contract.functions.sealProspectus(hash_bytes, sid, company_name),
+            cfg, "sealProspectus",
+        )
         logger.info(
             f"[LIVE] Prospectus sealed on {cfg['network_name']} | "
             f"company={company_name} | block={receipt.blockNumber} | tx={tx_hex[:18]}..."
@@ -406,23 +517,11 @@ def log_audit_snapshot(
         }
 
     try:
-        w3, contract, account = _get_web3_and_contract()
         hash_bytes = _hex_to_bytes32(snap_hash)
-
-        tx = contract.functions.logAudit(
-            sid, hash_bytes, checks_run, checks_passed
-        ).build_transaction({
-            "from":     account.address,
-            "nonce":    w3.eth.get_transaction_count(account.address),
-            "gas":      100_000,
-            "gasPrice": w3.eth.gas_price,
-        })
-
-        signed  = w3.eth.account.sign_transaction(tx, cfg["private_key"])
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=90)
-
-        tx_hex = w3.to_hex(tx_hash)
+        w3, tx_hex, receipt = _build_sign_send_wait(
+            lambda contract: contract.functions.logAudit(sid, hash_bytes, checks_run, checks_passed),
+            cfg, "logAudit",
+        )
         logger.info(
             f"[LIVE] Audit logged on {cfg['network_name']} | "
             f"checks={checks_run}/{checks_passed} | block={receipt.blockNumber}"

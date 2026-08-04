@@ -7,11 +7,6 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger("sebi-ipo-generator.consistency_checker")
 
 try:
-    from groq import Groq
-except ImportError:
-    Groq = None
-
-try:
     from nlp_analyzer import nlp_semantic_match
 except ImportError:
     nlp_semantic_match = None

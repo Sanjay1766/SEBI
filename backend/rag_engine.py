@@ -2,7 +2,7 @@
 rag_engine.py — SEBI ICDR Semantic RAG & ChromaDB Vector Retrieval Engine
 ==========================================================================
 Provides vector retrieval, statutory citation matching, confidence scoring,
-ChromaDB persistent collection indexing, and Groq LLM context synthesis over
+ChromaDB persistent collection indexing, and LLM context synthesis over
 the SEBI ICDR Chapter IX regulation corpus and uploaded SEBI PDFs.
 """
 
@@ -13,11 +13,7 @@ import math
 import logging
 from typing import Dict, Any, List, Tuple
 from sebi_icdr_corpus import SEBI_ICDR_CORPUS
-
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
+from llm_client import get_llm_client
 
 try:
     import chromadb
@@ -32,7 +28,7 @@ class SEBIRAGEngine:
     """
     RAG Engine featuring ChromaDB persistent vector storage,
     PDF chunking pipeline, cosine/TF-IDF vector retrieval,
-    and Groq Llama-3.3 context synthesis.
+    and LLM context synthesis via the configured provider (llm_client.py).
     """
     def __init__(self, chroma_dir: str = "./chroma_db"):
         self.corpus = SEBI_ICDR_CORPUS
@@ -184,7 +180,7 @@ class SEBIRAGEngine:
         Executes complete RAG pipeline:
         1. Vector similarity search over ChromaDB & SEBI ICDR Corpus.
         2. Retrieves statutory citations & confidence scores.
-        3. Synthesizes legally authoritative answer via Groq Llama-3.3.
+        3. Synthesizes a legally authoritative answer via the configured LLM provider.
         """
         retrieved = self.retrieve_relevant_regulations(query, top_k=3)
         
@@ -216,12 +212,11 @@ class SEBIRAGEngine:
         form_data = (session_data or {}).get("form_data", {})
         company_name = form_data.get("company_name", "Your Company")
 
-        api_key = os.getenv("GROQ_API_KEY", "")
-        is_mock = not api_key or "your_groq_api_key" in api_key
+        llm = get_llm_client()
 
         engine_name = "ChromaDB + SEBI ICDR Vector RAG" if self.collection else "SEBI ICDR Vector RAG"
 
-        if is_mock or not Groq:
+        if not llm.is_available():
             top_cit = citations[0] if citations else None
             if top_cit:
                 answer = f"According to **{top_cit['regulation_no']}** ({top_cit['citation']}): {top_cit['text']}\n\n*Statutory Guidance for {company_name}*: Draft prospectus disclosures must strictly comply with these SEBI ICDR Chapter IX requirements."
@@ -236,7 +231,6 @@ class SEBIRAGEngine:
             }
 
         try:
-            client = Groq(api_key=api_key)
             prompt = f"""
 You are SEBI IPO Copilot, an expert Indian capital markets legal auditor advising merchant bankers and company founders.
 Answer the user's question using the retrieved SEBI ICDR statutory regulations below.
@@ -255,21 +249,19 @@ Instructions:
 2. Explicitly cite SEBI ICDR Regulations (e.g. Reg. 236(1), Reg. 229) in bold text.
 3. Be clear, practical, and founder-friendly.
 """
-            chat_completion = client.chat.completions.create(
+            answer = llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
                 temperature=0.2,
             )
-            answer = chat_completion.choices[0].message.content.strip()
 
             return {
                 "answer": answer,
                 "retrieved_citations": citations,
                 "overall_confidence": max_confidence,
-                "rag_engine": f"{engine_name} + Groq Llama-3.3"
+                "rag_engine": f"{engine_name} + {llm.provider}:{llm.model}"
             }
         except Exception as e:
-            logger.error(f"Groq RAG synthesis error: {e}")
+            logger.error(f"LLM ({llm.provider}) RAG synthesis error: {e}")
             top_cit = citations[0] if citations else None
             answer = f"According to **{top_cit['regulation_no']}**: {top_cit['text']}" if top_cit else "Consult SEBI ICDR Regulations Chapter IX."
             return {
