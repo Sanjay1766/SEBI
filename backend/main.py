@@ -5,6 +5,8 @@ import tempfile
 import uuid
 import asyncio
 import time
+import hashlib
+from datetime import datetime
 from collections import defaultdict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -90,7 +92,7 @@ try:
     from due_diligence import get_due_diligence_summary, generate_form_a_certificate
     from peer_comparison import calculate_peer_comparison_and_valuation
     from version_tracker import get_version_history_summary, create_version_snapshot
-    from exporter import create_efiling_package_zip, create_export_zip_bundle
+    from exporter import create_export_zip_bundle
 except ImportError as err:
     logger.warning(f"Enterprise modules import warning: {err}")
 
@@ -107,10 +109,7 @@ except ImportError as err:
 audit_logger = AuditLog()
 cert_store = CertificationStore()
 
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
+from llm_client import get_llm_client
 
 app = FastAPI(title="SEBI SME IPO Draft-Generator API")
 
@@ -125,7 +124,7 @@ else:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -295,7 +294,7 @@ class CopilotPayload(BaseModel):
 
 class GenerateRiskFactorsPayload(BaseModel):
 
-    company_name: Optional[str] = "Apex Technochem Limited"
+    company_name: Optional[str] = "Your Company"
     industry_name: Optional[str] = "Specialty Chemicals"
     revenue: Optional[str] = "45.0"
     issue_size: Optional[str] = "18.5"
@@ -357,10 +356,9 @@ def copilot_assistant(payload: CopilotPayload, user: Dict[str, Any] = Depends(ge
     schema = load_schema()
     validation = validate_session_data(session, schema)
     
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key
-    
-    if is_mock or not Groq:
+    llm = get_llm_client()
+
+    if not llm.is_available():
         user_msg = payload.message.lower()
         if "audit" in user_msg or "scan" in user_msg or "report" in user_msg:
             conflicts = [inc['title'] for inc in validation.get("inconsistencies", [])]
@@ -378,27 +376,24 @@ def copilot_assistant(payload: CopilotPayload, user: Dict[str, Any] = Depends(ge
             return {
                 "reply": "🤖 (Offline Demo Mode)\n\nI am the SEBI SME IPO Compliance Copilot. Ask me to 'audit my data', 'draft my risks', or explain Chapter IX regulations like promoter shareholding requirements."
             }
-            
+
     try:
-        client = Groq(api_key=api_key)
         system_prompt = build_copilot_system_prompt(session, validation)
-        
+
         messages = [{"role": "system", "content": system_prompt}]
         for item in payload.history[-6:]:
             messages.append({"role": item.role, "content": item.content})
-        
+
         messages.append({"role": "user", "content": payload.message})
-        
-        chat_completion = client.chat.completions.create(
+
+        reply = llm.complete(
             messages=messages,
-            model="llama-3.3-70b-versatile",
             temperature=0.5,
-            max_tokens=800
+            max_tokens=800,
         )
-        reply = chat_completion.choices[0].message.content.strip()
         return {"reply": reply}
     except Exception as e:
-        logger.error(f"Copilot API failed: {e}. Falling back to offline simulation.")
+        logger.error(f"Copilot API failed ({llm.provider}): {e}. Falling back to offline simulation.")
         user_msg = payload.message.lower()
         if "audit" in user_msg or "scan" in user_msg or "report" in user_msg:
             conflicts = [inc['title'] for inc in validation.get("inconsistencies", [])]
@@ -422,9 +417,8 @@ def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_u
     field_key = payload.field_key
     form_data = payload.form_data
     
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key
-    
+    llm = get_llm_client()
+
     company_name = form_data.get("company_name", "[Company Name]")
     industry_name = form_data.get("industry_name", "the sector")
     products = form_data.get("products_services", "primary products")
@@ -460,11 +454,10 @@ def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_u
         "material_contracts_desc": "1. Tripartite Agreement with Lead Manager and Registrar.\n2. Underwriting Agreement with Lead Manager.\n3. Registered Office warehouse lease agreement."
     }
     
-    if is_mock or not Groq:
+    if not llm.is_available():
         return {"draft": local_drafts.get(field_key, "Offline Auto-Draft placeholder text.")}
-        
+
     try:
-        client = Groq(api_key=api_key)
         prompt = f"""
         You are a SEBI merchant banker drafting an SME IPO Prospectus section.
         Draft the narrative/content for the field '{field_key}' ({desc}) for the company '{company_name}'.
@@ -484,16 +477,14 @@ def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_u
         
         Draft:
         """
-        chat_completion = client.chat.completions.create(
+        draft_text = llm.complete(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
             temperature=0.4,
-            max_tokens=300
+            max_tokens=300,
         )
-        draft_text = chat_completion.choices[0].message.content.strip()
         return {"draft": draft_text}
     except Exception as e:
-        logger.error(f"Auto-draft failed for {field_key}: {e}. Returning fallback template.")
+        logger.error(f"Auto-draft failed for {field_key} ({llm.provider}): {e}. Returning fallback template.")
         return {"draft": local_drafts.get(field_key, "Auto-draft fallback placeholder.")}
 
 @app.get("/api/ocr_status")
@@ -559,7 +550,7 @@ def get_document_verifiable_credential(doc_type: str, user: Dict[str, Any] = Dep
     uploaded_files = session.get("uploaded_files", [])
     target_file = next((f for f in uploaded_files if f.get("type") == doc_type), None)
     
-    company_name = session.get("form_data", {}).get("company_name", "Apex Technochem Limited")
+    company_name = session.get("form_data", {}).get("company_name", "Your Company")
     doc_hash = target_file.get("doc_hash", "0x" + hashlib.sha256(doc_type.encode()).hexdigest()) if target_file else "0x" + hashlib.sha256(doc_type.encode()).hexdigest()
     filename = target_file.get("filename", f"{doc_type}_document.pdf") if target_file else f"{doc_type}_document.pdf"
     
@@ -589,7 +580,7 @@ def generate_risk_factors_endpoint(payload: GenerateRiskFactorsPayload, user: Di
     session = load_session(user["id"])
     form_data = session.get("form_data", {})
     return generate_sebi_risk_factors(
-        company_name=payload.company_name or form_data.get("company_name", "Apex Technochem Limited"),
+        company_name=payload.company_name or form_data.get("company_name", "Your Company"),
         industry_name=payload.industry_name or form_data.get("industry_name", "Specialty Chemicals"),
         revenue=payload.revenue or str(form_data.get("revenue_fy_latest", "45.0")),
         issue_size=payload.issue_size or str(form_data.get("issue_size", "18.5")),
@@ -645,21 +636,34 @@ async def upload_document(
         try:
             if job_manager:
                 job_manager.update_job(job_id, progress=20, stage="Validating document integrity & computing SHA-256 hash...")
-            
+
             # ── Blockchain anchoring ──
+            # Runs in a worker thread: anchor_document_hash can block for up to
+            # ~90s per attempt (wait_for_transaction_receipt), further multiplied
+            # by retry backoff on a flaky RPC. Calling it directly here (as before)
+            # blocked the single-threaded asyncio event loop for that whole time —
+            # stalling every other request on the server, not just this upload.
             blockchain_record = {}
             doc_hash = None
             if BLOCKCHAIN_AVAILABLE:
                 try:
                     doc_hash = compute_sha256_file(file_path)
-                    blockchain_record = anchor_document_hash(doc_hash=doc_hash, doc_type=doc_type)
+                    blockchain_record = await asyncio.to_thread(
+                        anchor_document_hash, doc_hash=doc_hash, doc_type=doc_type
+                    )
                 except Exception as bc_err:
                     logger.warning(f"Blockchain anchoring skipped: {bc_err}")
 
             if job_manager:
                 job_manager.update_job(job_id, progress=45, stage="Performing OCR text extraction & tabular analysis...")
-            
-            extracted = await asyncio.to_thread(extract_document_data, file_path, doc_type)
+
+            def on_extraction_progress(pct: int, stage_msg: str):
+                if job_manager:
+                    job_manager.update_job(job_id, progress=pct, stage=stage_msg)
+
+            extracted = await asyncio.to_thread(
+                extract_document_data, file_path, doc_type, on_extraction_progress
+            )
 
             if job_manager:
                 job_manager.update_job(job_id, progress=75, stage="Structuring entities & SEBI ICDR compliance fields...")
@@ -685,7 +689,7 @@ async def upload_document(
             # Issue W3C Verifiable Credential
             if issue_document_vc and doc_hash:
                 try:
-                    company_name = session.get("form_data", {}).get("company_name", "Apex Technochem Limited")
+                    company_name = session.get("form_data", {}).get("company_name", "Your Company")
                     w3c_vc = issue_document_vc(
                         doc_type=doc_type,
                         doc_hash=doc_hash,
@@ -772,9 +776,10 @@ async def generate_draft(user: Dict[str, Any] = Depends(get_current_user)):
                     docx_bytes = f.read()
                 draft_hash = compute_sha256_bytes(docx_bytes)
                 company_name = session.get("form_data", {}).get("company_name", "Unknown Company")
-                blockchain_seal = seal_prospectus(
-                    draft_hash=draft_hash,
-                    company_name=company_name,
+                # Off the event loop: seal_prospectus can block for up to ~90s
+                # per attempt (wait_for_transaction_receipt) plus retry backoff.
+                blockchain_seal = await asyncio.to_thread(
+                    seal_prospectus, draft_hash=draft_hash, company_name=company_name
                 )
                 logger.info(
                     f"Prospectus sealed [{blockchain_seal.get('mode','?')}] "
@@ -988,17 +993,15 @@ def nlp_explain_flag(payload: ExplainRequest):
     else:
         explanation = details.get("description", "Please review the document inconsistency with your compliance auditor.")
 
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key or Groq is None
+    llm = get_llm_client()
 
     recommendations = details.get("fix_steps") or [
         "Cross-check statutory certificates with MCA/GST portals.",
         "Update DRHP disclosure tables before submitting to lead merchant banker."
     ]
 
-    if not is_mock and Groq:
+    if llm.is_available():
         try:
-            client = Groq(api_key=api_key)
             prompt = f"""
             Explain this SEBI compliance error to an SME business founder in simple, non-technical English:
             Error Title: {payload.title or rule_name}
@@ -1006,14 +1009,12 @@ def nlp_explain_flag(payload: ExplainRequest):
 
             Provide a 2-3 sentence clear explanation of why this matters for SEBI approval.
             """
-            chat = client.chat.completions.create(
+            explanation = llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
                 temperature=0.3,
             )
-            explanation = chat.choices[0].message.content.strip()
         except Exception as e:
-            logger.warning(f"Groq explain failed: {e}")
+            logger.warning(f"LLM ({llm.provider}) explain failed: {e}")
 
     return {
         "status": "success",
@@ -1109,25 +1110,6 @@ def update_section_approval_api(payload: ApprovalRequest, user: dict = Depends(g
     save_session(user["id"], session)
     return {"status": "success", "approvals": approvals}
 
-
-@app.get("/api/export/package")
-def export_efiling_package_api(user: dict = Depends(get_current_user)):
-    """GET /api/export/package — Downloads complete e-Filing Zip bundle containing DRHP DOCX, Form A, and VC logs."""
-    session = load_session(user["id"])
-    company_name = session.get("form_data", {}).get("company_name", "Issuer_Company")
-    safe_name = "".join(c if c.isalnum() else "_" for c in company_name)
-    
-    temp_dir = tempfile.mkdtemp()
-    zip_filename = f"{safe_name}_SEBI_SME_IPO_Efiling_Package.zip"
-    zip_path = os.path.join(temp_dir, zip_filename)
-    
-    create_efiling_package_zip(session, zip_path)
-    
-    return FileResponse(
-        zip_path,
-        filename=zip_filename,
-        media_type="application/zip"
-    )
 
 
 # ── SECTION 2c: Hallucination Guard Validation Endpoint ───────────────────────

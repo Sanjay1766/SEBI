@@ -47,7 +47,7 @@ PS_CLAUSES = [
     {
         "id": "PS-6",
         "sebi_words": "substantially complete draft",
-        "discharged_by": "CoverageScore engine evaluating 60+ SEBI ICDR requirements",
+        "discharged_by": "CoverageScore engine evaluating named SEBI ICDR requirements (see coverage.SEBI_REQUIREMENTS)",
         "proof": "Live coverage score display; 'Substantially Complete' badge awarded upon achieving >= 80% completeness score.",
         "status": "complete"
     },
@@ -76,10 +76,10 @@ PS_CLAUSES = [
     {
         "id": "PS-10",
         "sebi_words": "all material disclosure requirements under SEBI's SME IPO framework",
-        "discharged_by": "60+ versioned SEBI ICDR requirements in coverage.py with clause references",
+        "discharged_by": "Named, individually-clause-referenced SEBI ICDR requirements in coverage.py",
         "proof": "coverage_report.json generated in ZIP bundle citing exact statutory clause for every gap.",
         "status": "partial",
-        "caveat": "Curated 60+ core statutory disclosures; specialized auditor-only Annexures require external CA sign-off."
+        "caveat": "Curated core statutory disclosures only; specialized auditor-only Annexures require external CA sign-off."
     },
     {
         "id": "PS-11",
