@@ -352,13 +352,10 @@ def nlp_analyze_full_session(session_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# Realistic demo fallback flags for SME IPO Prospectus Narratives
-FALLBACK_RED_FLAGS = []
-
 def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
     """Scans prospectus narrative fields for investor protection red flags.
 
-    Uses Groq LLM if GROQ_API_KEY is available; otherwise returns clean status when narratives are compliant.
+    Uses Groq LLM if GROQ_API_KEY is available; otherwise performs rule-based scanning for vague buzzwords and boilerplate.
     """
     api_key = os.getenv("GROQ_API_KEY", "")
     is_mock = not api_key or "your_groq_api_key" in api_key or Groq is None
@@ -394,21 +391,59 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
             "scan_summary": "No narrative content to analyse yet."
         }
 
-    # Only show demo flags when running in mock mode AND there is actual content
-    MIN_CONTENT_LEN = 50
-    has_substantial_content = any(len(v) >= MIN_CONTENT_LEN for v in active_narratives.values())
+    # Rule-based scanner helper
+    def _rule_based_flags() -> List[Dict[str, Any]]:
+        flags = []
+        # Check for vague buzzwords in business_overview or combined
+        for key, text in active_narratives.items():
+            norm_t = text.lower()
+            found_vague = [phrase for phrase in VAGUE_BUZZWORDS if phrase in norm_t]
+            if found_vague:
+                flags.append({
+                    "id": f"rf_vague_{key}",
+                    "field_label": key.replace("_", " ").title(),
+                    "field_key": key,
+                    "severity": "HIGH",
+                    "category": "vague_language",
+                    "issue": f"Narrative uses unquantified market position claims ({', '.join(repr(p) for p in found_vague)}) without verifiable metrics.",
+                    "suggestion": "Quantify market share using third-party industry reports or state exact rank with citation to comply with SEBI ICDR Schedule VI.",
+                    "reasoning_steps": [
+                        f"Detected unquantified market claims: {', '.join(found_vague)}.",
+                        "SEBI ICDR Schedule VI Part A: Disclosure of competitive position requires independent third-party research citation."
+                    ]
+                })
+
+            if key == "risk_factors" and any(b in norm_t for b in ["economic downturn", "general economic", "market risks", "beyond our control"]):
+                flags.append({
+                    "id": "rf_boilerplate_risk",
+                    "field_label": "Risk Factors",
+                    "field_key": "risk_factors",
+                    "severity": "HIGH",
+                    "category": "boilerplate",
+                    "issue": "Generic macroeconomic risk factors included without company-specific sensitivity analysis.",
+                    "suggestion": "Replace standard templates with exact financial impact figures.",
+                    "reasoning_steps": [
+                        "Identified generic macroeconomic templates in Risk Factors.",
+                        "SEBI ICDR Reg 248: Risk disclosures must quantify direct operational and financial sensitivity unique to issuer."
+                    ]
+                })
+
+        return flags
 
     if is_mock or not Groq:
+        flags = _rule_based_flags()
+        high_sev = sum(1 for f in flags if f.get("severity") == "HIGH")
+        score = max(0, 100 - (len(flags) * 15))
         return {
             "status": "success",
-            "source": "demo_fallback",
+            "source": "rule_based_scanner",
             "scanned_fields": list(active_narratives.keys()),
-            "red_flags": [],
-            "total_flags": 0,
-            "high_severity_count": 0,
-            "investor_protection_score": 100,
+            "red_flags": flags,
+            "total_flags": len(flags),
+            "high_severity_count": high_sev,
+            "investor_protection_score": score,
             "nlp_quality": nlp_quality,
-            "scan_summary": "Narrative disclosures are clear and compliant."
+            "scan_summary": f"Scanned narratives. Found {len(flags)} red flag(s)." if flags else "Narrative disclosures are clear and compliant."
         }
 
     try:

@@ -719,3 +719,294 @@ def check_narrative_quality(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.warning(f"Narrative compliance check skipped: {e}")
     return flags
+
+
+# ── SECTION 3: Planted Contradiction Validator ────────────────────────────────
+
+from pydantic import BaseModel
+
+
+class ContradictionFinding(BaseModel):
+    id: str
+    severity: str  # "BLOCKER" | "MATERIAL" | "MINOR"
+    title: str
+    description: str
+    field_a: str
+    value_a: Any
+    field_b: str
+    value_b: Any
+    difference: str
+    suggested_fix: str
+
+
+class ContradictionDetector:
+    """Statutory & Data Contradiction Detector for SEBI SME IPO applications."""
+
+    def _get_val(self, session: Dict[str, Any], path: str) -> Any:
+        """Helper to get nested values from session."""
+        parts = path.split(".")
+        curr = session
+        for p in parts:
+            if isinstance(curr, dict):
+                curr = curr.get(p)
+            else:
+                return None
+        return curr
+
+    def _check_issue_size_consistency(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        extracted = session.get("extracted_data", {})
+        bank_letter = extracted.get("bank_letter", {})
+
+        issue_size = form_data.get("issue_size_cr") or form_data.get("issue_size")
+        bank_issue_size = bank_letter.get("issue_size_cr") or session.get("bank_letter_issue_size_cr")
+
+        if issue_size is not None and bank_issue_size is not None:
+            try:
+                v1 = float(issue_size)
+                v2 = float(bank_issue_size)
+                diff = abs(v1 - v2)
+                if diff > 0.01:
+                    return ContradictionFinding(
+                        id="issue_size_mismatch",
+                        severity="BLOCKER",
+                        title="Issue Size Contradiction Between Form and Bank Sanction Letter",
+                        description=f"Form data specifies issue size of ₹{v1} Cr, but bank sanction letter field states ₹{v2} Cr.",
+                        field_a="form_data.issue_size_cr",
+                        value_a=v1,
+                        field_b="bank_letter.issue_size_cr",
+                        value_b=v2,
+                        difference=f"₹{diff:.2f} Cr gap",
+                        suggested_fix=f"Reconcile to ₹{v1:.2f} Cr — difference is ₹{diff:.2f} Cr"
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_promoter_holding_consistency(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        extracted = session.get("extracted_data", {})
+        shareholding = extracted.get("shareholding", {})
+
+        form_holding = form_data.get("promoter_holding_pct")
+        extracted_holding = shareholding.get("promoter_holding_pct")
+
+        if form_holding is not None and extracted_holding is not None:
+            try:
+                v1 = float(form_holding)
+                v2 = float(extracted_holding)
+                diff = abs(v1 - v2)
+                if diff > 0.1:
+                    return ContradictionFinding(
+                        id="promoter_holding_mismatch",
+                        severity="MATERIAL",
+                        title="Promoter Holding Discrepancy",
+                        description=f"Form data promoter holding ({v1}%) does not match extracted shareholding pattern ({v2}%).",
+                        field_a="form_data.promoter_holding_pct",
+                        value_a=v1,
+                        field_b="extracted_data.shareholding.promoter_holding_pct",
+                        value_b=v2,
+                        difference=f"{diff:.1f}% discrepancy",
+                        suggested_fix=f"Reconcile promoter shareholding pattern to exact figure ({v1}% or {v2}%)."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_gcp_cap(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        issue_size = form_data.get("issue_size_cr") or form_data.get("issue_size")
+        gcp_amount = form_data.get("gcp_amount_cr") or form_data.get("gcp_amount")
+
+        if issue_size is not None and gcp_amount is not None:
+            try:
+                iss = float(issue_size)
+                gcp = float(gcp_amount)
+                max_gcp = min(0.15 * iss, 10.0)
+                if gcp > max_gcp + 0.01:
+                    return ContradictionFinding(
+                        id="gcp_cap_violated",
+                        severity="BLOCKER",
+                        title="General Corporate Purposes (GCP) Exceeds Regulatory Cap",
+                        description=f"GCP allocation ₹{gcp:.2f} Cr exceeds SEBI ICDR Reg 230(2) maximum cap of ₹{max_gcp:.2f} Cr (min of 15% of issue size or ₹10 Cr).",
+                        field_a="form_data.gcp_amount_cr",
+                        value_a=gcp,
+                        field_b="sebi_icdr_reg_230_cap",
+                        value_b=max_gcp,
+                        difference=f"₹{gcp - max_gcp:.2f} Cr excess",
+                        suggested_fix=f"Cap GCP allocation at ₹{max_gcp:.2f} Cr as per SEBI ICDR Regulation 230(2)."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_objects_arithmetic(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        issue_size = form_data.get("issue_size_cr") or form_data.get("issue_size")
+        gcp_amount = form_data.get("gcp_amount_cr") or form_data.get("gcp_amount") or 0.0
+        objects = form_data.get("objects_of_issue") or []
+
+        if issue_size is not None and isinstance(objects, list) and len(objects) > 0:
+            try:
+                iss = float(issue_size)
+                gcp = float(gcp_amount)
+                obj_sum = 0.0
+                for o in objects:
+                    if isinstance(o, dict):
+                        obj_sum += float(o.get("amount_cr", 0.0))
+                    elif isinstance(o, (int, float)):
+                        obj_sum += float(o)
+                total_alloc = obj_sum + gcp
+                diff = abs(total_alloc - iss)
+                if diff > 0.01:
+                    return ContradictionFinding(
+                        id="objects_arithmetic_mismatch",
+                        severity="BLOCKER",
+                        title="Objects of Issue Arithmetic Mismatch",
+                        description=f"Sum of objects (₹{obj_sum:.2f} Cr) + GCP (₹{gcp:.2f} Cr) equals ₹{total_alloc:.2f} Cr, which does not match total issue size ₹{iss:.2f} Cr.",
+                        field_a="sum(objects) + gcp",
+                        value_a=total_alloc,
+                        field_b="form_data.issue_size_cr",
+                        value_b=iss,
+                        difference=f"₹{diff:.2f} Cr gap",
+                        suggested_fix=f"Reconcile project object allocations so total sum matches ₹{iss:.2f} Cr (difference: ₹{diff:.2f} Cr)."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_promoter_lock_in(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        lock_in_years = form_data.get("promoter_lock_in_years")
+        existing_shares = form_data.get("existing_shares_cr") or form_data.get("pre_issue_shares")
+        fresh_shares = form_data.get("fresh_issue_shares_cr") or form_data.get("fresh_shares")
+        promoter_holding_pct = form_data.get("promoter_holding_pct", 100.0)
+
+        if lock_in_years is not None:
+            try:
+                years = float(lock_in_years)
+                if years < 3.0:
+                    return ContradictionFinding(
+                        id="promoter_lock_in_duration",
+                        severity="BLOCKER",
+                        title="Promoter Lock-in Duration Below SEBI Minimum",
+                        description=f"Promoter lock-in period of {years} years is less than the mandatory SEBI Chapter IX minimum of 3 years.",
+                        field_a="form_data.promoter_lock_in_years",
+                        value_a=years,
+                        field_b="sebi_minimum_lock_in",
+                        value_b=3,
+                        difference=f"{3 - years:.1f} years shortfall",
+                        suggested_fix="Set promoter lock-in period to at least 3 years as mandated by SEBI ICDR Regulations."
+                    )
+            except ValueError:
+                pass
+
+        if existing_shares and fresh_shares and promoter_holding_pct:
+            try:
+                ex = float(existing_shares)
+                fr = float(fresh_shares)
+                pct = float(promoter_holding_pct)
+                promoter_shares = (pct / 100.0) * ex
+                post_total = ex + fr
+                post_promoter_pct = (promoter_shares / post_total) * 100.0 if post_total > 0 else 0.0
+
+                if post_promoter_pct < 20.0:
+                    return ContradictionFinding(
+                        id="promoter_post_issue_holding_too_low",
+                        severity="BLOCKER",
+                        title="Post-Issue Promoter Shareholding Below 20% Mandatory Minimum",
+                        description=f"Calculated post-issue promoter shareholding is {post_promoter_pct:.2f}%, which is below SEBI's 20% minimum threshold.",
+                        field_a="post_issue_promoter_pct",
+                        value_a=round(post_promoter_pct, 2),
+                        field_b="sebi_minimum_post_issue_pct",
+                        value_b=20.0,
+                        difference=f"{20.0 - post_promoter_pct:.2f}% shortfall",
+                        suggested_fix="Increase promoter contribution or restructure issue size to maintain post-issue promoter shareholding at ≥ 20%."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_post_issue_capital(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        existing_shares = form_data.get("existing_shares_cr")
+        fresh_shares = form_data.get("fresh_issue_shares_cr")
+        face_value = form_data.get("face_value", 10.0)
+
+        if existing_shares is not None and fresh_shares is not None:
+            try:
+                ex = float(existing_shares)
+                fr = float(fresh_shares)
+                fv = float(face_value)
+                # If existing_shares and fresh_shares are already expressed in Cr paid-up value:
+                total_capital_cr = (ex + fr) * (fv / 10.0) if fv != 10 else (ex + fr)
+                if total_capital_cr > 25.0:
+                    return ContradictionFinding(
+                        id="post_issue_capital_exceeded",
+                        severity="BLOCKER",
+                        title="Post-Issue Paid-up Capital Exceeds SME IPO Limit",
+                        description=f"Post-issue paid-up capital of ₹{total_capital_cr:.2f} Cr exceeds the ₹25 Cr SME IPO ceiling.",
+                        field_a="post_issue_paidup_capital_cr",
+                        value_a=round(total_capital_cr, 2),
+                        field_b="sme_ipo_cap_cr",
+                        value_b=25.0,
+                        difference=f"₹{total_capital_cr - 25.0:.2f} Cr breach",
+                        suggested_fix="Reduce fresh issue size or pre-issue capital so post-issue paid-up capital remains ≤ ₹25 Crores."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_ebitda_track_record(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        e24 = form_data.get("ebitda_fy24") or form_data.get("ebitda")
+        e23 = form_data.get("ebitda_fy23")
+        e22 = form_data.get("ebitda_fy22")
+
+        ebitdas = [e24, e23, e22]
+        valid_ebitdas = []
+        for e in ebitdas:
+            if e is not None:
+                try:
+                    valid_ebitdas.append(float(e))
+                except ValueError:
+                    pass
+
+        if len(valid_ebitdas) >= 3:
+            positive_count = sum(1 for v in valid_ebitdas if v > 0)
+            if positive_count < 2:
+                return ContradictionFinding(
+                    id="ebitda_track_record_insufficient",
+                    severity="BLOCKER",
+                    title="Operating Profit (EBITDA) Track Record Criterion Not Met",
+                    description=f"Issuer has positive EBITDA in only {positive_count} of the last 3 financial years. SEBI SME IPO rules require operating profit in at least 2 of 3 FYs.",
+                    field_a="positive_ebitda_years",
+                    value_a=positive_count,
+                    field_b="sebi_required_years",
+                    value_b=2,
+                    difference=f"{2 - positive_count} year shortfall",
+                    suggested_fix="Issuer must establish positive operating profit (EBITDA) in at least 2 of the prior 3 financial years before SME IPO filing."
+                )
+        return None
+
+    def run_all_checks(self, session: Dict[str, Any]) -> List[ContradictionFinding]:
+        """Runs all contradiction and statutory consistency checks."""
+        findings: List[ContradictionFinding] = []
+
+        checks = [
+            self._check_issue_size_consistency,
+            self._check_promoter_holding_consistency,
+            self._check_gcp_cap,
+            self._check_objects_arithmetic,
+            self._check_promoter_lock_in,
+            self._check_post_issue_capital,
+            self._check_ebitda_track_record,
+        ]
+
+        for check in checks:
+            res = check(session)
+            if res:
+                findings.append(res)
+
+        return findings
+
