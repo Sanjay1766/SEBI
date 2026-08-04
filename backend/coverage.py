@@ -1,8 +1,11 @@
 """
 Coverage Score Engine for IPO Sherpa.
 
-Evaluates SME IPO session data against 60+ SEBI (ICDR) Regulations, 2018
-Chapter IX disclosure requirements, calculating a quantitative completeness score.
+Evaluates SME IPO session data against SEBI (ICDR) Regulations, 2018
+Chapter IX disclosure requirements (see SEBI_REQUIREMENTS below), calculating
+a quantitative completeness score. Every entry maps to a distinct, named
+disclosure item with its own required session field(s) — no synthetic or
+placeholder requirements are counted toward the score.
 """
 
 from typing import Dict, Any, List
@@ -288,18 +291,6 @@ SEBI_REQUIREMENTS = [
         "weight": 2.0
     }
 ]
-
-# Generate synthetic requirement expansions up to 60 items for full regulatory coverage
-for i in range(1, 31):
-    SEBI_REQUIREMENTS.append({
-        "id": f"expanded_req_{i}",
-        "section": "Regulatory Approvals & Statements",
-        "description": f"Mandatory Statutory Disclosure Clause #{i} under SEBI ICDR Schedule VI",
-        "clause_ref": f"SEBI (ICDR) Regulations 2018, Schedule VI Part A, Item {10 + i}",
-        "required_session_keys": ["company_name"],  # verified if basic session active
-        "severity": "minor",
-        "weight": 0.5
-    })
 
 
 class RequirementGap(BaseModel):
