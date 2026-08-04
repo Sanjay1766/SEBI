@@ -130,6 +130,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/health")
+def health_check():
+    """Liveness/readiness probe for Docker HEALTHCHECK and Railway's healthcheckPath."""
+    return {"status": "ok"}
+
+
 # ── Rate Limiting Middleware (In-memory token bucket) ──────────────────────────
 _RATE_LIMIT_STORE: Dict[str, List[float]] = defaultdict(list)
 RATE_LIMIT_WINDOW = 60  # seconds

@@ -1,32 +1,29 @@
-# Ignore everything by default, then whitelist what we need.
-# This keeps the Docker image lean and prevents secrets leaking in.
+# Blacklist approach: copy everything by default, exclude only what must
+# never be baked into the image. A whitelist here goes stale every time a
+# new backend module is added (main.py imports 20+ local modules — a
+# whitelist previously missed 15 of them, which would crash the container
+# on startup with ImportError). Excluding secrets/caches/local-state is a
+# much smaller, more stable list to maintain than every source file.
 
-# Ignore all
-**
-
-# Whitelist source files
-!main.py
-!extractor.py
-!nlp_analyzer.py
-!consistency_checker.py
-!generator.py
-!blockchain.py
-!validator.py
-!schema.json
-
-# Whitelist config
-!requirements.txt
-!Dockerfile
+# Secrets — never bake these into an image
+.env
+.env.*
 !.env.example
 
-# Always exclude secrets and local state
-.env
-*.pyc
+# Local runtime state / caches — regenerated at runtime, not part of the image
 __pycache__/
+*.pyc
 .venv/
 venv/
 temp_uploads/
+audit/
+chroma_db/
 session_state.json
 *.docx
 *.pdf
+
+# Dev-only
 tests/
+.pytest_cache/
+.git/
+.gitignore
