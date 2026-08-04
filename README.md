@@ -32,6 +32,23 @@ Open your browser at **`http://localhost:5173`**.
 
 ---
 
+## LLM Provider Configuration
+
+All LLM calls go through `backend/llm_client.py`, so switching providers is a `.env` change — no code edits. Copy `backend/.env.example` to `backend/.env` and set:
+
+```env
+LLM_PROVIDER=groq        # groq | openai | anthropic | ollama
+LLM_MODEL=                # optional override; each provider has a sensible default
+GROQ_API_KEY=              # required if LLM_PROVIDER=groq
+OPENAI_API_KEY=            # required if LLM_PROVIDER=openai
+ANTHROPIC_API_KEY=         # required if LLM_PROVIDER=anthropic
+OLLAMA_BASE_URL=http://localhost:11434/v1   # used if LLM_PROVIDER=ollama; no key needed
+```
+
+Without a valid key for the selected provider, the app runs in **Offline Demo Mode** — every LLM-backed feature (extraction, copilot, narrative drafting, RAG, red-flag scanning) falls back to its rule-based/template path rather than crashing.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -46,7 +63,7 @@ Open your browser at **`http://localhost:5173`**.
                │ • ContradictionDetector (7 statutory checks) │
                │ • HallucinationGuard (Digit-level fact store)│
                │ • Banker Certification Store (Gated export)  │
-               │ • Coverage Engine (60+ ICDR requirements)    │
+               │ • Coverage Engine (named ICDR requirements)  │
                │ • Exporter (Schedule VI Part A/E DOCX + ZIP) │
                │ • Audit Logger (Append-only JSONL events)    │
                │ • Blockchain Anchoring (Polygon Amoy Testnet)│
@@ -64,18 +81,18 @@ Open your browser at **`http://localhost:5173`**.
 | **PS-3** | *"accessible to promoters without specialist knowledge"* | Step-by-step guided wizard + statutory tooltips | Field tooltips citing exact SEBI ICDR clauses for every question | **COMPLETE** |
 | **PS-4** | *"checks for accuracy and completeness"* | `HallucinationGuard` + `ContradictionDetector` + `CoverageScore` | 7 statutory consistency checks + digit-level numeric validation | **COMPLETE** |
 | **PS-5** | *"preserve the role of authorised intermediaries"* | `CertificationStore` export gating | HTTP 403 export lock until all 11 sections certified by merchant banker | **COMPLETE** |
-| **PS-6** | *"substantially complete draft"* | `CoverageScore` engine evaluating 60+ requirements | Live coverage score; "Substantially Complete" badge at >= 80% | **COMPLETE** |
+| **PS-6** | *"substantially complete draft"* | `CoverageScore` engine evaluating named ICDR requirements | Live coverage score; "Substantially Complete" badge at >= 80% | **COMPLETE** |
 | **PS-7** | *"significantly reducing preparation time"* | Automated document extraction & drafting wizard | Reduces machine drafting time from weeks to minutes | **PARTIAL** ⚠️ |
 | **PS-8** | *"lowering dependence on intermediaries at early stage"* | Self-service intake wizard; banker joins for sign-off | Promoter fills form independently before banker review | **COMPLETE** |
 | **PS-9** | *"more accessible for smaller enterprises"* | SEBI Chapter IX eligibility gate | Enforces post-issue capital <= 25 Cr & EBITDA track record | **COMPLETE** |
-| **PS-10**| *"all material disclosure requirements"* | 60+ versioned SEBI ICDR requirements in `coverage.py` | `coverage_report.json` generated in ZIP bundle with clause refs | **PARTIAL** ⚠️ |
+| **PS-10**| *"all material disclosure requirements"* | Named, individually clause-referenced SEBI ICDR requirements in `coverage.py` | `coverage_report.json` generated in ZIP bundle with clause refs | **PARTIAL** ⚠️ |
 | **PS-11**| *"flag gaps or inconsistencies"* | `ContradictionDetector` (7 checks) + gap report | Catches issue size, promoter holding, GCP cap discrepancies | **COMPLETE** |
 | **PS-12**| *"simple enough for a first-time issuer"* | Plain-English guided wizard with zero jargon | Step-by-step workflow requiring zero technical setup | **COMPLETE** |
 | **PS-13**| *"broadening the pipeline of SMEs"* | Eligibility gate providing remediation feedback | Failed criteria returns specific gap list & action roadmap | **COMPLETE** |
 
 > ⚠️ **Honest Partial Admissions**:
 > - **PS-7**: Measures machine drafting speed in IPO Sherpa; does not include external CA auditing or legal due diligence cycles.
-> - **PS-10**: Covers 60+ core statutory disclosures; specialized auditor-only Annexures require external CA sign-off.
+> - **PS-10**: Covers core statutory disclosures only; specialized auditor-only Annexures require external CA sign-off.
 
 ---
 

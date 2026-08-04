@@ -2,7 +2,8 @@ import os
 import json
 import logging
 import re
-from typing import Dict, Any
+import concurrent.futures
+from typing import Any, Callable, Dict, Optional
 
 # Configure logger
 logger = logging.getLogger("sebi-ipo-generator.extractor")
@@ -15,21 +16,63 @@ except ImportError:
     logger.warning("pdfplumber not installed. PDF text extraction will be unavailable.")
 
 try:
+    from PIL import Image as _PILImage
+    _PIL_AVAILABLE = True
+except ImportError:
+    _PILImage = None
+    _PIL_AVAILABLE = False
+    logger.warning("Pillow (PIL) not installed. Image-based OCR will be unavailable.")
+
+try:
+    import fitz  # PyMuPDF — renders PDF pages to images with zero system
+    _PYMUPDF_AVAILABLE = True and _PIL_AVAILABLE
+except ImportError:
+    fitz = None
+    _PYMUPDF_AVAILABLE = False
+    logger.warning("PyMuPDF (fitz) not installed. Falling back to pdf2image/Poppler for scanned-PDF rasterization.")
+
+try:
     from pdf2image import convert_from_path
 except ImportError:
     convert_from_path = None
-    logger.warning("pdf2image not installed. Scanned-PDF OCR will be unavailable.")
+    if not _PYMUPDF_AVAILABLE:
+        logger.warning("pdf2image not installed either. Scanned-PDF OCR will be unavailable.")
 
 try:
+    # Must be set before `import paddleocr` — PaddleX reads this flag once at
+    # import time to decide the default inference backend. Some PP-OCRv6
+    # detection models hit an unimplemented oneDNN/PIR attribute conversion
+    # on certain CPU builds (NotImplementedError in onednn_instruction.cc);
+    # forcing the plain "paddle" backend instead of "mkldnn" avoids that
+    # broken code path entirely. Respects an explicit user override via env.
+    os.environ.setdefault("PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT", "False")
+
     from paddleocr import PaddleOCR as _PaddleOCR
     import numpy as _np
     # Instantiate once at module load; model weights are cached to ~/.paddlex/official_models.
     # PaddleOCR 3.x renamed/removed several 2.x constructor kwargs:
     #   use_angle_cls -> use_textline_orientation
     #   show_log      -> removed entirely (raises "Unknown argument" if passed)
-    _paddle_ocr = _PaddleOCR(use_textline_orientation=True, lang="en")
+    #
+    # Model/preprocessing choice is a deliberate speed tradeoff, benchmarked
+    # against a real uploaded document on this deployment's CPU:
+    #   PP-OCRv6_medium (the paddleocr default) + full preprocessing pipeline:
+    #     >180s and still not finished on a single 200-DPI page — makes any
+    #     multi-page scanned upload appear to hang forever.
+    #   PP-OCRv5_mobile + preprocessing disabled: ~15s/page — the difference
+    #   between OCR that works and OCR that never completes. Orientation
+    #   classification/unwarping mainly help photographed/rotated documents;
+    #   most uploaded "scanned" PDFs come from a flatbed scanner and are
+    #   already upright, so skipping those steps is a reasonable default.
+    _paddle_ocr = _PaddleOCR(
+        text_detection_model_name="PP-OCRv5_mobile_det",
+        text_recognition_model_name="PP-OCRv5_mobile_rec",
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False,
+    )
     _PADDLE_AVAILABLE = True
-    logger.info("PaddleOCR initialised successfully.")
+    logger.info("PaddleOCR initialised successfully (PP-OCRv5 mobile models).")
 except ImportError:
     _PaddleOCR = None
     _np = None
@@ -45,20 +88,14 @@ except Exception as _paddle_init_err:
 
 try:
     import pytesseract
-    from PIL import Image as _PILImage
     _PYTESSERACT_AVAILABLE = True
     logger.info("pytesseract initialised successfully.")
 except ImportError:
     pytesseract = None
-    _PILImage = None
     _PYTESSERACT_AVAILABLE = False
     logger.warning("pytesseract not installed.")
 
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
-    logger.warning("groq SDK not installed. LLM extraction will be unavailable.")
+from llm_client import get_llm_client
 
 # ── Camelot & Tabula — Financial Table Extraction (F3) ───────────────────────
 # Both are optional; the code degrades gracefully through a 3-tier fallback chain.
@@ -97,9 +134,19 @@ _GS_AVAILABLE = _ghostscript_available()
 
 
 def ocr_available() -> dict:
-    """Check whether PaddleOCR/pytesseract and Poppler (pdf2image) are available on this system."""
+    """Check whether PaddleOCR/pytesseract and a PDF-to-image rasterizer (PyMuPDF or Poppler) are available."""
     import subprocess
-    result = {"ocr_available": False, "paddleocr_available": False, "pytesseract_available": False, "poppler_available": False}
+    result = {
+        "ocr_available": False,
+        "paddleocr_available": False,
+        "pytesseract_available": False,
+        "pymupdf_available": _PYMUPDF_AVAILABLE,
+        "poppler_available": False,
+        # True if scanned-PDF pages can be rasterized to images at all, via
+        # either engine — this is the flag that actually matters for whether
+        # scanned-document OCR will work, independent of which one is used.
+        "pdf_rasterizer_available": _PYMUPDF_AVAILABLE,
+    }
 
     if _PADDLE_AVAILABLE:
         result["ocr_available"] = True
@@ -116,6 +163,7 @@ def ocr_available() -> dict:
         )
         if proc.returncode == 0 or b"Poppler" in proc.stderr or b"pdftoppm" in proc.stderr:
             result["poppler_available"] = True
+            result["pdf_rasterizer_available"] = True
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
@@ -123,6 +171,57 @@ def ocr_available() -> dict:
 
 # Pre-compute at startup for fast API responses
 OCR_STATUS = ocr_available()
+
+
+def _pdf_pages_to_images(file_path: str) -> list:
+    """Rasterizes every page of a PDF to a list of PIL Images for OCR input.
+
+    PyMuPDF (fitz) is tried first: it's a self-contained pip package with no
+    system binary dependency, so scanned-PDF OCR works out of the box in any
+    environment (Docker, CI, a judge's laptop) without needing Poppler
+    installed and on PATH. Falls back to pdf2image/Poppler only if PyMuPDF
+    isn't available, for environments that already rely on it.
+    """
+    if _PYMUPDF_AVAILABLE:
+        images = []
+        with fitz.open(file_path) as doc:
+            for page in doc:
+                # 200 DPI balances OCR accuracy against memory/time for large multi-page PDFs.
+                pix = page.get_pixmap(dpi=200)
+                img = _PILImage.frombytes("RGB", [pix.width, pix.height], pix.samples) if _PILImage else None
+                if img is not None:
+                    images.append(img)
+        return images
+
+    if convert_from_path:
+        return convert_from_path(file_path)
+
+    raise RuntimeError("No PDF rasterizer available (install pymupdf, or poppler-utils for pdf2image).")
+
+
+# ── OCR safety bounds ─────────────────────────────────────────────────────
+# Even with fast mobile models, a pathological page (huge resolution, dense
+# noise) could stall an OCR call. These bounds guarantee an extraction job
+# always reaches a terminal state instead of hanging indefinitely.
+OCR_PAGE_TIMEOUT_SECONDS = 45   # wall-clock cap per page, per engine
+MAX_OCR_PAGES = 15             # SME statutory certificates are rarely longer than this
+
+
+def _run_with_timeout(fn, *args, timeout: float = OCR_PAGE_TIMEOUT_SECONDS, **kwargs):
+    """Runs a blocking call in a worker thread with a wall-clock timeout.
+
+    OCR engine calls are synchronous and can't be cancelled mid-flight, so a
+    stuck call would otherwise block the whole extraction job forever. On
+    timeout this raises TimeoutError immediately without waiting for the
+    orphaned worker thread — it's left to finish (or not) on its own, and its
+    result is simply discarded.
+    """
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(fn, *args, **kwargs)
+        return future.result(timeout=timeout)
+    finally:
+        executor.shutdown(wait=False)
 
 
 def _paddle_ocr_text(img_array) -> str:
@@ -140,75 +239,135 @@ def _paddle_ocr_text(img_array) -> str:
             lines.extend(t for t in rec_texts if t)
     return "\n".join(lines)
 
-def extract_raw_text(file_path: str) -> str:
-    """Attempts to extract text from a file using pdfplumber, falling back to OCR if empty/scanned."""
+def extract_raw_text(
+    file_path: str,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> str:
+    """Attempts to extract text from a file using pdfplumber, falling back to OCR if empty/scanned.
+
+    progress_callback, if given, is called as callback(percent, stage_message)
+    at each meaningful step (e.g. per OCR page) so callers can surface real
+    progress instead of a static "processing" indicator during a slow OCR run.
+    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
-        
+
+    def _report(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass  # progress reporting must never break extraction itself
+
     text = ""
     file_ext = os.path.splitext(file_path)[1].lower()
-    
+
     if file_ext == ".pdf":
         if pdfplumber:
             try:
                 with pdfplumber.open(file_path) as pdf:
                     for page in pdf.pages:
-                        page_text = page.extract_text()
+                        # layout=True preserves the page's visual column/row
+                        # positioning using whitespace, instead of pdfplumber's
+                        # default reading-order heuristic — this matters a lot
+                        # for statutory certificates and financial statements,
+                        # which are label:value forms and tables rather than
+                        # flowing prose. Without it, multi-column layouts can
+                        # scramble which value ends up next to which label,
+                        # which is a real source of "wrong field extracted"
+                        # even on a perfectly clean, text-based PDF.
+                        page_text = page.extract_text(layout=True)
                         if page_text:
                             text += page_text + "\n"
                 logger.info(f"Extracted {len(text)} characters using pdfplumber.")
             except Exception as e:
                 logger.error(f"pdfplumber extraction failed: {e}")
-        
+
         # Fallback to OCR if pdfplumber returned nothing (scanned / image-only PDF)
-        if not text.strip() and convert_from_path:
+        if not text.strip() and (_PYMUPDF_AVAILABLE or convert_from_path):
+            images = None  # rasterized once, lazily, and shared across engines below
+
+            def _get_images():
+                nonlocal images
+                if images is None:
+                    images = _pdf_pages_to_images(file_path)
+                    if len(images) > MAX_OCR_PAGES:
+                        logger.warning(
+                            f"PDF has {len(images)} pages; capping OCR to the first "
+                            f"{MAX_OCR_PAGES} to bound worst-case processing time."
+                        )
+                        images = images[:MAX_OCR_PAGES]
+                return images
+
             if _PADDLE_AVAILABLE:
                 logger.info("PDF appears to be scanned or image-only. Attempting PaddleOCR...")
                 try:
-                    images = convert_from_path(file_path)
+                    images = _get_images()
                     for i, img in enumerate(images):
                         logger.info(f"PaddleOCR — processing page {i+1}/{len(images)}...")
+                        _report(
+                            45 + int(30 * i / max(1, len(images))),
+                            f"Running OCR on page {i+1}/{len(images)}...",
+                        )
                         img_array = _np.array(img)
-                        page_text = _paddle_ocr_text(img_array)
-                        if page_text:
-                            text += page_text + "\n"
+                        try:
+                            page_text = _run_with_timeout(_paddle_ocr_text, img_array)
+                            if page_text:
+                                text += page_text + "\n"
+                        except concurrent.futures.TimeoutError:
+                            logger.warning(
+                                f"PaddleOCR timed out (> {OCR_PAGE_TIMEOUT_SECONDS}s) on page "
+                                f"{i+1}/{len(images)}; skipping this page."
+                            )
                     logger.info(f"PaddleOCR extracted {len(text)} characters from scanned PDF.")
                 except Exception as e:
                     logger.error(f"PaddleOCR extraction failed: {e}")
-            
+
             if not text.strip() and _PYTESSERACT_AVAILABLE:
                 logger.info("Attempting pytesseract OCR on scanned PDF...")
                 try:
-                    images = convert_from_path(file_path)
+                    images = _get_images()
                     for i, img in enumerate(images):
-                        page_text = pytesseract.image_to_string(img)
-                        if page_text:
-                            text += page_text + "\n"
+                        _report(
+                            45 + int(30 * i / max(1, len(images))),
+                            f"Running fallback OCR on page {i+1}/{len(images)}...",
+                        )
+                        try:
+                            page_text = _run_with_timeout(pytesseract.image_to_string, img)
+                            if page_text:
+                                text += page_text + "\n"
+                        except concurrent.futures.TimeoutError:
+                            logger.warning(
+                                f"pytesseract timed out (> {OCR_PAGE_TIMEOUT_SECONDS}s) on page "
+                                f"{i+1}/{len(images)}; skipping this page."
+                            )
                     logger.info(f"pytesseract extracted {len(text)} characters from scanned PDF.")
                 except Exception as e:
                     logger.error(f"pytesseract OCR extraction failed: {e}")
-                
+
     elif file_ext in [".png", ".jpg", ".jpeg"]:
         if _PADDLE_AVAILABLE:
             try:
-                from PIL import Image
-                img_array = _np.array(Image.open(file_path))
-                text = _paddle_ocr_text(img_array)
+                img_array = _np.array(_PILImage.open(file_path))
+                text = _run_with_timeout(_paddle_ocr_text, img_array)
                 logger.info(f"PaddleOCR extracted {len(text)} characters from image.")
+            except concurrent.futures.TimeoutError:
+                logger.warning(f"PaddleOCR timed out (> {OCR_PAGE_TIMEOUT_SECONDS}s) on image.")
             except Exception as e:
                 logger.error(f"PaddleOCR image extraction failed: {e}")
-        
+
         if not text.strip() and _PYTESSERACT_AVAILABLE:
             try:
-                from PIL import Image
-                text = pytesseract.image_to_string(Image.open(file_path))
+                text = _run_with_timeout(pytesseract.image_to_string, _PILImage.open(file_path))
                 logger.info(f"pytesseract extracted {len(text)} characters from image.")
+            except concurrent.futures.TimeoutError:
+                logger.warning(f"pytesseract timed out (> {OCR_PAGE_TIMEOUT_SECONDS}s) on image.")
             except Exception as e:
                 logger.error(f"pytesseract image extraction failed: {e}")
-        
+
         if not text.strip():
             logger.warning("No OCR engine was available or succeeded for image parsing.")
-            
+
     else:
         # For text or csv files, read directly
         try:
@@ -216,7 +375,7 @@ def extract_raw_text(file_path: str) -> str:
                 text = f.read()
         except Exception as e:
             logger.error(f"Direct text read failed: {e}")
-            
+
     return text
 
 def clean_json_string(text: str) -> str:
@@ -235,6 +394,24 @@ _RE_COMPANY_NAME = re.compile(
     r"(?:name\s+of\s+(?:the\s+)?(?:company|taxpayer|assessee)|company\s+name|legal\s+name)[\s:\-–]+([A-Za-z0-9 .,'&()/-]{3,80})",
     re.IGNORECASE,
 )
+# Additional real-world phrasings that don't use an explicit "Company Name:" label —
+# tried in order after _RE_COMPANY_NAME, since a labelled match is the most reliable.
+_RE_COMPANY_NAME_CERTIFY = re.compile(
+    r"certify\s+that\s+([A-Za-z0-9 .,'&()/-]{3,80}?)\s+(?:is|has\s+been|was)\s+(?:hereby\s+)?incorporated",
+    re.IGNORECASE,
+)
+_RE_COMPANY_NAME_MS = re.compile(
+    r"\bM/s\.?\s+([A-Za-z0-9 .,'&()/-]{3,80})",
+    re.IGNORECASE,
+)
+# Last-resort heuristic: a capitalized phrase ending in a standard legal-entity
+# suffix, found anywhere in the text. Indian company names are near-universally
+# followed by one of these, so this catches documents that state the name as a
+# heading/title with no preceding label at all (e.g. "ABC PRIVATE LIMITED" printed
+# at the top of a certificate with no "Name:" prefix).
+_RE_COMPANY_NAME_SUFFIX = re.compile(
+    r"\b([A-Z][A-Za-z0-9&.,' -]{2,77}\s+(?:PRIVATE\s+LIMITED|PVT\.?\s*LTD\.?|LIMITED|LTD\.?|LLP))\b"
+)
 _RE_CIN        = re.compile(r"\b[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}\b")
 _RE_GSTIN      = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b")
 _RE_PAN        = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
@@ -251,13 +428,54 @@ _RE_ADDRESS    = re.compile(
 
 
 def _regex_company_name(text: str):
-    """Try to extract the company name from document text. Returns str or None."""
-    m = _RE_COMPANY_NAME.search(text)
+    """Try to extract the company name from document text.
+
+    Tries several real-world phrasing patterns in priority order (most
+    reliable/explicit first) rather than only matching an exact "Company
+    Name:" label, since most Certificates of Incorporation state the name
+    as a heading or within a "certify that X is incorporated" sentence with
+    no such label at all. Returns str or None.
+    """
+    for pattern in (_RE_COMPANY_NAME, _RE_COMPANY_NAME_CERTIFY, _RE_COMPANY_NAME_MS):
+        m = pattern.search(text)
+        if m:
+            name = m.group(1).strip().rstrip('.,;')
+            if len(name) >= 3:
+                return name
+    m = _RE_COMPANY_NAME_SUFFIX.search(text)
     if m:
         name = m.group(1).strip().rstrip('.,;')
         if len(name) >= 3:
             return name
     return None
+
+
+def _find_date_near_keywords(text: str, keywords: list, window: int = 80):
+    """Searches for a date pattern within `window` characters after any of
+    `keywords`, trying each keyword in priority order. Falls back to an
+    unanchored search of the whole document if no keyword-anchored date is
+    found.
+
+    Plain "first date anywhere in the document" matching is a real source of
+    wrong field values: a Certificate of Incorporation's raw text often
+    contains an issuance/print date, a signatory date, or a stamp date
+    before the actual incorporation date appears in the body — the old
+    unanchored search would silently grab whichever of those came first in
+    reading order instead of the semantically correct one.
+    """
+    lower_text = text.lower()
+    for kw in keywords:
+        start = 0
+        while True:
+            idx = lower_text.find(kw, start)
+            if idx == -1:
+                break
+            window_text = text[idx: idx + len(kw) + window]
+            m = _RE_DATE.search(window_text)
+            if m:
+                return m
+            start = idx + len(kw)
+    return _RE_DATE.search(text)  # fallback: unanchored, better than nothing
 
 
 def extract_fallback_data(file_path: str, doc_type: str, raw_text: str) -> Dict[str, Any]:
@@ -272,7 +490,7 @@ def extract_fallback_data(file_path: str, doc_type: str, raw_text: str) -> Dict[
 
     if doc_type == "incorporation":
         cin_m   = _RE_CIN.search(text)
-        date_m  = _RE_DATE.search(text)
+        date_m  = _find_date_near_keywords(text, ["incorporat", "date of incorporation", "registered on"])
         addr_m  = _RE_ADDRESS.search(text)
         name    = _regex_company_name(text)
 
@@ -296,7 +514,7 @@ def extract_fallback_data(file_path: str, doc_type: str, raw_text: str) -> Dict[
 
     elif doc_type == "gst":
         gstin_m    = _RE_GSTIN.search(text)
-        date_m     = _RE_DATE.search(text)
+        date_m     = _find_date_near_keywords(text, ["date of registration", "registration date", "registered on", "effective date"])
         turnover_m = _RE_TURNOVER.search(text)
         name       = _regex_company_name(text)
 
@@ -454,21 +672,26 @@ def extract_financial_tables(file_path: str) -> tuple:
     return None, None
 
 
-def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
-    """Extract structured fields from document text. Uses Groq LLM if available, rule-based fallback otherwise."""
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key
+def extract_document_data(
+    file_path: str,
+    doc_type: str,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> Dict[str, Any]:
+    """Extract structured fields from document text. Uses the configured LLM provider if available, rule-based fallback otherwise."""
+    llm = get_llm_client()
 
-    # ── Extract raw text (used by all non-financial doc types + final fallback) ──
+    # ── Extract raw text once (reused below for both the LLM path and the
+    # rule-based fallback — previously this ran twice per document, meaning
+    # OCR on a scanned PDF was silently doing its slow work all over again) ──
     raw_text = ""
     try:
         if os.path.exists(file_path):
-            raw_text = extract_raw_text(file_path)
+            raw_text = extract_raw_text(file_path, progress_callback=progress_callback)
     except Exception as e:
         logger.warning(f"Raw text extraction encountered warning: {e}")
 
-    if is_mock or not Groq:
-        logger.info(f"GROQ_API_KEY placeholder or SDK uninstalled; using rule-based extraction for {doc_type}.")
+    if not llm.is_available():
+        logger.info(f"LLM unavailable ({llm.unavailable_reason()}); using rule-based extraction for {doc_type}.")
         return extract_fallback_data(file_path, doc_type, raw_text)
 
     # ── For financials: attempt structured table extraction first (F3) ──────────
@@ -477,24 +700,16 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
     if doc_type == "financials":
         table_text, table_method = extract_financial_tables(file_path)
         if table_text:
-            logger.info(f"[F3] Using {table_method} table data for Groq financials extraction.")
+            logger.info(f"[F3] Using {table_method} table data for LLM financials extraction.")
 
-    # Choose the best available text input for Groq
+    # Choose the best available text input for the LLM
     if table_text:
         trimmed_text = table_text  # already trimmed to 10000 chars in extract_financial_tables
     else:
-        raw_text = extract_raw_text(file_path)
         if not raw_text.strip():
             logger.warning(f"Could not extract any text from {file_path}.")
             return {}
         trimmed_text = raw_text[:12000]
-
-    # Initialize Groq client
-    try:
-        client = Groq(api_key=api_key)
-    except Exception as e:
-        logger.error(f"Failed to initialize Groq client: {e}.")
-        return {}
 
     # System-level instruction to prevent hallucination across all doc types
     system_instruction = (
@@ -588,7 +803,7 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
         return {}
 
     try:
-        chat_completion = client.chat.completions.create(
+        response_text = llm.complete(
             messages=[
                 {
                     "role": "system",
@@ -599,13 +814,11 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
                     "content": prompt_template.format(text=trimmed_text),
                 }
             ],
-            model="llama-3.3-70b-versatile",
-            response_format={"type": "json_object"},
             temperature=0.1,
+            json_mode=True,
         )
-        response_text = chat_completion.choices[0].message.content
-        logger.info(f"Groq API call succeeded for {doc_type} (input via {table_method if doc_type == 'financials' else 'pdfplumber_text'}).")
-        
+        logger.info(f"LLM ({llm.provider}) call succeeded for {doc_type} (input via {table_method if doc_type == 'financials' else 'pdfplumber_text'}).")
+
         cleaned_text = clean_json_string(response_text)
         try:
             extracted_data = json.loads(cleaned_text)
@@ -653,5 +866,5 @@ def extract_document_data(file_path: str, doc_type: str) -> Dict[str, Any]:
             extracted_data["extraction_method"] = table_method
         return extracted_data
     except Exception as e:
-        logger.error(f"Groq API call failed: {e}. Falling back to rule-based extraction.")
+        logger.error(f"LLM ({llm.provider}) call failed: {e}. Falling back to rule-based extraction.")
         return extract_fallback_data(file_path, doc_type, raw_text)

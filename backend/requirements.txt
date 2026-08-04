@@ -1,12 +1,20 @@
 fastapi
 uvicorn
+# LLM providers — all optional (backend/llm_client.py degrades gracefully if a
+# given provider's SDK isn't installed). Groq is the default (LLM_PROVIDER=groq);
+# install openai/anthropic only if you plan to switch providers, and none are
+# needed for LLM_PROVIDER=ollama (it reuses the openai SDK's OpenAI-compatible
+# client against a local Ollama server).
 groq
+openai
+anthropic
 pdfplumber
 python-docx
 pydantic
 python-dotenv
 python-multipart
-pdf2image          # converts scanned PDF pages to PIL images for PaddleOCR
+pymupdf             # renders scanned PDF pages to images for OCR — pure pip package, no Poppler/system binary needed
+pdf2image           # secondary rasterizer fallback if pymupdf is unavailable; requires Poppler (pdftoppm) on PATH
 # PaddleOCR — 98%+ accuracy on scanned documents (replaces Tesseract)
 paddlepaddle       # CPU build; swap for paddlepaddle-gpu on CUDA hosts
 paddleocr
@@ -27,4 +35,4 @@ torch
 # tabula-py requires Java JRE >= 8; both degrade gracefully if unavailable
 camelot-py[cv]
 tabula-py
-
+chromadb
