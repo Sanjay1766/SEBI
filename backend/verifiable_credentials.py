@@ -22,7 +22,7 @@ def issue_document_vc(
     doc_type: str,
     doc_hash: str,
     filename: str,
-    company_name: str = "Apex Technochem Limited",
+    company_name: str = "Your Company",
     session_id: str = "sebi-ipo-session-v1"
 ) -> Dict[str, Any]:
     """
