@@ -30,10 +30,7 @@ except Exception as _st_exc:  # ImportError, OSError (model download), etc.
 
 logger = logging.getLogger("sebi-ipo-generator.nlp_analyzer")
 
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
+from llm_client import get_llm_client
 
 # Realistic demo fallback flags for SME IPO Prospectus Narratives
 FALLBACK_RED_FLAGS = [
@@ -304,22 +301,19 @@ def nlp_assess_readability_and_quality(text: str) -> Dict[str, Any]:
 
 
 def nlp_summarize_text(text: str, target_words: int = 80) -> str:
-    """Summarizes document narrative text using Groq LLM or extractive fallback."""
+    """Summarizes document narrative text using the configured LLM or extractive fallback."""
     if not text or len(text.strip()) < 50:
         return text or ""
 
-    api_key = os.getenv("GROQ_API_KEY", "")
-    if api_key and "your_groq_api_key" not in api_key and Groq:
+    llm = get_llm_client()
+    if llm.is_available():
         try:
-            client = Groq(api_key=api_key)
             prompt = f"Summarize the following SME IPO narrative into clear key takeaways under {target_words} words:\n{text[:4000]}"
-            completion = client.chat.completions.create(
+            return llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
                 temperature=0.3,
-                max_tokens=150
+                max_tokens=150,
             )
-            return completion.choices[0].message.content.strip()
         except Exception as e:
             logger.warning(f"LLM summarization failed: {e}. Using extractive fallback.")
 
@@ -355,10 +349,9 @@ def nlp_analyze_full_session(session_data: Dict[str, Any]) -> Dict[str, Any]:
 def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
     """Scans prospectus narrative fields for investor protection red flags.
 
-    Uses Groq LLM if GROQ_API_KEY is available; otherwise performs rule-based scanning for vague buzzwords and boilerplate.
+    Uses the configured LLM provider if available; otherwise performs rule-based scanning for vague buzzwords and boilerplate.
     """
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key or Groq is None
+    llm = get_llm_client()
 
     # Collect narrative inputs
     narratives = {
@@ -430,7 +423,7 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
 
         return flags
 
-    if is_mock or not Groq:
+    if not llm.is_available():
         flags = _rule_based_flags()
         high_sev = sum(1 for f in flags if f.get("severity") == "HIGH")
         score = max(0, 100 - (len(flags) * 15))
@@ -447,7 +440,6 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     try:
-        client = Groq(api_key=api_key)
         prompt = f"""
         You are a senior SEBI Compliance & Investor Protection Auditor. Analyze these draft SME IPO prospectus narrative sections for investor protection risks:
         - Vague or unsubstantiated claims ('market leader', 'guaranteed growth')
@@ -473,13 +465,10 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
         Only return the JSON array, no commentary.
         """
 
-        completion = client.chat.completions.create(
+        content = llm.complete(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
             temperature=0.2,
         )
-
-        content = completion.choices[0].message.content.strip()
         # Clean markdown wrappers if present
         if content.startswith("```json"):
             content = content[7:]
@@ -495,7 +484,7 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
 
         return {
             "status": "success",
-            "source": "groq_llm",
+            "source": "llm_scan",
             "scanned_fields": list(active_narratives.keys()),
             "red_flags": parsed_flags,
             "total_flags": len(parsed_flags),
@@ -505,7 +494,7 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
             "scan_summary": f"{len(parsed_flags)} investor-protection flags detected via AI narrative scan."
         }
     except Exception as e:
-        logger.error(f"Groq Red Flag scan failed: {e}. Falling back to default flags.")
+        logger.error(f"LLM ({llm.provider}) red flag scan failed: {e}. Falling back to default flags.")
         return {
             "status": "success",
             "source": "demo_fallback",
@@ -521,17 +510,16 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def generate_sebi_risk_factors(
 
-    company_name: str = "Apex Technochem Limited",
+    company_name: str = "Your Company",
     industry_name: str = "Specialty Chemicals",
     revenue: str = "45.0",
     issue_size: str = "18.5",
     business_overview: str = "",
 ) -> Dict[str, Any]:
     """Generates structured, company-specific Internal & External Risk Factors conforming to SEBI ICDR Schedule VI Part A."""
-    api_key = os.getenv("GROQ_API_KEY", "")
-    is_mock = not api_key or "your_groq_api_key" in api_key or Groq is None
+    llm = get_llm_client()
 
-    if is_mock or not Groq:
+    if not llm.is_available():
         internal = [
             f"Raw Material Price Volatility: Key chemical input prices (accounting for ~64% of cost of sales for {company_name}) fluctuate based on global petrochemical crude trends. Unhedged price spikes could reduce EBITDA margin.",
             f"Working Capital Intensity: {company_name} requires significant working capital. Trade receivables stood at ₹12.4 Cr as of FY23. Delays in customer payments may constrain operating cash flows.",
@@ -554,7 +542,6 @@ def generate_sebi_risk_factors(
         }
 
     try:
-        client = Groq(api_key=api_key)
         prompt = f"""
 You are an expert SEBI IPO Legal Advisor. Generate company-specific, quantified Internal and External Risk Factors for an SME IPO prospectus under SEBI ICDR Chapter IX & Schedule VI Part A.
 
@@ -577,12 +564,10 @@ Return strictly a valid JSON object:
   "formatted_text": "Markdown formatted risk factors section for DRHP..."
 }}
 """
-        completion = client.chat.completions.create(
+        content = llm.complete(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
             temperature=0.3,
         )
-        content = completion.choices[0].message.content.strip()
         if content.startswith("```json"):
             content = content[7:]
         if content.startswith("```"):
@@ -593,7 +578,7 @@ Return strictly a valid JSON object:
         parsed = json.loads(content.strip())
         return {
             "status": "success",
-            "source": "groq_llm_generator",
+            "source": "llm_generator",
             "internal_risks": parsed.get("internal_risks", []),
             "external_risks": parsed.get("external_risks", []),
             "formatted_text": parsed.get("formatted_text", "")
