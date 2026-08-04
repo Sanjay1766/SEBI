@@ -1,0 +1,59 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+      POLYGON_RPC_URL: ${POLYGON_RPC_URL:-}
+      BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-}
+      BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+      BLOCKCHAIN_MAX_RETRIES: ${BLOCKCHAIN_MAX_RETRIES:-1}
+      BLOCKCHAIN_RETRY_BACKOFF_SECONDS: ${BLOCKCHAIN_RETRY_BACKOFF_SECONDS:-2}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+    volumes:
+      # Named volume, not a bind mount to the repo — keeps model downloads
+      # (PaddleOCR/sentence-transformers) cached across `docker compose down`
+      # without touching host files or fighting the image's own /root/.cache.
+      - backend-model-cache:/root/.cache
+      - backend-paddlex-cache:/root/.paddlex
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the JS bundle at build time — must match wherever the
+        # backend is reachable from the browser, not from inside the Compose
+        # network. Published on host port 8000 above, so localhost:8000 is
+        # correct for the default one-command local run.
+        VITE_API_URL: http://localhost:8000
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-model-cache:
+  backend-paddlex-cache:

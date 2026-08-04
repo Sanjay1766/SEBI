@@ -1,38 +1,46 @@
-fastapi
-uvicorn
+fastapi==0.139.2
+uvicorn==0.51.0
 # LLM providers — all optional (backend/llm_client.py degrades gracefully if a
 # given provider's SDK isn't installed). Groq is the default (LLM_PROVIDER=groq);
 # install openai/anthropic only if you plan to switch providers, and none are
 # needed for LLM_PROVIDER=ollama (it reuses the openai SDK's OpenAI-compatible
 # client against a local Ollama server).
-groq
-openai
-anthropic
-pdfplumber
-python-docx
-pydantic
-python-dotenv
-python-multipart
-pymupdf             # renders scanned PDF pages to images for OCR — pure pip package, no Poppler/system binary needed
-pdf2image           # secondary rasterizer fallback if pymupdf is unavailable; requires Poppler (pdftoppm) on PATH
-# PaddleOCR — 98%+ accuracy on scanned documents (replaces Tesseract)
-paddlepaddle       # CPU build; swap for paddlepaddle-gpu on CUDA hosts
-paddleocr
+groq==1.5.0
+openai==2.53.0
+anthropic==0.120.2
+pdfplumber==0.11.10
+python-docx==1.2.0
+pydantic==2.13.4
+python-dotenv==1.2.2
+python-multipart==0.0.32
+numpy==2.3.5        # image array conversion for OCR input (extractor.py); also a transitive dep of paddleocr/torch
+pymupdf==1.28.0     # renders scanned PDF pages to images for OCR — pure pip package, no Poppler/system binary needed
+pdf2image==1.17.0   # secondary rasterizer fallback if pymupdf is unavailable; requires Poppler (pdftoppm) on PATH
+# PaddleOCR — primary OCR engine for scanned documents
+paddlepaddle==3.3.1  # CPU build; swap for paddlepaddle-gpu on CUDA hosts
+paddleocr==3.7.0
+# pytesseract — secondary OCR fallback if PaddleOCR is unavailable/fails.
+# Requires the `tesseract` system binary (tesseract-ocr) separately on PATH —
+# the pip package alone is just a wrapper around it.
+pytesseract==0.3.13
 # Blockchain anchoring (Polygon Amoy Testnet)
-# Run: pip install web3
 # Not strictly required — app runs in mock mode if not installed
-web3
+web3==7.16.0
 # Semantic entity resolution (F2)
 # all-MiniLM-L6-v2 model (~80MB) downloaded to ~/.cache on first run
-sentence-transformers
+sentence-transformers==5.6.1
 # torch: CPU-only wheel in Docker (~200 MB). Local dev uses full wheel via venv.
-# The --extra-index-url is respected by pip inside the Dockerfile.
+# The --extra-index-url is respected by pip inside the Dockerfile. Version
+# carries the "+cpu" local suffix from that index — required for the pin to
+# resolve correctly against it.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
+torch==2.13.0+cpu
 # Financial table extraction (F3)
-# camelot-py[cv] uses OpenCV for stream mode (no Ghostscript needed)
-# lattice mode additionally requires Ghostscript binary on PATH
-# tabula-py requires Java JRE >= 8; both degrade gracefully if unavailable
-camelot-py[cv]
-tabula-py
-chromadb
+# camelot-py 2.0.0 bundles opencv-python-headless as a base dependency (no
+# [cv] extra needed anymore — that extra doesn't exist in this version;
+# current extras are plot/ml/ocr/ghostscript/dev). Stream mode needs no
+# Ghostscript; lattice mode additionally requires a Ghostscript binary on PATH.
+# tabula-py requires Java JRE >= 8; both degrade gracefully if unavailable.
+camelot-py==2.0.0
+tabula-py==2.10.0
+chromadb==1.5.9
