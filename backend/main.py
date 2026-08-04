@@ -5,6 +5,8 @@ import tempfile
 import uuid
 import asyncio
 import time
+import hashlib
+from datetime import datetime
 from collections import defaultdict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -90,7 +92,7 @@ try:
     from due_diligence import get_due_diligence_summary, generate_form_a_certificate
     from peer_comparison import calculate_peer_comparison_and_valuation
     from version_tracker import get_version_history_summary, create_version_snapshot
-    from exporter import create_efiling_package_zip, create_export_zip_bundle
+    from exporter import create_export_zip_bundle
 except ImportError as err:
     logger.warning(f"Enterprise modules import warning: {err}")
 
@@ -125,7 +127,7 @@ else:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1109,25 +1111,6 @@ def update_section_approval_api(payload: ApprovalRequest, user: dict = Depends(g
     save_session(user["id"], session)
     return {"status": "success", "approvals": approvals}
 
-
-@app.get("/api/export/package")
-def export_efiling_package_api(user: dict = Depends(get_current_user)):
-    """GET /api/export/package — Downloads complete e-Filing Zip bundle containing DRHP DOCX, Form A, and VC logs."""
-    session = load_session(user["id"])
-    company_name = session.get("form_data", {}).get("company_name", "Issuer_Company")
-    safe_name = "".join(c if c.isalnum() else "_" for c in company_name)
-    
-    temp_dir = tempfile.mkdtemp()
-    zip_filename = f"{safe_name}_SEBI_SME_IPO_Efiling_Package.zip"
-    zip_path = os.path.join(temp_dir, zip_filename)
-    
-    create_efiling_package_zip(session, zip_path)
-    
-    return FileResponse(
-        zip_path,
-        filename=zip_filename,
-        media_type="application/zip"
-    )
 
 
 # ── SECTION 2c: Hallucination Guard Validation Endpoint ───────────────────────

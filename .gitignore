@@ -7,4 +7,5 @@ venv/
 session_state.json
 backend/temp_uploads/
 backend/*.docx
+backend/audit/
 .DS_Store
