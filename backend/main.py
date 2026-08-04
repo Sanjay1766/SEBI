@@ -297,7 +297,7 @@ class CopilotPayload(BaseModel):
 
 class GenerateRiskFactorsPayload(BaseModel):
 
-    company_name: Optional[str] = "Apex Technochem Limited"
+    company_name: Optional[str] = "Your Company"
     industry_name: Optional[str] = "Specialty Chemicals"
     revenue: Optional[str] = "45.0"
     issue_size: Optional[str] = "18.5"
@@ -561,7 +561,7 @@ def get_document_verifiable_credential(doc_type: str, user: Dict[str, Any] = Dep
     uploaded_files = session.get("uploaded_files", [])
     target_file = next((f for f in uploaded_files if f.get("type") == doc_type), None)
     
-    company_name = session.get("form_data", {}).get("company_name", "Apex Technochem Limited")
+    company_name = session.get("form_data", {}).get("company_name", "Your Company")
     doc_hash = target_file.get("doc_hash", "0x" + hashlib.sha256(doc_type.encode()).hexdigest()) if target_file else "0x" + hashlib.sha256(doc_type.encode()).hexdigest()
     filename = target_file.get("filename", f"{doc_type}_document.pdf") if target_file else f"{doc_type}_document.pdf"
     
@@ -591,7 +591,7 @@ def generate_risk_factors_endpoint(payload: GenerateRiskFactorsPayload, user: Di
     session = load_session(user["id"])
     form_data = session.get("form_data", {})
     return generate_sebi_risk_factors(
-        company_name=payload.company_name or form_data.get("company_name", "Apex Technochem Limited"),
+        company_name=payload.company_name or form_data.get("company_name", "Your Company"),
         industry_name=payload.industry_name or form_data.get("industry_name", "Specialty Chemicals"),
         revenue=payload.revenue or str(form_data.get("revenue_fy_latest", "45.0")),
         issue_size=payload.issue_size or str(form_data.get("issue_size", "18.5")),
@@ -687,7 +687,7 @@ async def upload_document(
             # Issue W3C Verifiable Credential
             if issue_document_vc and doc_hash:
                 try:
-                    company_name = session.get("form_data", {}).get("company_name", "Apex Technochem Limited")
+                    company_name = session.get("form_data", {}).get("company_name", "Your Company")
                     w3c_vc = issue_document_vc(
                         doc_type=doc_type,
                         doc_hash=doc_hash,

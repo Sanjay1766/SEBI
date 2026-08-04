@@ -214,7 +214,7 @@ class SEBIRAGEngine:
 
         context_str = "\n\n".join(context_blocks) if context_blocks else "No direct statutory match found in SEBI ICDR Chapter IX corpus."
         form_data = (session_data or {}).get("form_data", {})
-        company_name = form_data.get("company_name", "Apex Technochem Limited")
+        company_name = form_data.get("company_name", "Your Company")
 
         api_key = os.getenv("GROQ_API_KEY", "")
         is_mock = not api_key or "your_groq_api_key" in api_key

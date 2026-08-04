@@ -23,8 +23,11 @@ except ImportError:
 try:
     from paddleocr import PaddleOCR as _PaddleOCR
     import numpy as _np
-    # Instantiate once at module load; model weights are cached to ~/.paddleocr
-    _paddle_ocr = _PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+    # Instantiate once at module load; model weights are cached to ~/.paddlex/official_models.
+    # PaddleOCR 3.x renamed/removed several 2.x constructor kwargs:
+    #   use_angle_cls -> use_textline_orientation
+    #   show_log      -> removed entirely (raises "Unknown argument" if passed)
+    _paddle_ocr = _PaddleOCR(use_textline_orientation=True, lang="en")
     _PADDLE_AVAILABLE = True
     logger.info("PaddleOCR initialised successfully.")
 except ImportError:
@@ -121,6 +124,22 @@ def ocr_available() -> dict:
 # Pre-compute at startup for fast API responses
 OCR_STATUS = ocr_available()
 
+
+def _paddle_ocr_text(img_array) -> str:
+    """Runs PaddleOCR 3.x's predict() pipeline on a single image and returns joined text.
+
+    PaddleOCR 3.x replaced the old .ocr() -> list[[bbox, (text, score)], ...] format with
+    .predict() -> list[OCRResult], where each OCRResult is a dict-like object exposing
+    'rec_texts' (list[str]) and 'rec_scores' (list[float]) for the recognised lines.
+    """
+    results = _paddle_ocr.predict(img_array)
+    lines = []
+    for res in results or []:
+        rec_texts = res.get("rec_texts") if hasattr(res, "get") else None
+        if rec_texts:
+            lines.extend(t for t in rec_texts if t)
+    return "\n".join(lines)
+
 def extract_raw_text(file_path: str) -> str:
     """Attempts to extract text from a file using pdfplumber, falling back to OCR if empty/scanned."""
     if not os.path.exists(file_path):
@@ -150,11 +169,8 @@ def extract_raw_text(file_path: str) -> str:
                     for i, img in enumerate(images):
                         logger.info(f"PaddleOCR — processing page {i+1}/{len(images)}...")
                         img_array = _np.array(img)
-                        result = _paddle_ocr.ocr(img_array, cls=True)
-                        if result and result[0]:
-                            page_text = "\n".join(
-                                line[1][0] for line in result[0] if line and line[1]
-                            )
+                        page_text = _paddle_ocr_text(img_array)
+                        if page_text:
                             text += page_text + "\n"
                     logger.info(f"PaddleOCR extracted {len(text)} characters from scanned PDF.")
                 except Exception as e:
@@ -177,11 +193,7 @@ def extract_raw_text(file_path: str) -> str:
             try:
                 from PIL import Image
                 img_array = _np.array(Image.open(file_path))
-                result = _paddle_ocr.ocr(img_array, cls=True)
-                if result and result[0]:
-                    text = "\n".join(
-                        line[1][0] for line in result[0] if line and line[1]
-                    )
+                text = _paddle_ocr_text(img_array)
                 logger.info(f"PaddleOCR extracted {len(text)} characters from image.")
             except Exception as e:
                 logger.error(f"PaddleOCR image extraction failed: {e}")

@@ -521,7 +521,7 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def generate_sebi_risk_factors(
 
-    company_name: str = "Apex Technochem Limited",
+    company_name: str = "Your Company",
     industry_name: str = "Specialty Chemicals",
     revenue: str = "45.0",
     issue_size: str = "18.5",
