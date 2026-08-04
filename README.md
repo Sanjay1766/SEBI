@@ -4,7 +4,33 @@ An AI-powered compliance workspace designed to help founders and financial teams
 
 ---
 
-## Quick Start (2 Minutes)
+## Docker Quick Start (One Command)
+
+Requires [Docker](https://docs.docker.com/get-docker/) and Docker Compose (bundled with Docker Desktop / Rancher Desktop).
+
+```bash
+git clone https://github.com/Sanjay1766/SEBI.git
+cd SEBI
+docker compose up
+```
+
+That's it. `docker compose up` builds and starts both services:
+
+- **Backend** → `http://localhost:8000` (health check at `/health`)
+- **Frontend** → `http://localhost:5173`
+
+It runs out of the box with zero configuration — no API keys, no Supabase, no `.env` file needed — falling back to offline/local-session mode for anything not configured. To enable live LLM extraction, Supabase-backed workspaces, or blockchain anchoring, copy `.env.example` to `.env` in the repo root and fill in the values you want *before* running `docker compose up` (or run `docker compose up --build` afterward to pick up changes).
+
+First build takes a few minutes (OCR and embedding models are downloaded and cached into the image so every container start afterward is fast, offline, and doesn't re-download anything). Subsequent runs are instant:
+
+```bash
+docker compose up      # start
+docker compose down    # stop
+```
+
+---
+
+## Manual Quick Start (2 Minutes)
 
 ```bash
 # 1. Clone the repository
