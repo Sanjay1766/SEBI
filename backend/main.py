@@ -90,9 +90,22 @@ try:
     from due_diligence import get_due_diligence_summary, generate_form_a_certificate
     from peer_comparison import calculate_peer_comparison_and_valuation
     from version_tracker import get_version_history_summary, create_version_snapshot
-    from exporter import create_efiling_package_zip
+    from exporter import create_efiling_package_zip, create_export_zip_bundle
 except ImportError as err:
     logger.warning(f"Enterprise modules import warning: {err}")
+
+try:
+    from hallucination_guard import HallucinationGuard
+    from consistency_checker import ContradictionDetector
+    from certification import CertificationStore
+    from audit_log import AuditLog
+    from coverage import compute_coverage
+    from ps_mapping import get_ps_mapping
+except ImportError as err:
+    logger.warning(f"Upgrade modules import warning: {err}")
+
+audit_logger = AuditLog()
+cert_store = CertificationStore()
 
 try:
     from groq import Groq
@@ -1116,9 +1129,166 @@ def export_efiling_package_api(user: dict = Depends(get_current_user)):
         media_type="application/zip"
     )
 
+
+# ── SECTION 2c: Hallucination Guard Validation Endpoint ───────────────────────
+
+class HallucinationCheckPayload(BaseModel):
+    section_key: str
+    content: str
+
+@app.post("/api/validate/hallucination")
+def validate_hallucination_endpoint(payload: HallucinationCheckPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    guard = HallucinationGuard()
+    result = guard.check(payload.content, session)
+    audit_logger.log(user["id"], "validation.run", f"hallucination:{payload.section_key}", detail={"passed": result.passed, "violations": result.violations})
+    return result.model_dump(mode="json")
+
+
+# ── SECTION 3c: Fix Suggestion Endpoint ──────────────────────────────────────
+
+class FixSuggestionPayload(BaseModel):
+    finding_id: str
+
+@app.post("/api/validate/fix-suggestion")
+def fix_suggestion_endpoint(payload: FixSuggestionPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    detector = ContradictionDetector()
+    findings = detector.run_all_checks(session)
+    for f in findings:
+        if f.id == payload.finding_id:
+            return {"finding_id": f.id, "suggested_fix": f.suggested_fix}
+    return {"finding_id": payload.finding_id, "suggested_fix": "Reconcile field values across documents to comply with SEBI ICDR regulations."}
+
+
+# ── SECTION 4b: Banker Certification Endpoints ───────────────────────────────
+
+class ReviewPayload(BaseModel):
+    reviewer_note: str = ""
+
+class CertifyPayload(BaseModel):
+    banker_name: str
+    banker_notes: str = ""
+
+class UncertifyPayload(BaseModel):
+    reason: str = ""
+
+@app.post("/api/certification/{section_key}/review")
+def review_section_endpoint(section_key: str, payload: ReviewPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    state = cert_store.set_reviewed(session, section_key, payload.reviewer_note)
+    save_session(user["id"], session)
+    audit_logger.log(user["id"], "section.review", f"section:{section_key}")
+    return state.model_dump(mode="json")
+
+@app.post("/api/certification/{section_key}/certify")
+def certify_section_endpoint(section_key: str, payload: CertifyPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    state = cert_store.certify(session, section_key, payload.banker_name, payload.banker_notes)
+    save_session(user["id"], session)
+    audit_logger.log(user["id"], "section.certify", f"section:{section_key}", detail={"certified_by": payload.banker_name})
+    return state.model_dump(mode="json")
+
+@app.post("/api/certification/{section_key}/uncertify")
+def uncertify_section_endpoint(section_key: str, payload: UncertifyPayload, user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    state = cert_store.uncertify(session, section_key, payload.reason)
+    save_session(user["id"], session)
+    audit_logger.log(user["id"], "section.uncertify", f"section:{section_key}", detail={"reason": payload.reason})
+    return state.model_dump(mode="json")
+
+@app.get("/api/certification/status")
+def certification_status_endpoint(user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    states = {k: v.model_dump(mode="json") for k, v in cert_store.get_all_states(session).items()}
+    allowed, blocking = cert_store.export_allowed(session)
+    certified_count = sum(1 for v in states.values() if v["status"] == "certified")
+    return {
+        "states": states,
+        "export_allowed": allowed,
+        "blocking_sections": blocking,
+        "certified_count": certified_count,
+        "total_required": len(states)
+    }
+
+
+# ── SECTION 5c: Audit Log Endpoint ───────────────────────────────────────────
+
+@app.get("/api/audit")
+def get_audit_log_endpoint(action: Optional[str] = None, user: Dict[str, Any] = Depends(get_current_user)):
+    entries = audit_logger.get_log(user["id"], limit=200)
+    if action:
+        entries = [e for e in entries if e.action == action]
+    summary = audit_logger.get_summary(user["id"])
+    return {
+        "summary": summary,
+        "entries": [e.model_dump(mode="json") for e in entries]
+    }
+
+
+# ── SECTION 6b: Coverage Score Endpoint ──────────────────────────────────────
+
+@app.get("/api/coverage")
+def get_coverage_endpoint(user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    report = compute_coverage(session)
+    return report.model_dump(mode="json")
+
+
+# ── SECTION 7c: Gated Export Bundle Endpoint ─────────────────────────────────
+
+from fastapi.responses import Response
+
+@app.get("/api/export/bundle")
+def export_zip_bundle_endpoint(user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    allowed, blocking = cert_store.export_allowed(session)
+    if not allowed:
+        audit_logger.log(user["id"], "export.blocked", "bundle", outcome="denied", detail={"blocking": blocking})
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "export_blocked",
+                "message": "Export requires merchant banker certification of all sections.",
+                "blocking_sections": blocking,
+                "certified_count": len(cert_store.CERTIFIABLE_SECTIONS) - len(blocking),
+                "total_required": len(cert_store.CERTIFIABLE_SECTIONS)
+            }
+        )
+    zip_bytes = create_export_zip_bundle(session, user_id=user["id"])
+    company_name = session.get("form_data", {}).get("company_name", "Issuer_Company")
+    safe_name = "".join(c if c.isalnum() else "_" for c in company_name)
+    filename = f"{safe_name}_DRHP_Draft_{time.strftime('%Y%m%d')}.zip"
+    
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+# ── SECTION 8b: Problem Statement Mapping Endpoint ───────────────────────────
+
+@app.get("/api/ps-mapping")
+def get_ps_mapping_endpoint():
+    return {"clauses": get_ps_mapping()}
+
+
+# ── SECTION 9a: Blockchain Trail Endpoint ────────────────────────────────────
+
+@app.get("/api/blockchain/trail")
+def get_blockchain_trail_endpoint(user: Dict[str, Any] = Depends(get_current_user)):
+    session = load_session(user["id"])
+    entries = audit_logger.get_log(user["id"], limit=500)
+    bc_events = [e.model_dump(mode="json") for e in entries if e.action.startswith("blockchain.")]
+    return {
+        "blockchain_status": get_blockchain_status() if BLOCKCHAIN_AVAILABLE else {"status": "MOCK_MODE"},
+        "events": bc_events
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
-    # Read host and port from env, defaulting to localhost:8000
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run("main:app", host=host, port=port, reload=True)

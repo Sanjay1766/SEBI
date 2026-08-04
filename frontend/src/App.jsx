@@ -210,7 +210,6 @@ export default function App({ user, onSignOut }) {
       setSessionData(emptySession);
       setValidationResults(null);
       setRedFlagResults(null);
-      setIsDigiLockerConnected(false);
       setConfirmReset(false);
       await validateSession();
     } catch (err) {
@@ -613,6 +612,7 @@ export default function App({ user, onSignOut }) {
               <FolderOpen className={`w-4 h-4 shrink-0 ${activeTab === 'uploads' ? 'text-accent-500' : 'text-gray-400'}`} />
               <span>Document Vault</span>
             </button>
+
 
             <div className="pt-4 pb-2 px-3 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
               Drafting Wizard
