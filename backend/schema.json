@@ -2,31 +2,57 @@
   "sections": [
     {
       "id": "cover_page",
-      "name": "Cover page",
-      "description": "Basic details appearing on the prospectus cover, such as company name, logo, issue details, and lead manager.",
+      "name": "Cover Page / Issuer Identity",
+      "description": "Basic issuer identity details appearing on the prospectus cover: registered name, CIN, registered office, contact particulars, promoters, and issue mechanics (lead manager, registrar, price band).",
       "fields": [
-        {"key": "company_name", "label": "Company Name", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Exact registered name of the company"},
-        {"key": "issue_size", "label": "Issue Size (₹ Crores)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Total size of the IPO issue in INR Crores"},
-        {"key": "price_band", "label": "Price Band (₹)", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Price band range, e.g., '100 - 105'"},
-        {"key": "lead_manager", "label": "Lead Manager Name", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Merchant banker managing the issue"},
-        {"key": "registrar", "label": "Registrar Name", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Registrar to the issue"}
+        {"key": "company_name", "label": "Company Name", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "incorporation", "tooltip": "Exact registered name of the company"},
+        {"key": "former_name", "label": "Former Name(s) (if applicable)", "section": "cover_page", "required": false, "blocking": false, "data_type": "string", "source_hint": "incorporation", "tooltip": "Prior registered name(s) per RoC/CIN history, e.g. '(Formerly X Private Limited)'"},
+        {"key": "cin", "label": "CIN (Corporate Identification Number)", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "incorporation", "tooltip": "21-digit Corporate Identification Number (auto-extracted from Incorporation Certificate)"},
+        {"key": "incorporation_date", "label": "Date of Incorporation", "section": "cover_page", "required": false, "blocking": false, "data_type": "date", "source_hint": "incorporation", "tooltip": "Date the company was officially incorporated (auto-extracted from Incorporation Certificate)"},
+        {"key": "registered_office", "label": "Registered Office Address", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "incorporation", "tooltip": "Official address registered with ROC. All statutory correspondence is served here."},
+        {"key": "company_type", "label": "Company Type", "section": "cover_page", "required": false, "blocking": false, "data_type": "select", "options": ["Public Limited Company", "Private Limited Company", "LLP"], "source_hint": "incorporation", "tooltip": "Legal form of the company as classified by RoC"},
+        {"key": "company_secretary_name", "label": "Company Secretary / Compliance Officer Name", "section": "cover_page", "required": true, "blocking": false, "data_type": "string", "source_hint": "manual", "tooltip": "Named contact person on the cover page for investor correspondence"},
+        {"key": "contact_email", "label": "Contact Email", "section": "cover_page", "required": true, "blocking": false, "data_type": "string", "source_hint": "manual", "tooltip": "Compliance officer email printed on the cover page"},
+        {"key": "contact_phone", "label": "Contact Telephone", "section": "cover_page", "required": true, "blocking": false, "data_type": "string", "source_hint": "manual", "tooltip": "Compliance officer telephone printed on the cover page"},
+        {"key": "company_website", "label": "Company Website", "section": "cover_page", "required": false, "blocking": false, "data_type": "string", "source_hint": "manual", "tooltip": "Corporate website URL — business decision, cannot be extracted from any statutory document"},
+        {"key": "promoter_names", "label": "Promoter Names (Cover Page List)", "section": "cover_page", "required": true, "blocking": true, "data_type": "list", "item_fields": [{"key": "name", "label": "Promoter Name", "data_type": "string"}], "source_hint": "dir12", "tooltip": "Names of all promoters as they appear on the cover page banner (SEBI ICDR Sch VI Part A). Overlaps with the detailed 'promoters' list in the Promoters section — keep both in sync."},
+        {"key": "company_acronym", "label": "Company Acronym/Abbreviation", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "manual", "tooltip": "Short name used for the company throughout the document, e.g. 'XYZ'"},
+        {"key": "lead_manager", "label": "Lead Manager Name", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "manual", "tooltip": "SEBI-registered Category I Merchant Banker (BRLM) appointed to manage the issue"},
+        {"key": "registrar", "label": "Registrar to the Issue", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "manual", "tooltip": "SEBI-registered registrar to maintain share records and process applications"},
+        {"key": "issue_size", "label": "Total Issue Size (₹ Crores)", "section": "cover_page", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Total size of the IPO issue in INR Crores (fresh issue + OFS). Overlaps with fresh_issue_size_cr + ofs_size_cr in Offer Details — reconcile the two."},
+        {"key": "price_band", "label": "Price Band (₹)", "section": "cover_page", "required": true, "blocking": true, "data_type": "string", "source_hint": "manual", "tooltip": "Price band range, e.g., '100 - 105'"}
+      ]
+    },
+    {
+      "id": "offer_details",
+      "name": "Offer Details",
+      "description": "Structure of the fresh issue and offer for sale, face value, selling shareholders, and any pre-IPO placement.",
+      "fields": [
+        {"key": "fresh_issue_size_cr", "label": "Fresh Issue Size (₹ Crores)", "section": "offer_details", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Business decision — target fresh issue size. Cannot be extracted from any document; set by the company/BRLM."},
+        {"key": "ofs_size_cr", "label": "Offer for Sale Size (₹ Crores)", "section": "offer_details", "required": false, "blocking": false, "data_type": "number", "source_hint": "manual", "tooltip": "Business decision — aggregate OFS size, if any. Company does not receive OFS proceeds."},
+        {"key": "face_value_per_share", "label": "Face Value per Share (₹)", "section": "offer_details", "required": true, "blocking": true, "data_type": "number", "source_hint": "moa_aoa", "tooltip": "Face value of each equity share per MOA/AOA, typically ₹10"},
+        {"key": "selling_shareholders", "label": "Selling Shareholders", "section": "offer_details", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "name", "label": "Name", "data_type": "string"}, {"key": "type", "label": "Type (Promoter/Investor/Individual Selling Shareholder)", "data_type": "string"}, {"key": "shares_offered", "label": "Shares Offered", "data_type": "number"}, {"key": "waca_per_share", "label": "WACA per Share (₹)", "data_type": "number"}], "source_hint": "cap_table", "tooltip": "SEBI ICDR Sch VI — Offer for Sale details: name, type, number of shares offered, and CA-certified WACA per share"},
+        {"key": "pre_ipo_placement_amount", "label": "Pre-IPO Placement Amount (₹ Crores)", "section": "offer_details", "required": false, "blocking": false, "data_type": "number", "source_hint": "manual", "tooltip": "Business decision — proposed Pre-IPO placement size, if any (max 20% of Fresh Issue). Not extractable from any document."},
+        {"key": "pre_ipo_placement_terms", "label": "Pre-IPO Placement Terms", "section": "offer_details", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Business/legal decision — pricing basis and conditions of the Pre-IPO placement, if undertaken. Requires banker sign-off."}
       ]
     },
     {
       "id": "definitions",
       "name": "Definitions & abbreviations",
       "description": "Standard terms and acronyms used in the draft prospectus.",
-      "fields": [
-        {"key": "company_acronym", "label": "Company Acronym/Abbreviation", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Short name used for the company throughout the document, e.g. 'XYZ'"}
-      ]
+      "fields": []
     },
     {
       "id": "risk_factors",
       "name": "Risk factors",
-      "description": "Internal and external factors that could impact business operations and profitability.",
+      "description": "Internal and external factors that could impact business operations and profitability, including derived concentration metrics.",
       "fields": [
-        {"key": "internal_risks", "label": "Internal Risk Factors", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Describe company-specific risks like key customer dependency, outstanding litigations, promoter background"},
-        {"key": "external_risks", "label": "External Risk Factors", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Describe external risks like raw material inflation, regulatory changes, or competition"}
+        {"key": "internal_risks", "label": "Internal Risk Factors", "section": "risk_factors", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "Describe company-specific risks like key customer dependency, outstanding litigations, promoter background"},
+        {"key": "external_risks", "label": "External Risk Factors", "section": "risk_factors", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "Describe external risks like raw material inflation, regulatory changes, or competition"},
+        {"key": "customer_concentration_pct", "label": "Top-5 Customer Concentration (%)", "section": "risk_factors", "required": false, "blocking": false, "data_type": "number", "source_hint": "derived", "tooltip": "Derived from top5_customer_revenue_table ÷ revenue_from_operations. Not directly entered."},
+        {"key": "geographic_concentration_pct", "label": "Geographic Concentration (%)", "section": "risk_factors", "required": false, "blocking": false, "data_type": "number", "source_hint": "derived", "tooltip": "Derived from key_geographies_served revenue share, where disclosed."},
+        {"key": "raw_material_cost_pct", "label": "Raw Material Cost as % of Revenue", "section": "risk_factors", "required": false, "blocking": false, "data_type": "number", "source_hint": "derived", "tooltip": "Derived from restated financials (cost of materials consumed ÷ revenue from operations)."},
+        {"key": "risk_narrative_text", "label": "Consolidated Risk Factor Narrative", "section": "risk_factors", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Manual/LLM-assisted draft of the top-10 risk factors narrative — must be banker-reviewed before filing, per SEBI ICDR Sch VI Part A."}
       ]
     },
     {
@@ -34,20 +60,16 @@
       "name": "Summary of the offer",
       "description": "A high-level summary of the business, financial position, and the proposed issue size.",
       "fields": [
-        {"key": "summary_business_note", "label": "Summary Business Note", "type": "text", "source": "form", "required": false, "blocking": false, "tooltip": "A brief, one-paragraph summary of business operations"}
+        {"key": "summary_business_note", "label": "Summary Business Note", "section": "summary_offer", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "A brief, one-paragraph summary of business operations"}
       ]
     },
     {
       "id": "general_info",
       "name": "General information",
-      "description": "Corporate information, incorporation details, registrar, lead managers, auditors, and advisors.",
+      "description": "Statutory auditor details verified from documents.",
       "fields": [
-        {"key": "cin", "label": "CIN (Corporate Identification Number)", "type": "string", "source": "incorporation", "required": false, "blocking": false, "tooltip": "21-digit Corporate Identification Number (auto-extracted from Incorporation Certificate)"},
-        {"key": "incorporation_date", "label": "Date of Incorporation", "type": "date", "source": "incorporation", "required": false, "blocking": false, "tooltip": "Date the company was officially incorporated (auto-extracted from Incorporation Certificate)"},
-        {"key": "registered_office", "label": "Registered Office Address", "type": "string", "source": "incorporation", "required": false, "blocking": false, "tooltip": "Official address registered with ROC (auto-extracted from Incorporation Certificate)"},
-        {"key": "company_type", "label": "Company Type", "type": "string", "source": "incorporation", "required": false, "blocking": false, "tooltip": "E.g., Private Limited, Public Limited (auto-extracted from Incorporation Certificate)"},
-        {"key": "auditor_name", "label": "Statutory Auditor Name", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Name of the auditor firm"},
-        {"key": "auditor_membership", "label": "Auditor Registration/Membership No.", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "ICAI membership number"}
+        {"key": "auditor_name", "label": "Statutory Auditor Name", "section": "general_info", "required": true, "blocking": true, "data_type": "string", "source_hint": "financials", "tooltip": "Name of the auditor firm"},
+        {"key": "auditor_membership", "label": "Auditor Registration/Membership No.", "section": "general_info", "required": true, "blocking": true, "data_type": "string", "source_hint": "financials", "tooltip": "ICAI membership number"}
       ]
     },
     {
@@ -55,50 +77,92 @@
       "name": "Capital structure",
       "description": "Authorized, issued, and paid-up capital of the company before and after the IPO.",
       "fields": [
-        {"key": "authorized_capital", "label": "Authorized Share Capital (₹)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Maximum share capital company is authorized to issue"},
-        {"key": "paid_up_capital_pre", "label": "Pre-Issue Paid-up Capital (₹)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Total capital paid by shareholders pre-IPO"},
-        {"key": "promoter_shareholding_pre_pct", "label": "Pre-Issue Promoter Shareholding (%)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Percentage of share capital held by promoters before IPO"}
+        {"key": "authorized_capital", "label": "Authorized Share Capital (₹)", "section": "capital_structure", "required": true, "blocking": true, "data_type": "number", "source_hint": "moa_aoa", "tooltip": "Maximum share capital company is authorized to issue"},
+        {"key": "paid_up_capital_pre", "label": "Pre-Issue Paid-up Capital (₹)", "section": "capital_structure", "required": true, "blocking": true, "data_type": "number", "source_hint": "financials", "tooltip": "Total capital paid by shareholders pre-IPO"},
+        {"key": "promoter_shareholding_pre_pct", "label": "Pre-Issue Promoter Shareholding (%)", "section": "capital_structure", "required": true, "blocking": true, "data_type": "number", "source_hint": "cap_table", "tooltip": "Percentage of share capital held by promoters before IPO"}
       ]
     },
     {
       "id": "objects_issue",
       "name": "Objects of the issue",
-      "description": "Detailed utilization of the IPO proceeds, broken down into working capital, expansion, and other purposes.",
+      "description": "Detailed utilization of the IPO proceeds, broken down by use, with the General Corporate Purposes cap validated against Gross Proceeds.",
       "fields": [
-        {"key": "expansion_amount", "label": "Capital Expenditure/Expansion (₹ Crores)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Funding allocated for machinery, plants, or expansion"},
-        {"key": "working_capital_amount", "label": "Working Capital Requirement (₹ Crores)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Funding allocated for working capital"},
-        {"key": "debt_repayment_amount", "label": "Debt Repayment Amount (₹ Crores)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Funding allocated to pay off borrowings"},
-        {"key": "general_corp_amount", "label": "General Corporate Purposes (₹ Crores)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Funding allocated for miscellaneous corporate expenses"},
-        {"key": "issue_expenses", "label": "Issue Expenses (₹ Crores)", "type": "number", "source": "form", "required": true, "blocking": true, "tooltip": "Lead manager fees, marketing, legal, and printing expenses"}
+        {"key": "expansion_amount", "label": "Capital Expenditure/Expansion (₹ Crores)", "section": "objects_issue", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Funding allocated for machinery, plants, or expansion"},
+        {"key": "working_capital_amount", "label": "Working Capital Requirement (₹ Crores)", "section": "objects_issue", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Funding allocated for working capital"},
+        {"key": "debt_repayment_amount", "label": "Debt Repayment Amount (₹ Crores)", "section": "objects_issue", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Funding allocated to pay off borrowings"},
+        {"key": "issue_expenses", "label": "Issue Expenses (₹ Crores)", "section": "objects_issue", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Lead manager fees, marketing, legal, and printing expenses"},
+        {"key": "use_of_proceeds", "label": "Use of Proceeds (Itemized)", "section": "objects_issue", "required": true, "blocking": true, "data_type": "list", "item_fields": [{"key": "particular", "label": "Particular", "data_type": "string"}, {"key": "estimated_amount_cr", "label": "Estimated Amount (₹ Crores)", "data_type": "number"}], "source_hint": "manual", "tooltip": "SEBI ICDR Reg 230 — full itemized breakdown of Net Proceeds deployment. Business decision, cannot be extracted."},
+        {"key": "general_corp_amount", "label": "General Corporate Purposes (₹ Crores)", "section": "objects_issue", "required": true, "blocking": true, "data_type": "number", "source_hint": "manual", "tooltip": "Funding allocated for miscellaneous corporate expenses. Same figure as gcp_amount_cr below — kept as one field."},
+        {"key": "gcp_amount_cr", "label": "GCP Amount — Validated (≤25% of Gross Proceeds)", "section": "objects_issue", "required": false, "blocking": false, "data_type": "number", "source_hint": "derived", "tooltip": "SEBI ICDR Reg 230(2) — General Corporate Purposes must not exceed 25% of Gross Proceeds of the Fresh Issue. Duplicates general_corp_amount; retained separately here to carry the validation flag distinctly from the raw entered amount."}
       ]
     },
     {
       "id": "business_overview",
       "name": "Business overview",
-      "description": "Complete breakdown of products, services, operating model, customers, and key suppliers.",
+      "description": "Complete breakdown of products, services, operating model, customers, geographies, facilities, and competitive strengths/strategies.",
       "fields": [
-        {"key": "products_services", "label": "Main Products & Services Offered", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Describe primary product and service offerings"},
-        {"key": "business_model", "label": "Business Model Description", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "How the business makes money, sales channels, etc."},
-        {"key": "key_customers", "label": "Key Customers/Industries Served", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Key client segments or specific large customers"}
+        {"key": "products_services_description", "label": "Products & Services Description", "section": "business_overview", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "SEBI ICDR Reg 248(2) — Detailed description of products/services offered. Overlaps with legacy 'products_services' field — reconcile."},
+        {"key": "industries_served", "label": "Industries Served", "section": "business_overview", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "Sectors/industries the company's customers belong to"},
+        {"key": "typical_customers", "label": "Typical Customers", "section": "business_overview", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "Description of the typical customer profile served. Overlaps with legacy 'key_customers' field — reconcile."},
+        {"key": "segment_reporting_applicable", "label": "Segment Reporting Applicable (Ind AS 108)", "section": "business_overview", "required": true, "blocking": false, "data_type": "boolean", "source_hint": "financials", "tooltip": "Whether the company reports separate operating segments under Ind AS 108"},
+        {"key": "segment_reporting_note", "label": "Segment Reporting Note", "section": "business_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "financials", "tooltip": "Explanation if no separate segment reporting applies, e.g. 'single reportable segment'"},
+        {"key": "key_geographies_served", "label": "Key Geographies Served", "section": "business_overview", "required": true, "blocking": true, "data_type": "text", "source_hint": "sales_register", "tooltip": "Primary states/regions/countries generating revenue"},
+        {"key": "top5_customer_revenue_table", "label": "Top-5 Customer Revenue Concentration (3-Year)", "section": "business_overview", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "customer_name", "label": "Customer Name", "data_type": "string"}, {"key": "fy1_revenue", "label": "FY (latest) Revenue (₹ Cr)", "data_type": "number"}, {"key": "fy1_pct", "label": "FY (latest) % of Total", "data_type": "number"}, {"key": "fy2_revenue", "label": "FY-1 Revenue (₹ Cr)", "data_type": "number"}, {"key": "fy2_pct", "label": "FY-1 % of Total", "data_type": "number"}, {"key": "fy3_revenue", "label": "FY-2 Revenue (₹ Cr)", "data_type": "number"}, {"key": "fy3_pct", "label": "FY-2 % of Total", "data_type": "number"}], "source_hint": "sales_register", "tooltip": "SEBI ICDR — revenue concentration among top customers over 3 fiscal years"},
+        {"key": "manufacturing_facility_locations", "label": "Manufacturing/Facility Locations", "section": "business_overview", "required": false, "blocking": false, "data_type": "list", "item_fields": [{"key": "type", "label": "Type", "data_type": "string"}, {"key": "location", "label": "Location", "data_type": "string"}], "source_hint": "manual", "tooltip": "List of manufacturing units/branch offices, each tagged Manufacturing Unit / Branch Office / Other — 'None, non-manufacturing entity' is valid for NBFCs/services businesses"},
+        {"key": "business_strengths", "label": "Business Strengths", "section": "business_overview", "required": true, "blocking": false, "data_type": "list", "item_fields": [{"key": "strength", "label": "Strength", "data_type": "string"}], "source_hint": "manual", "tooltip": "Competitive strengths narrative — a positioning/marketing judgment call, cannot be extracted from any document"},
+        {"key": "business_strategies", "label": "Business Strategies", "section": "business_overview", "required": true, "blocking": false, "data_type": "list", "item_fields": [{"key": "strategy", "label": "Strategy", "data_type": "string"}], "source_hint": "manual", "tooltip": "Forward-looking strategy narrative — a business/board decision, cannot be extracted from any document"},
+        {"key": "products_services", "label": "Main Products & Services Offered (Legacy)", "section": "business_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Legacy field retained for backward compatibility — superseded by products_services_description"},
+        {"key": "business_model", "label": "Business Model Description", "section": "business_overview", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "How the business makes money, sales channels, etc."},
+        {"key": "key_customers", "label": "Key Customers/Industries Served (Legacy)", "section": "business_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Legacy field retained for backward compatibility — superseded by typical_customers/industries_served"}
       ]
     },
     {
       "id": "industry_overview",
       "name": "Industry overview",
-      "description": "Market trends, industry size, and potential growth of the business segment.",
+      "description": "Market trends, industry size, and potential growth of the business segment, sourced from an independent industry report.",
       "fields": [
-        {"key": "industry_name", "label": "Industry/Sector Name", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "E.g., Speciality Chemicals, IT Services"},
-        {"key": "industry_narrative", "label": "Industry Narrative Summary", "type": "text", "source": "form", "required": false, "blocking": false, "tooltip": "Narrative overview of industry trends (can be auto-drafted)"}
+        {"key": "industry_name", "label": "Industry/Sector Name", "section": "industry_overview", "required": true, "blocking": true, "data_type": "string", "source_hint": "manual", "tooltip": "E.g., Speciality Chemicals, IT Services"},
+        {"key": "industry_report_source", "label": "Industry Report Source", "section": "industry_overview", "required": true, "blocking": true, "data_type": "string", "source_hint": "manual", "tooltip": "Name of the CRISIL/CARE/ICRA (or similar) report commissioned and cited — a commercial/legal decision, not extractable"},
+        {"key": "industry_market_size", "label": "Industry Market Size", "section": "industry_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "industry_report", "tooltip": "Best-effort extraction from the industry report PDF — formats vary widely across CRISIL/CARE/ICRA reports; confidence flagged low"},
+        {"key": "industry_cagr", "label": "Industry CAGR (%)", "section": "industry_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "industry_report", "tooltip": "Best-effort extraction from the industry report PDF; confidence flagged low due to inconsistent report formats"},
+        {"key": "industry_growth_narrative", "label": "Industry Growth Narrative", "section": "industry_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Narrative synthesis of industry trends — requires judgment beyond raw report extraction"},
+        {"key": "industry_narrative", "label": "Industry Narrative Summary (Legacy)", "section": "industry_overview", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Legacy field retained for backward compatibility — superseded by industry_growth_narrative"}
       ]
     },
     {
-      "id": "management",
-      "name": "Management & promoters",
-      "description": "Details of the founders/promoters, board members, key managerial personnel, and remuneration.",
+      "id": "promoters",
+      "name": "Promoters",
+      "description": "Detailed promoter profiles: designation, DIN, tenure, qualifications, and experience.",
       "fields": [
-        {"key": "promoters_names", "label": "Promoter Names", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Comma-separated list of individual or corporate promoters"},
-        {"key": "directors_names", "label": "Board Directors Names", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Comma-separated list of directors on the board"},
-        {"key": "promoter_experience", "label": "Key Promoter Experience Summary", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Brief work and educational history of promoters"}
+        {"key": "promoters", "label": "Promoters (Detailed)", "section": "promoters", "required": true, "blocking": true, "data_type": "list", "item_fields": [
+          {"key": "name", "label": "Name", "data_type": "string"},
+          {"key": "designation", "label": "Designation", "data_type": "string"},
+          {"key": "din", "label": "DIN", "data_type": "string"},
+          {"key": "date_associated_since", "label": "Associated Since", "data_type": "date"},
+          {"key": "education_qualification", "label": "Education Qualification", "data_type": "string"},
+          {"key": "years_experience", "label": "Years of Experience", "data_type": "number"},
+          {"key": "biography_narrative", "label": "Biography Narrative", "data_type": "text"}
+        ], "source_hint": "dir12", "tooltip": "SEBI ICDR Sch VI Part A — full promoter profiles. Note: a company may have no identifiable promoter (professionally managed) per Reg 2(1)(pp) — in that case this list is empty and 'promoter_names' on the cover page should state so explicitly."},
+        {"key": "promoters_names", "label": "Promoter Names (Legacy, Comma-Separated)", "section": "promoters", "required": false, "blocking": false, "data_type": "string", "source_hint": "manual", "tooltip": "Legacy field retained for backward compatibility — superseded by the 'promoters' list above"},
+        {"key": "promoter_experience", "label": "Key Promoter Experience Summary (Legacy)", "section": "promoters", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Legacy field retained for backward compatibility — superseded by biography_narrative within the 'promoters' list"}
+      ]
+    },
+    {
+      "id": "board_kmp",
+      "name": "Board of Directors & KMP",
+      "description": "Board of Directors and Key Managerial Personnel, sourced from DIR-12 filings/board resolutions.",
+      "fields": [
+        {"key": "directors", "label": "Board of Directors", "section": "board_kmp", "required": true, "blocking": true, "data_type": "list", "item_fields": [
+          {"key": "name", "label": "Name", "data_type": "string"},
+          {"key": "din", "label": "DIN", "data_type": "string"},
+          {"key": "designation", "label": "Designation", "data_type": "string"},
+          {"key": "independent_flag", "label": "Independent Director?", "data_type": "boolean"}
+        ], "source_hint": "dir12", "tooltip": "Companies Act 2013 Sec 149 — full Board (minimum 3 for public company, including 1 independent director)"},
+        {"key": "kmp", "label": "Key Managerial Personnel", "section": "board_kmp", "required": true, "blocking": true, "data_type": "list", "item_fields": [
+          {"key": "name", "label": "Name", "data_type": "string"},
+          {"key": "designation", "label": "Designation", "data_type": "string"}
+        ], "source_hint": "dir12", "tooltip": "SEBI ICDR Sch VI Part A — CFO, Company Secretary and other KMP not already listed as Executive Directors"},
+        {"key": "directors_names", "label": "Board Directors Names (Legacy, Comma-Separated)", "section": "board_kmp", "required": false, "blocking": false, "data_type": "string", "source_hint": "manual", "tooltip": "Legacy field retained for backward compatibility — superseded by the 'directors' list above"}
       ]
     },
     {
@@ -106,18 +170,67 @@
       "name": "Related party transactions",
       "description": "Transactions with subsidiaries, promoters, relatives, or director-controlled entities.",
       "fields": [
-        {"key": "rpt_declared", "label": "Related Party Transactions Declared", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Details of sales, loans, or purchases with related parties over last 3 years"}
+        {"key": "rpt_declared", "label": "Related Party Transactions Declared", "section": "rpt", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "Details of sales, loans, or purchases with related parties over last 3 years"}
       ]
     },
     {
       "id": "financials",
       "name": "Financial statements (restated)",
-      "description": "Restated financial performance metrics including assets, revenue, profits, and borrowings for the past 3 fiscal years.",
+      "description": "Restated financial performance metrics for the past 3 fiscal years, sourced primarily from restated audited financial statements.",
       "fields": [
-        {"key": "fy_years", "label": "Financial Years Included", "type": "string", "source": "financials", "required": false, "blocking": false, "tooltip": "E.g., FY24, FY25, FY26 (auto-extracted from Financial Statements)"},
-        {"key": "revenue_fy_latest", "label": "Latest Year Revenue (₹ Crores)", "type": "number", "source": "financials", "required": false, "blocking": false, "tooltip": "Total revenue in the latest financial year (auto-extracted from Financial Statements)"},
-        {"key": "pat_fy_latest", "label": "Latest Year Profit After Tax (₹ Crores)", "type": "number", "source": "financials", "required": false, "blocking": false, "tooltip": "Net profit (PAT) in the latest financial year (auto-extracted from Financial Statements)"},
-        {"key": "borrowings_latest", "label": "Total Borrowings (₹ Crores)", "type": "number", "source": "financials", "required": false, "blocking": false, "tooltip": "Total short-term and long-term borrowings outstanding (auto-extracted from Financial Statements)"}
+        {"key": "fy_years", "label": "Financial Years Included", "section": "financials", "required": false, "blocking": false, "data_type": "string", "source_hint": "financials", "tooltip": "E.g., FY24, FY25, FY26 (auto-extracted from Financial Statements)"},
+        {"key": "equity_share_capital", "label": "Equity Share Capital (₹ Cr, 3yr)", "section": "financials", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Restated equity share capital across 3 fiscal years"},
+        {"key": "net_worth", "label": "Net Worth (₹ Cr, 3yr)", "section": "financials", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "SEBI ICDR Reg 229(2) — latest audited net worth, 3-year restated"},
+        {"key": "revenue_from_operations", "label": "Revenue from Operations (₹ Cr, 3yr)", "section": "financials", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "3-year restated revenue from operations. Overlaps with legacy revenue_fy24/fy23/fy22 single-year fields in coverage.py."},
+        {"key": "ebitda", "label": "EBITDA (₹ Cr, 3yr)", "section": "financials", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "SEBI ICDR Reg 229(1)(b) — EBITDA operating profit track record, 3-year restated"},
+        {"key": "pat", "label": "Profit After Tax (₹ Cr, 3yr)", "section": "financials", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "3-year restated Profit After Tax. Overlaps with legacy pat_fy24/fy23/fy22 single-year fields in coverage.py."},
+        {"key": "eps_basic", "label": "Basic EPS (₹, 3yr)", "section": "financials", "required": true, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Restated basic earnings per equity share, 3-year"},
+        {"key": "eps_diluted", "label": "Diluted EPS (₹, 3yr)", "section": "financials", "required": true, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Restated diluted earnings per equity share, 3-year"},
+        {"key": "ronw_pct", "label": "Return on Net Worth (%, 3yr)", "section": "financials", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (%)", "data_type": "number"}], "source_hint": "financials", "tooltip": "PAT ÷ Net Worth, 3-year restated"},
+        {"key": "nav_per_share", "label": "Net Asset Value per Share (₹, 3yr)", "section": "financials", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Net Worth ÷ number of equity shares outstanding, 3-year restated"},
+        {"key": "total_borrowings", "label": "Total Borrowings (₹ Cr, 3yr)", "section": "financials", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "SEBI ICDR Sch VI Part B — 3-year restated total borrowings. Overlaps with legacy 'borrowings_latest' single-year field."},
+        {"key": "cash_flow_operating", "label": "Net Cash from Operating Activities (₹ Cr, 3yr)", "section": "financials", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Restated cash flow statement — operating activities, 3-year"},
+        {"key": "cash_flow_investing", "label": "Net Cash from Investing Activities (₹ Cr, 3yr)", "section": "financials", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Restated cash flow statement — investing activities, 3-year"},
+        {"key": "cash_flow_financing", "label": "Net Cash from Financing Activities (₹ Cr, 3yr)", "section": "financials", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "fy", "label": "Fiscal Year", "data_type": "string"}, {"key": "value", "label": "Value (₹ Cr)", "data_type": "number"}], "source_hint": "financials", "tooltip": "Restated cash flow statement — financing activities, 3-year"},
+        {"key": "auditor_qualifications", "label": "Auditor Qualifications", "section": "financials", "required": true, "blocking": true, "data_type": "text", "source_hint": "auditor_report", "tooltip": "Any reservations, qualifications, or adverse remarks by statutory auditors on the restated financials. Defaults to 'None' — flagged if left empty rather than explicitly confirmed."},
+        {"key": "revenue_fy_latest", "label": "Latest Year Revenue (₹ Crores) (Legacy)", "section": "financials", "required": false, "blocking": false, "data_type": "number", "source_hint": "financials", "tooltip": "Legacy single-year field — superseded by revenue_from_operations table"},
+        {"key": "pat_fy_latest", "label": "Latest Year Profit After Tax (₹ Crores) (Legacy)", "section": "financials", "required": false, "blocking": false, "data_type": "number", "source_hint": "financials", "tooltip": "Legacy single-year field — superseded by pat table"},
+        {"key": "borrowings_latest", "label": "Total Borrowings (₹ Crores) (Legacy)", "section": "financials", "required": false, "blocking": false, "data_type": "number", "source_hint": "financials", "tooltip": "Legacy single-year field — superseded by total_borrowings table"}
+      ]
+    },
+    {
+      "id": "kpis",
+      "name": "Key Performance Indicators",
+      "description": "Sector-specific KPIs matching the company's industry template (Manufacturing / NBFC / Jewellery & Trading / Services), tracked across 3 fiscal years.",
+      "fields": [
+        {"key": "kpi_sector", "label": "KPI Sector Template", "section": "kpis", "required": true, "blocking": true, "data_type": "select", "options": ["Manufacturing", "NBFC", "Jewellery & Trading", "Services"], "source_hint": "manual", "tooltip": "Business classification decision — determines which KPI field set applies. Sector-dependent by design; do not hardcode a single universal KPI list."},
+        {"key": "kpi_values", "label": "KPI Values (3-Year, by Selected Sector)", "section": "kpis", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "kpi_name", "label": "KPI", "data_type": "string"}, {"key": "unit", "label": "Unit", "data_type": "string"}, {"key": "fy1_value", "label": "FY (latest)", "data_type": "number"}, {"key": "fy2_value", "label": "FY-1", "data_type": "number"}, {"key": "fy3_value", "label": "FY-2", "data_type": "number"}], "source_hint": "financials", "tooltip": "Values populated against the field set matching kpi_sector. See kpi_sector_templates for the per-sector KPI list."}
+      ]
+    },
+    {
+      "id": "shareholding",
+      "name": "Shareholding Pattern",
+      "description": "Pre- and post-offer shareholding of promoters, promoter group, and top shareholders, plus ESOP details.",
+      "fields": [
+        {"key": "pre_offer_shareholding", "label": "Pre-Offer Shareholding", "section": "shareholding", "required": true, "blocking": true, "data_type": "table", "item_fields": [{"key": "shareholder", "label": "Shareholder", "data_type": "string"}, {"key": "shares", "label": "No. of Equity Shares", "data_type": "number"}, {"key": "pct", "label": "% of Pre-Offer Capital", "data_type": "number"}], "source_hint": "cap_table", "tooltip": "SEBI ICDR — full pre-offer cap table by shareholder"},
+        {"key": "post_offer_shareholding", "label": "Post-Offer Shareholding", "section": "shareholding", "required": false, "blocking": false, "data_type": "table", "item_fields": [{"key": "shareholder", "label": "Shareholder", "data_type": "string"}, {"key": "shares", "label": "No. of Equity Shares", "data_type": "number"}, {"key": "pct", "label": "% of Post-Offer Capital", "data_type": "number"}], "source_hint": "derived", "tooltip": "Derived once offer size and price band are finalized — cannot be computed until fresh_issue_size_cr and price_band are set"},
+        {"key": "promoter_group_members", "label": "Promoter Group Members", "section": "shareholding", "required": true, "blocking": true, "data_type": "list", "item_fields": [{"key": "name", "label": "Name", "data_type": "string"}, {"key": "relationship", "label": "Relationship to Promoter", "data_type": "string"}], "source_hint": "cap_table", "tooltip": "SEBI ICDR Reg 2(1)(pp) — immediate relatives and entities forming the Promoter Group"},
+        {"key": "esop_details", "label": "ESOP Details", "section": "shareholding", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Scheme reference and vesting schedule for any Employee Stock Option Plan — 'No ESOP scheme in force' is a valid entry"}
+      ]
+    },
+    {
+      "id": "waca",
+      "name": "Weighted Average Cost of Acquisition (WACA)",
+      "description": "CA-certified weighted average cost of acquisition for promoters and selling shareholders.",
+      "fields": [
+        {"key": "waca_table", "label": "WACA Table", "section": "waca", "required": true, "blocking": true, "data_type": "table", "item_fields": [
+          {"key": "shareholder", "label": "Promoter/Selling Shareholder", "data_type": "string"},
+          {"key": "shares_held", "label": "Shares Held", "data_type": "number"},
+          {"key": "waca_per_share", "label": "WACA per Share (₹)", "data_type": "number"},
+          {"key": "shares_acquired_last_1yr", "label": "Shares Acquired in Last 1 Year", "data_type": "number"},
+          {"key": "waca_last_1yr", "label": "WACA of Shares Acquired in Last 1 Year (₹)", "data_type": "number"}
+        ], "source_hint": "manual", "tooltip": "Must originate from a dated Chartered Accountant certificate — cannot be auto-generated or estimated"},
+        {"key": "waca_ca_certificate_date", "label": "WACA CA Certificate Date", "section": "waca", "required": true, "blocking": true, "data_type": "date", "source_hint": "manual", "tooltip": "Date of the Chartered Accountant certificate the WACA table is drawn from. Must reference an actual, dated certificate — do not auto-generate this."}
       ]
     },
     {
@@ -125,8 +238,16 @@
       "name": "Legal & regulatory disclosures",
       "description": "Pending litigations, criminal proceedings, regulatory actions, and statutory tax disputes.",
       "fields": [
-        {"key": "litigations_company", "label": "Litigations against Company", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Details of civil, criminal, or tax proceedings pending against company"},
-        {"key": "litigations_promoters", "label": "Litigations against Promoters", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Details of proceedings pending against promoters"}
+        {"key": "litigations_company", "label": "Litigations against Company (Legacy Narrative)", "section": "legal_disclosures", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Legacy free-text field — superseded by the structured litigation_summary table"},
+        {"key": "litigations_promoters", "label": "Litigations against Promoters (Legacy Narrative)", "section": "legal_disclosures", "required": false, "blocking": false, "data_type": "text", "source_hint": "manual", "tooltip": "Legacy free-text field — superseded by the structured litigation_summary table"},
+        {"key": "litigation_summary", "label": "Summary of Outstanding Litigation", "section": "legal_disclosures", "required": true, "blocking": true, "data_type": "table", "item_fields": [
+          {"key": "entity_type", "label": "Entity Type (Company/Directors/Promoters/KMP/Senior Mgmt)", "data_type": "string"},
+          {"key": "criminal_count", "label": "Criminal Proceedings", "data_type": "number"},
+          {"key": "tax_count", "label": "Tax Proceedings", "data_type": "number"},
+          {"key": "statutory_regulatory_count", "label": "Statutory/Regulatory Proceedings", "data_type": "number"},
+          {"key": "civil_litigation_count", "label": "Material Civil Litigation", "data_type": "number"},
+          {"key": "aggregate_amount_cr", "label": "Aggregate Amount Involved (₹ Cr)", "data_type": "number"}
+        ], "source_hint": "manual", "tooltip": "Must originate from legal counsel via a structured litigation schedule upload, not free-text scraping or inference. Every cell in this table is manual-only even though it renders as structured data."}
       ]
     },
     {
@@ -134,10 +255,10 @@
       "name": "Statutory compliance certificates",
       "description": "Statutory identification numbers and registrations verified from documents.",
       "fields": [
-        {"key": "gstin", "label": "GSTIN (GST Number)", "type": "string", "source": "gst", "required": false, "blocking": false, "tooltip": "Goods and Services Tax Identification Number (auto-extracted from GST Certificate)"},
-        {"key": "pan", "label": "PAN (Permanent Account Number)", "type": "string", "source": "form", "required": true, "blocking": true, "tooltip": "Company PAN Card Number"},
-        {"key": "pan_name", "label": "Name on PAN Card", "type": "string", "source": "form", "required": false, "blocking": false, "tooltip": "Exact legal name as registered on PAN"},
-        {"key": "gst_annual_turnover", "label": "GST Declared Annual Turnover (₹ Crores)", "type": "number", "source": "gst", "required": false, "blocking": false, "tooltip": "Annual turnover registered in GST filings (auto-extracted from GST Certificate)"}
+        {"key": "gstin", "label": "GSTIN (GST Number)", "section": "compliance_certs", "required": false, "blocking": false, "data_type": "string", "source_hint": "gst", "tooltip": "Goods and Services Tax Identification Number (auto-extracted from GST Certificate)"},
+        {"key": "pan", "label": "PAN (Permanent Account Number)", "section": "compliance_certs", "required": true, "blocking": true, "data_type": "string", "source_hint": "compliance", "tooltip": "Company PAN Card Number"},
+        {"key": "pan_name", "label": "Name on PAN Card", "section": "compliance_certs", "required": false, "blocking": false, "data_type": "string", "source_hint": "compliance", "tooltip": "Exact legal name as registered on PAN"},
+        {"key": "gst_annual_turnover", "label": "GST Declared Annual Turnover (₹ Crores)", "section": "compliance_certs", "required": false, "blocking": false, "data_type": "number", "source_hint": "gst", "tooltip": "Annual turnover registered in GST filings (auto-extracted from GST Certificate)"}
       ]
     },
     {
@@ -145,7 +266,7 @@
       "name": "Material contracts & documents for inspection",
       "description": "List of critical supplier/customer agreements, MOA/AOA, and other inspectable files.",
       "fields": [
-        {"key": "material_contracts_desc", "label": "Description of Material Contracts", "type": "text", "source": "form", "required": true, "blocking": true, "tooltip": "Brief description of key commercial contracts, underwriting agreements, or leases"}
+        {"key": "material_contracts_desc", "label": "Description of Material Contracts", "section": "material_contracts", "required": true, "blocking": true, "data_type": "text", "source_hint": "manual", "tooltip": "Brief description of key commercial contracts, underwriting agreements, or leases"}
       ]
     },
     {
@@ -153,8 +274,71 @@
       "name": "Declaration",
       "description": "Directors' official declaration and signature certifying the prospectus validity.",
       "fields": [
-        {"key": "declaration_signed", "label": "Declaration Signed Status", "type": "boolean", "source": "form", "required": true, "blocking": true, "tooltip": "Confirm directors have agreed to the standard declaration"}
+        {"key": "declaration_signed", "label": "Declaration Signed Status", "section": "declaration", "required": true, "blocking": true, "data_type": "boolean", "source_hint": "manual", "tooltip": "Confirm directors have agreed to the standard declaration"}
       ]
     }
-  ]
+  ],
+  "kpi_sector_templates": {
+    "Manufacturing": [
+      {"kpi_name": "Revenue from Operations", "unit": "₹ in Cr"},
+      {"kpi_name": "EBITDA", "unit": "₹ in Cr"},
+      {"kpi_name": "EBITDA Margin", "unit": "%"},
+      {"kpi_name": "PAT Margin", "unit": "%"},
+      {"kpi_name": "Return on Equity", "unit": "%"},
+      {"kpi_name": "Return on Capital Employed", "unit": "%"},
+      {"kpi_name": "Trade Receivable Days", "unit": "Days"},
+      {"kpi_name": "Inventory Days", "unit": "Days"},
+      {"kpi_name": "Trade Payable Days", "unit": "Days"},
+      {"kpi_name": "Cash Conversion Cycle", "unit": "Days"},
+      {"kpi_name": "Debt to Equity", "unit": "Times"},
+      {"kpi_name": "Net Debt to EBITDA", "unit": "Times"},
+      {"kpi_name": "Order Book", "unit": "₹ in Cr"},
+      {"kpi_name": "Manufacturing Area / Installed Capacity", "unit": "sq.m / units"}
+    ],
+    "NBFC": [
+      {"kpi_name": "Loans (AUM)", "unit": "₹ in Cr"},
+      {"kpi_name": "Loans (AUM) Growth", "unit": "%"},
+      {"kpi_name": "Disbursements", "unit": "₹ in Cr"},
+      {"kpi_name": "Net Worth", "unit": "₹ in Cr"},
+      {"kpi_name": "Yield on Average Loans (AUM)", "unit": "%"},
+      {"kpi_name": "Average Cost of Borrowings", "unit": "%"},
+      {"kpi_name": "Spread", "unit": "%"},
+      {"kpi_name": "Net Interest Margin", "unit": "%"},
+      {"kpi_name": "Cost to Income Ratio", "unit": "%"},
+      {"kpi_name": "Gross Stage 3 (GNPA)", "unit": "%"},
+      {"kpi_name": "Net Stage 3 (NNPA)", "unit": "%"},
+      {"kpi_name": "Provision Coverage Ratio", "unit": "%"},
+      {"kpi_name": "CRAR", "unit": "%"},
+      {"kpi_name": "Debt to Equity", "unit": "Times"},
+      {"kpi_name": "Return on Equity", "unit": "%"},
+      {"kpi_name": "Credit Rating", "unit": "Rating"}
+    ],
+    "Jewellery & Trading": [
+      {"kpi_name": "Revenue from Operations", "unit": "₹ in Cr"},
+      {"kpi_name": "EBITDA Margin", "unit": "%"},
+      {"kpi_name": "PAT Margin", "unit": "%"},
+      {"kpi_name": "Return on Equity", "unit": "%"},
+      {"kpi_name": "Return on Capital Employed", "unit": "%"},
+      {"kpi_name": "Debtor Days", "unit": "Days"},
+      {"kpi_name": "Creditor Days", "unit": "Days"},
+      {"kpi_name": "Inventory Days", "unit": "Days"},
+      {"kpi_name": "Working Capital Cycle", "unit": "Days"},
+      {"kpi_name": "Inventory Turnover Ratio", "unit": "Times"},
+      {"kpi_name": "Sales to Retained Customers", "unit": "₹ in Cr"},
+      {"kpi_name": "Ratio of Sales through Retained Customers", "unit": "%"},
+      {"kpi_name": "Sales Volume", "unit": "Kg"}
+    ],
+    "Services": [
+      {"kpi_name": "Revenue from Operations", "unit": "₹ in Cr"},
+      {"kpi_name": "EBITDA Margin", "unit": "%"},
+      {"kpi_name": "PAT Margin", "unit": "%"},
+      {"kpi_name": "Return on Equity", "unit": "%"},
+      {"kpi_name": "Return on Capital Employed", "unit": "%"},
+      {"kpi_name": "Trade Receivable Days", "unit": "Days"},
+      {"kpi_name": "Employee Attrition Rate", "unit": "%"},
+      {"kpi_name": "Revenue per Employee", "unit": "₹ in Lakh"},
+      {"kpi_name": "Client Retention Rate", "unit": "%"},
+      {"kpi_name": "Debt to Equity", "unit": "Times"}
+    ]
+  }
 }

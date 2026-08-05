@@ -7,33 +7,22 @@ export default function Uploader({
   apiFetch,
 }) {
 
-  const [uploading, setUploading] = useState({
-    financials: false,
-    gst: false,
-    incorporation: false,
-    compliance: false
-  });
-  
-  const [error, setError] = useState({
-    financials: '',
-    gst: '',
-    incorporation: '',
-    compliance: ''
-  });
+  const DOC_TYPES = [
+    'financials', 'gst', 'incorporation', 'compliance',
+    'moa_aoa', 'cap_table', 'dir12', 'litigation_schedule', 'industry_report', 'sales_register',
+  ];
+  const initFalse = () => Object.fromEntries(DOC_TYPES.map(t => [t, false]));
+  const initEmptyStr = () => Object.fromEntries(DOC_TYPES.map(t => [t, '']));
+  const initTrue = () => Object.fromEntries(DOC_TYPES.map(t => [t, true]));
+  const initNull = () => Object.fromEntries(DOC_TYPES.map(t => [t, null]));
 
-  const [dragging, setDragging] = useState({
-    financials: false,
-    gst: false,
-    incorporation: false,
-    compliance: false
-  });
+  const [uploading, setUploading] = useState(initFalse());
 
-  const [expandedJson, setExpandedJson] = useState({
-    financials: true,
-    gst: true,
-    incorporation: true,
-    compliance: true
-  });
+  const [error, setError] = useState(initEmptyStr());
+
+  const [dragging, setDragging] = useState(initFalse());
+
+  const [expandedJson, setExpandedJson] = useState(initTrue());
 
   const [vcModal, setVcModal] = useState(null);
 
@@ -54,14 +43,15 @@ export default function Uploader({
     gst: useRef(null),
     incorporation: useRef(null),
     compliance: useRef(null),
+    moa_aoa: useRef(null),
+    cap_table: useRef(null),
+    dir12: useRef(null),
+    litigation_schedule: useRef(null),
+    industry_report: useRef(null),
+    sales_register: useRef(null),
   };
 
-  const [jobState, setJobState] = useState({
-    financials: null,
-    gst: null,
-    incorporation: null,
-    compliance: null
-  });
+  const [jobState, setJobState] = useState(initNull());
 
   const handleUpload = async (docType, file) => {
     if (!file) return;
@@ -233,6 +223,87 @@ export default function Uploader({
         pan_name: 'Name on PAN',
         tan: 'Company TAN No.'
       }
+    },
+    moa_aoa: {
+      title: 'MOA / AOA',
+      desc: 'Memorandum and Articles of Association (PDF).',
+      accentColor: 'text-indigo-600',
+      accentBg: 'bg-indigo-50/60',
+      accentBorder: 'border-indigo-200/80',
+      iconBg: 'bg-indigo-100/80',
+      icon: '📘',
+      extractedKeys: {
+        authorized_capital: 'Authorized Capital',
+        face_value_per_share: 'Face Value / Share',
+        objects_clause: 'Objects Clause'
+      }
+    },
+    cap_table: {
+      title: 'Register of Members / Cap Table',
+      desc: 'Shareholder register for pre-offer shareholding and promoter group (PDF).',
+      accentColor: 'text-violet-600',
+      accentBg: 'bg-violet-50/60',
+      accentBorder: 'border-violet-200/80',
+      iconBg: 'bg-violet-100/80',
+      icon: '🧮',
+      extractedKeys: {
+        promoter_shareholding_pre_pct: 'Promoter Shareholding %',
+        pre_offer_shareholding: 'Pre-Offer Shareholding Rows',
+        promoter_group_members: 'Promoter Group Members'
+      }
+    },
+    dir12: {
+      title: 'DIR-12 / Board Resolutions',
+      desc: 'Director/KMP appointment filings (PDF).',
+      accentColor: 'text-cyan-600',
+      accentBg: 'bg-cyan-50/60',
+      accentBorder: 'border-cyan-200/80',
+      iconBg: 'bg-cyan-100/80',
+      icon: '🧑‍💼',
+      extractedKeys: {
+        directors: 'Directors Found',
+        kmp: 'KMP Found'
+      }
+    },
+    litigation_schedule: {
+      title: 'Litigation Schedule',
+      desc: 'Structured litigation schedule from legal counsel (PDF) — not free-text scraped.',
+      accentColor: 'text-rose-600',
+      accentBg: 'bg-rose-50/60',
+      accentBorder: 'border-rose-200/80',
+      iconBg: 'bg-rose-100/80',
+      icon: '⚖️',
+      extractedKeys: {
+        litigation_summary: 'Litigation Summary Rows'
+      }
+    },
+    industry_report: {
+      title: 'Industry Report',
+      desc: 'CRISIL / CARE / ICRA industry report (PDF) — best-effort, low-confidence extraction.',
+      accentColor: 'text-teal-600',
+      accentBg: 'bg-teal-50/60',
+      accentBorder: 'border-teal-200/80',
+      iconBg: 'bg-teal-100/80',
+      icon: '📈',
+      extractedKeys: {
+        industry_market_size: 'Market Size',
+        industry_cagr: 'CAGR',
+        industry_report_source: 'Report Source'
+      }
+    },
+    sales_register: {
+      title: 'Sales Register / GST Sales',
+      desc: 'Sales ledger or GST sales register for customer concentration (PDF).',
+      accentColor: 'text-orange-600',
+      accentBg: 'bg-orange-50/60',
+      accentBorder: 'border-orange-200/80',
+      iconBg: 'bg-orange-100/80',
+      icon: '🧾',
+      extractedKeys: {
+        top5_customer_revenue_table: 'Top-5 Customer Rows',
+        key_geographies_served: 'Geographies',
+        gst_annual_turnover: 'GST Turnover'
+      }
     }
   };
 
@@ -246,6 +317,13 @@ export default function Uploader({
     }
     if (typeof val === 'number') {
       return `₹ ${val.toFixed(2)} Cr`;
+    }
+    if (Array.isArray(val)) {
+      return val.length === 0 ? (
+        <span className="text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md text-[9px] uppercase select-none">
+          Missing
+        </span>
+      ) : `${val.length} row${val.length === 1 ? '' : 's'} found`;
     }
     return String(val);
   };

@@ -425,6 +425,20 @@ _RE_ADDRESS    = re.compile(
     r"(?:registered\s+office|principal\s+place\s+of\s+business)[\s:\-–]+([A-Za-z0-9 .,'#/\\-]{10,200})",
     re.IGNORECASE,
 )
+_RE_DIN        = re.compile(r"\b\d{8}\b")
+_RE_AUTH_CAPITAL = re.compile(
+    r"authoris?ed\s+share\s+capital[\s:\-–]+(?:INR|Rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+_RE_FACE_VALUE = re.compile(
+    r"face\s+value\s+of\s+(?:INR|Rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:each|per\s+share)?",
+    re.IGNORECASE,
+)
+_RE_CAGR       = re.compile(r"CAGR\s+of\s+([\d.]+)\s*%", re.IGNORECASE)
+_RE_MARKET_SIZE = re.compile(
+    r"market\s+size\s+(?:of|is|was|estimated\s+at)\s+(?:INR|Rs\.?|₹|USD|\$)?\s*([\d,]+(?:\.\d+)?\s*(?:trillion|billion|million|crore|lakh)?)",
+    re.IGNORECASE,
+)
 
 
 def _regex_company_name(text: str):
@@ -577,10 +591,32 @@ def extract_fallback_data(file_path: str, doc_type: str, raw_text: str) -> Dict[
         auditor  = auditor_m.group(1).strip() if auditor_m else None
         membership = membership_m.group(1).strip() if membership_m else None
 
+        qual_m = re.search(
+            r"(?:qualifications?|reservations?|adverse\s+remarks?)[\s:\-–]+(?:of\s+the\s+)?(?:statutory\s+)?auditors?[^.]{0,20}?(?:is|are|:)?\s*(None|Nil|No\b[^.]{0,80}|[A-Za-z][^.]{10,200})\.",
+            text, re.IGNORECASE
+        )
+
+        revenue  = float(revenue_m.group(1)) if revenue_m else None
+        pat      = float(pat_m.group(1))     if pat_m     else None
+        auditor  = auditor_m.group(1).strip() if auditor_m else None
+        membership = membership_m.group(1).strip() if membership_m else None
+        auditor_qualifications = qual_m.group(1).strip() if qual_m else None
+
         if revenue   is None: missing.append("revenue_fy_latest")
         if pat       is None: missing.append("pat_fy_latest")
         if auditor   is None: missing.append("auditor_name")
         if membership is None: missing.append("auditor_membership")
+        if auditor_qualifications is None: missing.append("auditor_qualifications")
+
+        # 3-year restated table fields (equity_share_capital, net_worth, ebitda, eps_*, ronw_pct,
+        # nav_per_share, total_borrowings, cash_flow_*) are structurally table-shaped and require
+        # reliably identifying which column is which fiscal year — not attempted via plain regex.
+        # They stay null here and are flagged so the UI/coverage engine prompts a re-upload with
+        # a clearer table structure, or manual entry, rather than silently guessing.
+        for k in ["equity_share_capital", "net_worth", "revenue_from_operations", "ebitda", "pat",
+                  "eps_basic", "eps_diluted", "ronw_pct", "nav_per_share", "total_borrowings",
+                  "cash_flow_operating", "cash_flow_investing", "cash_flow_financing"]:
+            missing.append(k)
 
         return {
             "fy_years":            None,  # too variable for reliable regex
@@ -589,7 +625,100 @@ def extract_fallback_data(file_path: str, doc_type: str, raw_text: str) -> Dict[
             "borrowings_latest":   None,
             "auditor_name":        auditor,
             "auditor_membership":  membership,
+            "auditor_qualifications": auditor_qualifications,
             "missing_fields":      missing,
+        }
+
+    elif doc_type == "moa_aoa":
+        auth_m = _RE_AUTH_CAPITAL.search(text)
+        fv_m   = _RE_FACE_VALUE.search(text)
+        objects_m = re.search(
+            r"(?:main\s+)?objects?\s+(?:clause|to\s+be\s+pursued)[\s:\-–]*\n?(.{30,600}?)(?:\n\s*\n|\Z)",
+            text, re.IGNORECASE | re.DOTALL
+        )
+
+        authorized_capital = float(auth_m.group(1).replace(",", "")) if auth_m else None
+        face_value_per_share = float(fv_m.group(1).replace(",", "")) if fv_m else None
+        objects_clause = objects_m.group(1).strip() if objects_m else None
+
+        if authorized_capital is None:   missing.append("authorized_capital")
+        if face_value_per_share is None: missing.append("face_value_per_share")
+        if objects_clause is None:       missing.append("objects_clause")
+
+        return {
+            "authorized_capital":     authorized_capital,
+            "face_value_per_share":   face_value_per_share,
+            "objects_clause":         objects_clause,
+            "missing_fields":         missing,
+        }
+
+    elif doc_type == "cap_table":
+        # Register of Members / cap table is inherently tabular (shareholder, shares, %) —
+        # plain regex over flattened text cannot reliably associate a name with its row's
+        # share count and percentage, so this always defers to the LLM+table-extraction path
+        # in extract_document_data. Structured fields stay null here rather than risk
+        # mis-pairing a shareholder name with the wrong percentage.
+        for k in ["pre_offer_shareholding", "promoter_group_members", "promoter_shareholding_pre_pct"]:
+            missing.append(k)
+        return {
+            "pre_offer_shareholding": None,
+            "promoter_group_members": None,
+            "promoter_shareholding_pre_pct": None,
+            "missing_fields": missing,
+        }
+
+    elif doc_type == "dir12":
+        din_matches = _RE_DIN.findall(text)
+        name = _regex_company_name(text)  # rarely applicable, kept for consistency
+
+        if not din_matches: missing.append("directors")
+        missing.append("kmp")  # designation/role pairing needs LLM, not attempted via regex
+
+        return {
+            "directors_dins_found": din_matches[:20] if din_matches else None,
+            "directors": None,
+            "kmp": None,
+            "missing_fields": missing,
+        }
+
+    elif doc_type == "litigation_schedule":
+        # Litigation counts must originate from a structured legal-counsel schedule, not
+        # free-text scraping — if the LLM/table-extraction tier above this fallback failed,
+        # we deliberately do not attempt to infer criminal/tax/regulatory counts from prose.
+        missing.append("litigation_summary")
+        return {
+            "litigation_summary": None,
+            "missing_fields": missing,
+        }
+
+    elif doc_type == "industry_report":
+        cagr_m = _RE_CAGR.search(text)
+        size_m = _RE_MARKET_SIZE.search(text)
+
+        industry_cagr = f"{cagr_m.group(1)}%" if cagr_m else None
+        industry_market_size = size_m.group(1).strip() if size_m else None
+
+        if industry_cagr is None:        missing.append("industry_cagr")
+        if industry_market_size is None: missing.append("industry_market_size")
+
+        return {
+            "industry_cagr":        industry_cagr,
+            "industry_market_size": industry_market_size,
+            "extraction_confidence": "low",  # industry report formats vary widely across CRISIL/CARE/ICRA
+            "missing_fields":       missing,
+        }
+
+    elif doc_type == "sales_register":
+        turnover_m = _RE_TURNOVER.search(text)
+        gst_annual_turnover = float(turnover_m.group(1).replace(",", "")) if turnover_m else None
+
+        if gst_annual_turnover is None: missing.append("gst_annual_turnover")
+        missing.append("top5_customer_revenue_table")  # customer-by-customer breakdown needs LLM/table extraction
+
+        return {
+            "gst_annual_turnover":         gst_annual_turnover,
+            "top5_customer_revenue_table": None,
+            "missing_fields":              missing,
         }
 
     return {}
@@ -694,17 +823,35 @@ def extract_document_data(
         logger.info(f"LLM unavailable ({llm.unavailable_reason()}); using rule-based extraction for {doc_type}.")
         return extract_fallback_data(file_path, doc_type, raw_text)
 
-    # ── For financials: attempt structured table extraction first (F3) ──────────
+    # ── For inherently tabular doc types: attempt structured table extraction first (F3) ──
+    # cap_table (Register of Members) and litigation_schedule are just as row/column-shaped
+    # as financial statements, and the same "wrong name paired with wrong number" failure
+    # mode applies to plain text scraping — so they go through the identical camelot/tabula
+    # tiered pipeline rather than a separate one-off implementation.
+    TABLE_DRIVEN_DOC_TYPES = ("financials", "cap_table", "litigation_schedule")
     table_text = None
     table_method = "pdfplumber"  # default if table extraction unused
-    if doc_type == "financials":
+    if doc_type in TABLE_DRIVEN_DOC_TYPES:
         table_text, table_method = extract_financial_tables(file_path)
         if table_text:
-            logger.info(f"[F3] Using {table_method} table data for LLM financials extraction.")
+            logger.info(f"[F3] Using {table_method} table data for LLM {doc_type} extraction.")
 
     # Choose the best available text input for the LLM
     if table_text:
         trimmed_text = table_text  # already trimmed to 10000 chars in extract_financial_tables
+        # camelot/tabula's column-boundary detection can silently drop a whole column on PDFs
+        # that use whitespace-only (borderless) column separation rather than ruled lines —
+        # observed concretely on Register of Members exports, where the "No. of Equity Shares"
+        # and "Category" columns vanished from the table JSON entirely while the raw pdfplumber
+        # text still had them. Appending a raw-text excerpt lets the LLM cross-reference and
+        # recover values the table tier lost, instead of reporting them as null when they were
+        # actually present in the document.
+        if raw_text.strip():
+            trimmed_text += (
+                "\n\n--- SUPPLEMENTARY RAW DOCUMENT TEXT (cross-reference this if the table above "
+                "appears to be missing a column present in the original document) ---\n"
+                + raw_text[:4000]
+            )
     else:
         if not raw_text.strip():
             logger.warning(f"Could not extract any text from {file_path}.")
@@ -744,11 +891,121 @@ def extract_document_data(
             6. 'paid_up_capital_pre': Paid-up share capital before the proposed issue (INR Crores, float)
             7. 'auditor_name': Statutory auditor / auditing firm name
             8. 'auditor_membership': Auditor ICAI membership or registration number
-            9. 'missing_fields': Array of KEY strings for fields NOT clearly present.
+            9. 'auditor_qualifications': Any reservations/qualifications/adverse remarks by the statutory auditors on the restated financials; if the document states there were none, return the string "None"
+            10. 'segment_reporting_applicable': true/false — whether the company reports separate operating segments under Ind AS 108
+            11. Restated 3-year tables — for EACH of the following keys, return an array of objects
+                shaped like [{"fy": "FY26", "value": <number>}, {"fy": "FY25", "value": <number>}, {"fy": "FY24", "value": <number>}],
+                one object per fiscal year found, values in INR Crores (or ₹ as basic units, per share for EPS/NAV, and % for ronw_pct):
+                'equity_share_capital', 'net_worth', 'revenue_from_operations', 'ebitda', 'pat',
+                'eps_basic', 'eps_diluted', 'ronw_pct', 'nav_per_share', 'total_borrowings',
+                'cash_flow_operating', 'cash_flow_investing', 'cash_flow_financing'
+            12. 'missing_fields': Array of KEY strings for fields NOT clearly present.
 
             CRITICAL: Only extract values EXPLICITLY present. Return null for anything absent. No guessing.
             Output: valid JSON only.
             Data:
+            ---
+            {text}
+        """,
+        "moa_aoa": """
+            Extract the following fields from the Memorandum of Association / Articles of Association:
+            1. 'authorized_capital': Authorized share capital as stated in the MOA (INR Crores, float)
+            2. 'face_value_per_share': Face value of each equity share (INR, float, e.g. 10)
+            3. 'objects_clause': The Main Objects clause text (verbatim excerpt, up to 500 characters)
+            4. 'missing_fields': An array of strings listing any of the above 3 field KEYS that are NOT clearly present in the text.
+
+            CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
+            Output format must be valid JSON.
+            Text to extract from:
+            ---
+            {text}
+        """,
+        "cap_table": (
+            """
+            The data below is a structured JSON representation of tables extracted from a
+            Register of Members / capitalisation table PDF using camelot/tabula. Each object
+            in the array is one row; keys are column headers.
+            """
+            if _is_table_input else
+            """
+            The text below is extracted from a Register of Members / capitalisation table document.
+            """
+        ) + """
+            Extract the following fields:
+            1. 'pre_offer_shareholding': Array of objects [{"shareholder": <name>, "shares": <number>, "pct": <number>}] for every shareholder row found
+            2. 'promoter_group_members': Array of objects [{"name": <name>, "relationship": <relationship to promoter, if stated>}] for rows explicitly marked as Promoter Group
+            3. 'promoter_shareholding_pre_pct': Aggregate percentage held by Promoters (sum of Promoter rows), as a float
+            4. 'missing_fields': Array of KEY strings for fields NOT clearly present.
+
+            CRITICAL: Only extract rows/values EXPLICITLY present in the table data. Do not invent shareholder names or numbers. Return null/empty array for anything absent.
+            Output: valid JSON only.
+            Data:
+            ---
+            {text}
+        """,
+        "dir12": """
+            Extract the following fields from the DIR-12 filing / board resolution appointing directors and KMP:
+            1. 'directors': Array of objects [{"name": <name>, "din": <8-digit DIN>, "designation": <e.g. Managing Director, Independent Director>, "independent_flag": <true/false>}]
+            2. 'kmp': Array of objects [{"name": <name>, "designation": <e.g. Chief Financial Officer, Company Secretary>}] for Key Managerial Personnel who are NOT already listed as Executive Directors
+            3. 'missing_fields': An array of strings listing any of the above 2 field KEYS that are NOT clearly present in the text.
+
+            CRITICAL: Only extract names/DINs/designations EXPLICITLY present. Do not invent entries. Return null/empty array for anything absent.
+            Output format must be valid JSON.
+            Text to extract from:
+            ---
+            {text}
+        """,
+        "litigation_schedule": (
+            """
+            The data below is a structured JSON representation of tables extracted from a
+            litigation schedule PDF (provided by legal counsel) using camelot/tabula. Each
+            object in the array is one row; keys are column headers.
+            """
+            if _is_table_input else
+            """
+            The text below is extracted from a structured litigation schedule document provided by legal counsel.
+            This is NOT a request to infer litigation from free-text prose elsewhere in the prospectus —
+            only extract from this dedicated schedule.
+            """
+        ) + """
+            Extract the following field:
+            1. 'litigation_summary': Array of objects, one per entity_type, shaped like:
+               [{"entity_type": "Company - By", "criminal_count": <n>, "tax_count": <n>, "statutory_regulatory_count": <n>, "civil_litigation_count": <n>, "aggregate_amount_cr": <amount in INR Crores>}, ...]
+               covering Company (By/Against), Directors (By/Against), Promoters (By/Against), KMP (By/Against), Senior Management (By/Against) where present in the schedule.
+            2. 'missing_fields': Array containing 'litigation_summary' if the schedule could not be confidently parsed as a table.
+
+            CRITICAL: Only extract counts/amounts EXPLICITLY present in the schedule. Do not estimate or infer counts from narrative risk-factor text. Return null if the schedule is not clearly tabular.
+            Output: valid JSON only.
+            Data:
+            ---
+            {text}
+        """,
+        "industry_report": """
+            The text below is extracted from a third-party industry report (e.g. CRISIL, CARE, ICRA).
+            Industry report formats vary widely, so extraction confidence here is inherently lower than
+            for statutory documents — extract only what is explicit, do not synthesize a figure.
+            Extract the following fields:
+            1. 'industry_market_size': The stated market size (with unit, e.g. '₹221.88 trillion' or '76.46 million tonnes'), as a string
+            2. 'industry_cagr': The stated CAGR for the relevant industry/segment (e.g. '15.01%'), as a string
+            3. 'industry_report_source': The name of the report/agency cited (e.g. 'CRISIL Report', 'CARE Report')
+            4. 'missing_fields': An array of strings listing any of the above 3 field KEYS that are NOT clearly present in the text.
+
+            CRITICAL: If a value is not clearly and unambiguously present in the text, return null for that field. Do not guess. Do not fill placeholders. Do not estimate.
+            Output format must be valid JSON.
+            Text to extract from:
+            ---
+            {text}
+        """,
+        "sales_register": """
+            Extract the following fields from the sales/purchase ledger or GST sales register:
+            1. 'top5_customer_revenue_table': Array of objects [{"customer_name": <name>, "fy1_revenue": <number>, "fy1_pct": <number>}] for the top 5 customers by revenue found in the register (single most recent period available; use fy1_revenue/fy1_pct only if only one period is present)
+            2. 'key_geographies_served': Comma-separated list of states/regions appearing in the register as billing/shipping locations
+            3. 'gst_annual_turnover': Annual turnover reflected in the register (INR Crores, float)
+            4. 'missing_fields': An array of strings listing any of the above 3 field KEYS that are NOT clearly present in the text.
+
+            CRITICAL: Only extract customer names/figures EXPLICITLY present. Do not invent customers. Return null/empty array for anything absent.
+            Output format must be valid JSON.
+            Text to extract from:
             ---
             {text}
         """,
@@ -810,14 +1067,21 @@ def extract_document_data(
                     "content": system_instruction,
                 },
                 {
+                    # Deliberately a plain substring replace, not str.format(text=...): several
+                    # prompts above embed literal example JSON like {"shareholder": <name>, ...}
+                    # as extraction guidance, and .format() treats every {...} in the template as
+                    # a substitution field — not just the intended {text} — raising KeyError on
+                    # the first such brace (e.g. KeyError('"shareholder"')) and silently falling
+                    # back to the much weaker regex extractor. .replace() only ever touches the
+                    # literal "{text}" placeholder, so example JSON in prompts is safe by default.
                     "role": "user",
-                    "content": prompt_template.format(text=trimmed_text),
+                    "content": prompt_template.replace("{text}", trimmed_text),
                 }
             ],
             temperature=0.1,
             json_mode=True,
         )
-        logger.info(f"LLM ({llm.provider}) call succeeded for {doc_type} (input via {table_method if doc_type == 'financials' else 'pdfplumber_text'}).")
+        logger.info(f"LLM ({llm.provider}) call succeeded for {doc_type} (input via {table_method if doc_type in TABLE_DRIVEN_DOC_TYPES else 'pdfplumber_text'}).")
 
         cleaned_text = clean_json_string(response_text)
         try:
@@ -831,7 +1095,9 @@ def extract_document_data(
                 raise je
         
         # Clean numeric fields (ensure floats)
-        for key in ["revenue_fy_latest", "pat_fy_latest", "borrowings_latest", "gst_annual_turnover", "authorized_capital", "paid_up_capital_pre"]:
+        for key in ["revenue_fy_latest", "pat_fy_latest", "borrowings_latest", "gst_annual_turnover",
+                    "authorized_capital", "paid_up_capital_pre", "face_value_per_share",
+                    "promoter_shareholding_pre_pct"]:
             if key in extracted_data and extracted_data[key] is not None:
                 try:
                     # Convert string to float if it came as string
@@ -842,12 +1108,28 @@ def extract_document_data(
                 except ValueError:
                     extracted_data[key] = None
 
+        # 3-year restated table fields come back as [{"fy": ..., "value": <num or numeric string>}, ...];
+        # coerce each row's value to float the same way the flat numeric fields above are coerced.
+        for key in ["equity_share_capital", "net_worth", "revenue_from_operations", "ebitda", "pat",
+                    "eps_basic", "eps_diluted", "ronw_pct", "nav_per_share", "total_borrowings",
+                    "cash_flow_operating", "cash_flow_investing", "cash_flow_financing"]:
+            rows = extracted_data.get(key)
+            if isinstance(rows, list):
+                for row in rows:
+                    if isinstance(row, dict) and isinstance(row.get("value"), str):
+                        try:
+                            row["value"] = float(re.sub(r'[^\d\.\-]', '', row["value"]))
+                        except ValueError:
+                            row["value"] = None
+
         # ── Post-extraction validation: flag suspiciously short/invalid values ──
         # Define minimum plausible lengths for string fields per doc type
         min_lengths = {
             "financials": {"auditor_name": 3, "auditor_membership": 5, "fy_years": 4},
             "gst": {"gstin": 15, "company_name": 3},
             "incorporation": {"cin": 21, "company_name": 3, "registered_office": 5},
+            "moa_aoa": {"objects_clause": 20},
+            "industry_report": {"industry_report_source": 3},
             "compliance": {"pan": 10, "pan_name": 3, "tan": 10},
         }
         doc_mins = min_lengths.get(doc_type, {})
