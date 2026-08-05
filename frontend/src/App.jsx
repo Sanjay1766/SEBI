@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Upload, RefreshCw, FolderOpen,
-  Check, Sparkles, LogOut, Loader2, ShieldCheck,
-  ChevronRight, LayoutDashboard, AlertTriangle
+  FolderOpen, Check, Sparkles, LogOut, Loader2, ShieldCheck,
+  ChevronRight, LayoutDashboard, AlertTriangle,
+  ClipboardCheck, Landmark, History, PanelLeftClose, PanelLeftOpen,
+  Menu, X, Bell, Search, FileDown, FileText,
 } from 'lucide-react';
 import Wizard, { WIZARD_TAB_ORDER, WIZARD_STEPS } from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
+import ComplianceMap from './components/ComplianceMap';
+import BankerDashboard from './components/BankerDashboard';
+import AuditTrail from './components/AuditTrail';
 import { apiFetch } from './api';
 
 import { supabase } from './supabase';
@@ -33,6 +37,15 @@ export default function App({ user, onSignOut }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [scanningRedFlags, setScanningRedFlags] = useState(false);
   const [redFlagResults, setRedFlagResults] = useState(null);
+
+  // ── UI shell state (sidebar collapse, mobile drawer, topbar menus) ──
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [quickSwitchOpen, setQuickSwitchOpen] = useState(false);
+  const [quickSwitchQuery, setQuickSwitchQuery] = useState('');
+  const [regulatoryAlerts, setRegulatoryAlerts] = useState([]);
 
 
   // Real-time Collaboration States
@@ -119,6 +132,25 @@ export default function App({ user, onSignOut }) {
   // Fetch initial session state
   useEffect(() => {
     fetchSession();
+  }, []);
+
+  // Powers the topbar notification bell — same endpoint RegulatoryAlertBanner
+  // already calls on the dashboard, fetched independently here so the count
+  // is visible from any tab, not just when the dashboard is mounted.
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await authFetch('/api/regulatory_alerts');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setRegulatoryAlerts(data.alerts || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch regulatory alerts for notification bell:', err);
+      }
+    })();
+    return () => { isMounted = false; };
   }, []);
 
   // Update auto-saved timestamp when saved status turns to 'saved'
@@ -707,43 +739,80 @@ export default function App({ user, onSignOut }) {
   const isWizardTab = tabOrder.includes(activeTab);
   const wizardStepIndex = isWizardTab ? tabOrder.indexOf(activeTab) : -1;
 
+  const ADMIN_NAV = [
+    { id: 'compliance_matrix', label: 'Compliance Matrix', icon: ClipboardCheck },
+    { id: 'banker_dashboard', label: 'Banker Certification', icon: Landmark },
+    { id: 'audit_trail', label: 'Audit Trail', icon: History },
+  ];
+  const ADMIN_TITLES = Object.fromEntries(ADMIN_NAV.map(n => [n.id, n.label]));
+
   const pageTitle = activeTab === 'dashboard'
     ? 'Filing Dashboard'
     : activeTab === 'uploads'
       ? 'Document Vault'
-      : steps.find(s => s.id === activeTab)?.label || 'Drafting Wizard';
+      : ADMIN_TITLES[activeTab]
+        ? ADMIN_TITLES[activeTab]
+        : steps.find(s => s.id === activeTab)?.label || 'Drafting Wizard';
 
-  return (
-    <div className="min-h-screen flex bg-gray-50 text-gray-900 relative font-sans">
+  // Flat, searchable index for the topbar quick-switcher — real navigation
+  // over existing tabs/handlers, not a fake search backend.
+  const QUICK_SWITCH_ITEMS = [
+    { id: 'dashboard', label: 'Filing Dashboard', icon: LayoutDashboard },
+    { id: 'uploads', label: 'Document Vault', icon: FolderOpen },
+    ...steps.map(s => ({ id: s.id, label: s.label, icon: FileText })),
+    ...ADMIN_NAV,
+  ];
+  const quickSwitchResults = quickSwitchQuery.trim()
+    ? QUICK_SWITCH_ITEMS.filter(item => item.label.toLowerCase().includes(quickSwitchQuery.trim().toLowerCase()))
+    : QUICK_SWITCH_ITEMS;
 
-      {/* Pinned Top Progress Bar */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-100 z-50">
-        <div
-          className="h-full bg-accent-500 transition-all duration-700 ease-out rounded-r-full"
-          style={{ width: `${progressPct}%` }}
-        />
-      </div>
+  const jumpTo = (tabId) => {
+    setActiveTab(tabId);
+    setQuickSwitchOpen(false);
+    setQuickSwitchQuery('');
+    setMobileNavOpen(false);
+  };
 
-      {/* ── Sidebar Navigation ── */}
-      <aside className="w-64 border-r border-gray-100 bg-white shrink-0 flex flex-col hidden md:flex sticky top-0 h-screen z-40 shadow-sm overflow-hidden">
-        <div className="flex flex-col flex-1 min-h-0">
-          {/* Brand / Logo */}
-          <div className="px-4 py-4 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-r from-[#0d1f2d] via-[#1a3a4a] to-[#0d2b3e] text-white">
-            <img
-              src="/logo.png"
-              alt="IPO Sherpa"
-              className="h-9 w-auto shrink-0 rounded-lg drop-shadow-[0_4px_16px_rgba(0,179,134,0.45)]"
-            />
+  /* ── Shared nav row — used by both the desktop sidebar and mobile drawer ── */
+  const NavItem = ({ label, icon: Icon, active, collapsed, onClick }) => (
+    <button
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${collapsed ? 'justify-center' : ''} ${active
+          ? 'bg-accent-500 text-white shadow-sm shadow-accent-500/30'
+          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+        }`}
+    >
+      <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-gray-400'}`} />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </button>
+  );
+
+  /* ── Full sidebar contents, reused by the persistent desktop rail and the
+     mobile overlay drawer (which always renders expanded) ── */
+  const SidebarContent = ({ collapsed, onNavigate }) => {
+    const go = (id) => { setActiveTab(id); if (onNavigate) onNavigate(); };
+    return (
+      <div className="flex flex-col flex-1 min-h-0">
+        {/* Brand / Logo */}
+        <div className={`px-4 py-4 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-r from-[#0d1f2d] via-[#1a3a4a] to-[#0d2b3e] text-white ${collapsed ? 'justify-center px-2' : ''}`}>
+          <img
+            src="/logo.png"
+            alt="IPO Sherpa"
+            className="h-9 w-auto shrink-0 rounded-lg drop-shadow-[0_4px_16px_rgba(249,115,22,0.45)]"
+          />
+          {!collapsed && (
             <div>
               <h1 className="font-display font-bold text-[14.5px] text-white leading-tight tracking-tight flex items-center gap-1">
-                IPO <span className="text-[#00b386]">Sherpa</span>
+                IPO <span className="text-[#f97316]">Sherpa</span>
               </h1>
-              <p className="text-[9px] uppercase font-bold tracking-widest text-emerald-400/80 mt-0.5">SEBI IPO Workspace</p>
+              <p className="text-[9px] uppercase font-bold tracking-widest text-accent-400/80 mt-0.5">SEBI IPO Workspace</p>
             </div>
-          </div>
+          )}
+        </div>
 
-
-          {/* Sync status pill */}
+        {/* Sync status pill */}
+        {!collapsed && (
           <div className="px-5 py-2.5 border-b border-gray-50 flex items-center justify-between">
             <span className="text-[10.5px] text-gray-400 font-semibold select-none">Auto-sync</span>
             {saveStatus === 'saved' && (
@@ -762,86 +831,93 @@ export default function App({ user, onSignOut }) {
               </span>
             )}
           </div>
+        )}
 
-          {/* Nav */}
-          <nav className="p-3 space-y-0.5 overflow-y-auto flex-1 min-h-0">
+        {/* Nav */}
+        <nav className="p-3 space-y-0.5 overflow-y-auto flex-1 min-h-0">
+          {!collapsed && (
             <div className="pb-2 px-3 pt-2 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
               Overview
             </div>
+          )}
 
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${activeTab === 'dashboard'
-                  ? 'bg-accent-50 text-accent-700 border-l-[3px] border-accent-500'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-l-[3px] border-transparent'
-                }`}
-            >
-              <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'dashboard' ? 'text-accent-500' : 'text-gray-400'}`} />
-              <span>Filing Dashboard</span>
-            </button>
+          <NavItem id="dashboard" label="Filing Dashboard" icon={LayoutDashboard} collapsed={collapsed} active={activeTab === 'dashboard'} onClick={() => go('dashboard')} />
+          <NavItem id="uploads" label="Document Vault" icon={FolderOpen} collapsed={collapsed} active={activeTab === 'uploads'} onClick={() => go('uploads')} />
 
-            <button
-              onClick={() => setActiveTab('uploads')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold rounded-xl transition-all cursor-pointer ${activeTab === 'uploads'
-                  ? 'bg-accent-50 text-accent-700 border-l-[3px] border-accent-500'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-l-[3px] border-transparent'
-                }`}
-            >
-              <FolderOpen className={`w-4 h-4 shrink-0 ${activeTab === 'uploads' ? 'text-accent-500' : 'text-gray-400'}`} />
-              <span>Document Vault</span>
-            </button>
-
-
+          {!collapsed && (
             <div className="pt-4 pb-2 px-3 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
               Drafting Wizard
             </div>
+          )}
 
-            <div className="space-y-0.5">
-              {steps.map((step, idx) => {
-                const status = getStepStatus(step.id);
-                const isActive = activeTab === step.id;
+          <div className="space-y-0.5">
+            {steps.map((step) => {
+              const status = getStepStatus(step.id);
+              const isActive = activeTab === step.id;
+              if (collapsed) {
                 return (
                   <button
                     key={step.id}
-                    onClick={() => setActiveTab(step.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${isActive
-                        ? 'bg-gray-50 text-gray-900 border-accent-500 shadow-sm'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-transparent'
+                    onClick={() => go(step.id)}
+                    title={step.label}
+                    className={`w-full flex items-center justify-center px-3 py-2.5 rounded-xl transition-all cursor-pointer border-l-[3px] ${isActive ? 'bg-gray-50 border-accent-500 shadow-sm' : 'border-transparent hover:bg-gray-50'
                       }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {getStatusDot(status)}
-                      <span className="truncate">{step.label}</span>
-                    </div>
-                    <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${isActive
-                        ? 'bg-accent-50 text-accent-600 border border-accent-100'
-                        : 'bg-gray-100 text-gray-400 border border-gray-200'
-                      }`}>
-                      {step.code}
-                    </span>
+                    {getStatusDot(status)}
                   </button>
                 );
-              })}
+              }
+              return (
+                <button
+                  key={step.id}
+                  onClick={() => go(step.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${isActive
+                      ? 'bg-gray-50 text-gray-900 border-accent-500 shadow-sm'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-transparent'
+                    }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {getStatusDot(status)}
+                    <span className="truncate">{step.label}</span>
+                  </div>
+                  <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${isActive
+                      ? 'bg-accent-50 text-accent-600 border border-accent-100'
+                      : 'bg-gray-100 text-gray-400 border border-gray-200'
+                    }`}>
+                    {step.code}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {!collapsed && (
+            <div className="pt-4 pb-2 px-3 text-[10px] uppercase font-bold tracking-widest text-gray-400 select-none">
+              Compliance &amp; Audit
             </div>
-          </nav>
-        </div>
+          )}
+          {ADMIN_NAV.map(item => (
+            <NavItem key={item.id} {...item} collapsed={collapsed} active={activeTab === item.id} onClick={() => go(item.id)} />
+          ))}
+        </nav>
 
         {/* Sidebar Footer */}
         <div className="p-3 border-t border-gray-100">
-          {/* Progress summary */}
-          <div className="px-3 py-2.5 mb-1">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10.5px] font-bold text-gray-500">Wizard progress</span>
-              <span className="text-[10.5px] font-bold text-accent-600">{completedStepsCount}/{steps.length}</span>
+          {!collapsed && (
+            <div className="px-3 py-2.5 mb-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10.5px] font-bold text-gray-500">Wizard progress</span>
+                <span className="text-[10.5px] font-bold text-accent-600">{completedStepsCount}/{steps.length}</span>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent-500 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent-500 rounded-full transition-all duration-500"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-          {confirmReset ? (
+          )}
+          {!collapsed && confirmReset ? (
             <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-2 animate-fade-in-up">
               <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-700">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
@@ -866,82 +942,240 @@ export default function App({ user, onSignOut }) {
           ) : (
             <button
               onClick={() => setConfirmReset(true)}
-              className="w-full py-2 px-3 rounded-xl text-[11.5px] font-semibold text-gray-400 hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              title={collapsed ? 'Reset workspace' : undefined}
+              className={`w-full py-2 px-3 rounded-xl text-[11.5px] font-semibold text-gray-400 hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer ${collapsed ? '' : ''}`}
             >
-              <LogOut className="w-3.5 h-3.5" /> Reset workspace
+              <LogOut className="w-3.5 h-3.5" /> {!collapsed && 'Reset workspace'}
             </button>
           )}
-          <button
-            onClick={onSignOut}
-            className="w-full mt-2 py-2 px-3 rounded-xl text-[11.5px] font-semibold text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Sign out {user?.email ? `(${user.email})` : ''}
-          </button>
         </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen flex bg-[#F8F9FB] text-gray-800 relative font-sans">
+
+      {/* Pinned Top Progress Bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-100 z-50">
+        <div
+          className="h-full bg-accent-500 transition-all duration-700 ease-out rounded-r-full"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      {/* ── Desktop Sidebar (collapsible) ── */}
+      <aside className={`${sidebarCollapsed ? 'w-[72px]' : 'w-64'} border-r border-gray-100 bg-white shrink-0 hidden md:flex flex-col sticky top-0 h-screen z-40 shadow-sm overflow-hidden transition-[width] duration-200`}>
+        <SidebarContent collapsed={sidebarCollapsed} />
       </aside>
+
+      {/* ── Mobile Nav Drawer ── */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-gray-900/40" onClick={() => setMobileNavOpen(false)} />
+          <aside className="absolute left-0 top-0 h-full w-72 bg-white shadow-2xl flex flex-col animate-fade-in-up">
+            <div className="flex justify-end p-2 border-b border-gray-100">
+              <button onClick={() => setMobileNavOpen(false)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <SidebarContent collapsed={false} onNavigate={() => setMobileNavOpen(false)} />
+          </aside>
+        </div>
+      )}
 
       {/* ── Main Content Area ── */}
       <main className="flex-grow min-w-0 flex flex-col min-h-screen">
 
         {/* Top Header */}
-        <header className="h-14 border-b border-gray-100 bg-white flex justify-between items-center px-7 sticky top-0 z-30 shadow-sm select-none">
-          <div className="flex items-center gap-3">
-            {/* Breadcrumb style */}
-            <div className="flex items-center gap-2 text-gray-400">
+        <header className="h-16 border-b border-gray-100 bg-white flex items-center gap-3 px-4 md:px-7 sticky top-0 z-30 shadow-sm select-none">
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            className="md:hidden p-2 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-all cursor-pointer shrink-0"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Desktop sidebar collapse toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(v => !v)}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="hidden md:flex p-2 -ml-1 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all cursor-pointer shrink-0"
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
+
+          {/* Breadcrumb + title */}
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
+            <div className="hidden lg:flex items-center gap-2 text-gray-400">
               <span className="text-[12px] font-semibold">IPO Sherpa</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </div>
-            <h2 className="text-[14px] font-bold text-gray-900 tracking-tight">
+            <h2 className="text-[14px] font-bold text-gray-900 tracking-tight truncate max-w-[40vw]">
               {pageTitle}
             </h2>
-
             {isWizardTab && (
-              <span className="text-[10.5px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg font-semibold border border-gray-200">
+              <span className="hidden lg:inline-flex text-[10.5px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg font-semibold border border-gray-200 shrink-0">
                 Step {wizardStepIndex + 1} / {steps.length}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2.5">
+          {/* Quick switcher — real navigation over existing tabs, not a search backend */}
+          <div className="hidden lg:block relative flex-1 max-w-xs">
+            <Search className="w-3.5 h-3.5 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={quickSwitchQuery}
+              onChange={(e) => { setQuickSwitchQuery(e.target.value); setQuickSwitchOpen(true); }}
+              onFocus={() => { setQuickSwitchOpen(true); setNotifOpen(false); setProfileOpen(false); }}
+              placeholder="Jump to a section…"
+              className="w-full text-[12.5px] font-medium bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:border-accent-400 focus:bg-white focus:ring-2 focus:ring-accent-100 transition-all"
+            />
+            {quickSwitchOpen && (
+              <div className="absolute top-full left-0 mt-1.5 w-80 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-card-lg py-1.5 z-50">
+                {quickSwitchResults.length === 0 ? (
+                  <p className="px-3 py-4 text-[12px] text-gray-400 text-center">No sections match "{quickSwitchQuery}"</p>
+                ) : quickSwitchResults.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => jumpTo(item.id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] font-semibold text-gray-600 hover:bg-accent-50 hover:text-accent-700 transition-colors cursor-pointer text-left"
+                  >
+                    <item.icon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto shrink-0">
             {/* SEBI compliance badge */}
-            <div className="text-[10.5px] text-emerald-700 flex items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-semibold">
+            <div className="hidden xl:flex text-[10.5px] text-emerald-700 items-center gap-1.5 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>SEBI ICDR Chapter IX</span>
+            </div>
+
+            {/* Notifications bell — real data: validation conflicts + regulatory alerts */}
+            <div className="relative">
+              <button
+                onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); setQuickSwitchOpen(false); }}
+                className={`p-2 rounded-xl border transition-all cursor-pointer relative ${notifOpen ? 'bg-accent-50 border-accent-200 text-accent-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+              >
+                <Bell className="w-4 h-4" />
+                {(regulatoryAlerts.length + (validationResults?.inconsistencies?.length || 0)) > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-white">
+                    {regulatoryAlerts.length + (validationResults?.inconsistencies?.length || 0)}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-80 max-h-96 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-card-lg z-50">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <h4 className="text-[12.5px] font-bold text-gray-900">Notifications</h4>
+                  </div>
+                  {validationResults?.inconsistencies?.length > 0 && (
+                    <button
+                      onClick={() => { setActiveTab('dashboard'); setNotifOpen(false); }}
+                      className="w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer flex items-start gap-2.5"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[12px] font-bold text-gray-800">{validationResults.inconsistencies.length} SEBI compliance conflict{validationResults.inconsistencies.length === 1 ? '' : 's'}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">View on the Filing Dashboard</p>
+                      </div>
+                    </button>
+                  )}
+                  {regulatoryAlerts.slice(0, 5).map(alert => (
+                    <div key={alert.id} className="px-4 py-3 border-b border-gray-50 last:border-b-0 flex items-start gap-2.5">
+                      <Bell className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold text-gray-800 truncate">{alert.title}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{alert.date}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {regulatoryAlerts.length === 0 && !(validationResults?.inconsistencies?.length > 0) && (
+                    <p className="px-4 py-6 text-[12px] text-gray-400 text-center">You're all caught up.</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Copilot toggle */}
             <button
               onClick={() => setCopilotOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shadow-sm relative ${copilotOpen
+              className={`flex items-center gap-1.5 px-2.5 lg:px-3.5 py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shadow-sm relative ${copilotOpen
                   ? 'bg-accent-500 text-white border-accent-500 shadow-accent'
                   : 'bg-white hover:bg-accent-50 text-gray-600 hover:text-accent-700 border-gray-200 hover:border-accent-200'
                 }`}
             >
               <Sparkles className={`w-3.5 h-3.5 ${copilotOpen ? 'text-white' : 'text-accent-500'}`} />
-              <span>AI Copilot</span>
+              <span className="hidden lg:inline">AI Copilot</span>
               {validationResults?.inconsistencies?.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse" />
               )}
             </button>
+
+            {/* Primary CTA — reachable from any tab, not just the Dashboard card */}
+            <button
+              onClick={handleGenerateProspectus}
+              disabled={generating}
+              className="btn-primary !py-2 !px-3.5 !text-[11.5px]"
+            >
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+              <span className="hidden lg:inline">{generating ? 'Compiling…' : 'Generate Draft'}</span>
+            </button>
+
+            {/* Profile menu */}
+            <div className="relative">
+              <button
+                onClick={() => { setProfileOpen(v => !v); setNotifOpen(false); setQuickSwitchOpen(false); }}
+                className="w-9 h-9 rounded-full bg-accent-500 text-white text-[12px] font-bold flex items-center justify-center cursor-pointer hover:brightness-95 transition-all shrink-0"
+              >
+                {(user?.email || 'U').charAt(0).toUpperCase()}
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-gray-200 rounded-xl shadow-card-lg z-50 py-1.5">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-accent-500 text-white text-[12px] font-bold flex items-center justify-center shrink-0">
+                      {(user?.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12.5px] font-bold text-gray-900 truncate">{user?.email || 'Workspace user'}</p>
+                      <p className="text-[10.5px] text-gray-400">SME IPO Workspace</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={onSignOut}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[12.5px] font-semibold text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Content Container */}
-        <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-gray-50">
+        <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-[#F8F9FB]">
           {loading ? (
 
 
             <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
               <div className="flex flex-col items-center gap-5">
                 <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-xl">
-                  <Loader2 className="w-7 h-7 text-emerald-400 animate-spin" />
+                  <Loader2 className="w-7 h-7 text-accent-400 animate-spin" />
                 </div>
                 <div className="text-center space-y-1.5">
                   <p className="text-[14px] font-bold text-white/80 tracking-wide">Preparing your workspace…</p>
                   <p className="text-[11px] text-white/35 font-medium">Fetching session · Running compliance checks</p>
                 </div>
                 <div className="w-48 h-0.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full animate-pulse" style={{ width: '60%' }} />
+                  <div className="h-full bg-gradient-to-r from-accent-500 to-accent-400 rounded-full animate-pulse" style={{ width: '60%' }} />
                 </div>
               </div>
             </div>
@@ -983,6 +1217,10 @@ export default function App({ user, onSignOut }) {
                   validationResults={validationResults}
                 />
               )}
+
+              {activeTab === 'compliance_matrix' && <ComplianceMap />}
+              {activeTab === 'banker_dashboard' && <BankerDashboard />}
+              {activeTab === 'audit_trail' && <AuditTrail />}
             </>
           )}
         </div>

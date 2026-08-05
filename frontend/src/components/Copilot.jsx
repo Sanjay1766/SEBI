@@ -226,16 +226,16 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
   if (!isOpen) return null;
 
   return (
-    <div className="w-96 border-l border-slate-200 bg-[#F4F8FC] shrink-0 flex flex-col justify-between h-screen sticky top-0 z-40 shadow-card-lg relative animate-fade-in-up">
+    <div className="w-96 border-l border-slate-200 bg-gray-50 shrink-0 flex flex-col justify-between h-screen sticky top-0 z-40 shadow-card-lg relative animate-fade-in-up">
       {/* Top accent bar - Light Blue Accent */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-400" />
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-accent-500" />
       
       {/* Header */}
-      <div className="pt-2.5 px-4 py-3 border-b border-[#D2E2F0] flex justify-between items-center bg-[#E1EBF5] text-slate-800 select-none">
+      <div className="pt-2.5 px-4 py-3 border-b border-gray-200 flex justify-between items-center bg-white text-slate-800 select-none">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
+          <Sparkles className="w-4 h-4 text-accent-500 shrink-0" />
           <div className="min-w-0">
-            <h3 className="font-bold text-[13px] text-[#1B2A4A] tracking-tight leading-tight">AI Compliance Copilot</h3>
+            <h3 className="font-bold text-[13px] text-gray-900 tracking-tight leading-tight">AI Compliance Copilot</h3>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider">SEBI SME Auditor</span>
             </div>
@@ -273,7 +273,7 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
               <div 
                 className={`max-w-[88%] rounded-lg px-3.5 py-2.5 text-[12.5px] shadow-sm leading-relaxed ${
                   isUser 
-                    ? 'bg-blue-50/80 border border-blue-200 text-slate-800 rounded-tr-none' 
+                    ? 'bg-accent-50/70 border border-accent-200 text-slate-800 rounded-tr-none' 
                     : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
                 }`}
               >
@@ -320,7 +320,7 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
                 {/* Suggestion Card */}
                 {suggestion && (
                   <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200 flex flex-col gap-2">
-                    <div className="flex items-center gap-1.5 text-[#1B2A4A] font-bold text-[9.5px] uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 text-gray-900 font-bold text-[9.5px] uppercase tracking-wider">
                       <FileText className="w-3.5 h-3.5" /> Suggestion Draft
                       {FIELD_LABELS[suggestion.key] && (
                         <span className="text-slate-400 font-normal normal-case">· {FIELD_LABELS[suggestion.key]}</span>
@@ -334,7 +334,7 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
                       className={`w-full py-2 px-3 rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         appliedField === suggestion.key
                           ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-[#1B2A4A] hover:bg-[#2A3B5C] text-white shadow-sm'
+                          : 'bg-gray-900 hover:bg-gray-800 text-white shadow-sm'
                       }`}
                     >
                       {appliedField === suggestion.key ? (
@@ -375,7 +375,7 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
 
       {/* Quick Prompts Panel */}
       {showQuickActions && messages.length === 1 && (
-        <div className="px-4 pb-3.5 pt-2 bg-[#F0F5FA] border-t border-[#E1EBF5] select-none">
+        <div className="px-4 pb-3.5 pt-2 bg-gray-50 border-t border-gray-100 select-none">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[9.5px] uppercase font-bold tracking-widest text-slate-400">Quick Actions</p>
             <button 
@@ -405,19 +405,19 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
       {/* Input Form */}
       <form 
         onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-        className="p-4 border-t border-[#E1EBF5] bg-[#F0F5FA] flex gap-2 select-none"
+        className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2 select-none"
       >
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about SEBI compliance or draft…"
-          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-[12.5px] text-slate-700 placeholder-slate-400 focus:outline-none focus:border-[#1B2A4A] focus:ring-2 focus:ring-[#1B2A4A]/10 focus:bg-white transition-all shadow-sm"
+          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-[12.5px] text-slate-700 placeholder-slate-400 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 focus:bg-white transition-all shadow-sm"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="px-3.5 py-2.5 rounded-lg bg-[#1B2A4A] hover:bg-[#2A3B5C] active:bg-[#121E36] text-white transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center border border-[#1B2A4A] hover:border-[#2A3B5C] shadow-sm"
+          className="px-3.5 py-2.5 rounded-lg bg-gray-900 hover:bg-gray-800 active:bg-black text-white transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center border border-gray-900 hover:border-gray-800 shadow-sm"
         >
           <Send className="w-4 h-4" />
         </button>

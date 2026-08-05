@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, FileText, CheckCircle2, Clock, Copy, AlertCircle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Clock, Copy, AlertCircle, RefreshCw } from 'lucide-react';
+import Badge from './ui/Badge';
 
 export default function DueDiligenceManager({ apiFetch, validationResults, sessionData, onPreFill }) {
   const [data, setData] = useState(null);
@@ -56,10 +57,8 @@ export default function DueDiligenceManager({ apiFetch, validationResults, sessi
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-[15px] text-gray-900">Lead Manager Due Diligence & Form A Audit</h3>
-              <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md">
-                SEBI ICDR REG 246(1)
-              </span>
+              <h3 className="text-card-title">Lead Manager Due Diligence & Form A Audit</h3>
+              <Badge variant="success" size="xs" className="font-mono">SEBI ICDR REG 246(1)</Badge>
             </div>
             <p className="text-[12px] text-gray-500 mt-0.5">
               Statutory clearances checklist & Form A Lead Manager Due Diligence Certificate generator
@@ -83,7 +82,7 @@ export default function DueDiligenceManager({ apiFetch, validationResults, sessi
             onClick={() => setActiveTab('form_a')}
             className={`px-3.5 py-1.5 rounded-lg text-[11.5px] font-bold transition-all cursor-pointer ${
               activeTab === 'form_a'
-                ? 'bg-emerald-600 text-white shadow-2xs'
+                ? 'bg-accent-500 text-white shadow-2xs'
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
@@ -156,15 +155,9 @@ export default function DueDiligenceManager({ apiFetch, validationResults, sessi
                     )}
                     <span className="text-[12px] font-bold text-gray-900">{item.title}</span>
                   </div>
-                  <span
-                    className={`text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md ${
-                      item.status === 'verified'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                        : 'bg-amber-100 text-amber-800 border border-amber-200'
-                    }`}
-                  >
+                  <Badge variant={item.status === 'verified' ? 'success' : 'warning'} size="xs" className="font-mono">
                     {item.status === 'verified' ? 'VERIFIED' : 'PENDING'}
-                  </span>
+                  </Badge>
                 </div>
                 <p className="text-[11px] text-gray-600 leading-snug">{item.notes}</p>
                 <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-mono">

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Lock, Landmark, CheckCircle2, Loader2, Download } from 'lucide-react';
 import { apiFetch } from '../api';
+import Badge from './ui/Badge';
 
 const CERTIFIABLE_SECTIONS = [
   { key: "cover_page", name: "Cover Page & Issue Particulars" },
@@ -107,7 +109,11 @@ export default function BankerDashboard() {
   };
 
   if (loading && !statusData) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>Loading Banker Dashboard...</div>;
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center py-24 text-gray-400 gap-2">
+        <Loader2 className="w-5 h-5 animate-spin" /> Loading Banker Dashboard…
+      </div>
+    );
   }
 
   const states = statusData?.states || {};
@@ -117,170 +123,138 @@ export default function BankerDashboard() {
   const progressPct = Math.round((certifiedCount / totalRequired) * 100);
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', color: '#f8fafc' }}>
-      {/* Header Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-        padding: '1.75rem',
-        borderRadius: '12px',
-        border: '1px solid #334155',
-        marginBottom: '2rem',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#38bdf8', marginBottom: '0.5rem' }}>
-              🏦 Merchant Banker Certification Dashboard
-            </h2>
-            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
-              SEBI Chapter IX Mandate: DRHP export is strictly gated until all 11 statutory prospectus sections are certified by an authorized intermediary.
-            </p>
-          </div>
-
-          <div>
-            {isAllowed ? (
-              <span style={{
-                background: '#166534', color: '#4ade80', padding: '0.5rem 1rem', borderRadius: '20px',
-                fontWeight: '600', border: '1px solid #22c55e', fontSize: '0.9rem'
-              }}>
-                ✓ EXPORT READY
-              </span>
-            ) : (
-              <span style={{
-                background: '#991b1b', color: '#fca5a5', padding: '0.5rem 1rem', borderRadius: '20px',
-                fontWeight: '600', border: '1px solid #ef4444', fontSize: '0.9rem'
-              }}>
-                🔒 EXPORT BLOCKED ({certifiedCount}/{totalRequired} Certified)
-              </span>
-            )}
-          </div>
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in-up">
+      {/* Page header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-page-title flex items-center gap-2.5">
+            <Landmark className="w-7 h-7 text-accent-500" /> Banker Certification
+          </h1>
+          <p className="text-body mt-1 max-w-2xl">
+            SEBI Chapter IX Mandate: DRHP export is strictly gated until all {totalRequired} statutory prospectus sections are certified by an authorized intermediary.
+          </p>
         </div>
+        {isAllowed ? (
+          <Badge variant="success" icon={CheckCircle2} className="!text-[12px] !px-3.5 !py-2 shrink-0">EXPORT READY</Badge>
+        ) : (
+          <Badge variant="danger" icon={Lock} className="!text-[12px] !px-3.5 !py-2 shrink-0">
+            EXPORT BLOCKED ({certifiedCount}/{totalRequired} Certified)
+          </Badge>
+        )}
+      </div>
 
-        {/* Progress Bar */}
-        <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
-            <span>Certification Progress</span>
-            <span>{certifiedCount} of {totalRequired} Sections ({progressPct}%)</span>
-          </div>
-          <div style={{ background: '#334155', height: '10px', borderRadius: '5px', overflow: 'hidden' }}>
-            <div style={{
-              width: `${progressPct}%`, background: isAllowed ? '#22c55e' : '#0ea5e9', height: '100%',
-              transition: 'width 0.4s ease'
-            }} />
-          </div>
+      {/* Progress card */}
+      <div className="card rounded-2xl p-6">
+        <div className="flex items-center justify-between text-caption font-bold mb-2">
+          <span>Certification Progress</span>
+          <span>{certifiedCount} of {totalRequired} Sections ({progressPct}%)</span>
+        </div>
+        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${isAllowed ? 'bg-emerald-500' : 'bg-accent-500'}`}
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
       </div>
 
-      {/* Banker Particulars Input */}
-      <div style={{ background: '#1e293b', padding: '1rem 1.5rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Signing Merchant Banker Name:</span>
+      {/* Banker particulars + export */}
+      <div className="card rounded-2xl p-4 flex items-center gap-3 flex-wrap">
+        <span className="text-caption font-bold shrink-0">Signing Merchant Banker Name</span>
         <input
           type="text"
           value={bankerName}
           onChange={(e) => setBankerName(e.target.value)}
-          style={{ background: '#0f172a', border: '1px solid #475569', color: '#fff', padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.9rem', width: '260px' }}
+          className="form-input-base !w-64 !py-2 !text-[12.5px]"
         />
         <button
           onClick={handleDownloadBundle}
           disabled={!isAllowed}
-          style={{
-            marginLeft: 'auto', background: isAllowed ? '#22c55e' : '#475569', color: '#fff',
-            border: 'none', padding: '0.6rem 1.2rem', borderRadius: '6px', fontWeight: '600',
-            cursor: isAllowed ? 'pointer' : 'not-allowed'
-          }}
+          className={`ml-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12.5px] font-bold transition-all ${
+            isAllowed
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-sm'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          }`}
         >
-          Download Export Bundle (.ZIP)
+          <Download className="w-3.5 h-3.5" /> Download Export Bundle (.ZIP)
         </button>
       </div>
 
-      {/* Table of Certifiable Sections */}
-      <div style={{ background: '#1e293b', borderRadius: '12px', overflow: 'hidden', border: '1px solid #334155' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-          <thead>
-            <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155', color: '#94a3b8' }}>
-              <th style={{ padding: '1rem' }}>Section</th>
-              <th style={{ padding: '1rem' }}>Status</th>
-              <th style={{ padding: '1rem' }}>Certified By / Notes</th>
-              <th style={{ padding: '1rem', textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CERTIFIABLE_SECTIONS.map((sec) => {
-              const st = states[sec.key] || { status: 'draft' };
-              const isCertified = st.status === 'certified';
-              const isReviewed = st.status === 'reviewed';
+      {/* Certifiable sections table */}
+      <div className="card rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[12.5px] border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100 text-caption uppercase tracking-wide">
+                <th className="px-5 py-3.5 font-bold">Section</th>
+                <th className="px-5 py-3.5 font-bold w-28">Status</th>
+                <th className="px-5 py-3.5 font-bold">Certified By / Notes</th>
+                <th className="px-5 py-3.5 font-bold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {CERTIFIABLE_SECTIONS.map((sec) => {
+                const st = states[sec.key] || { status: 'draft' };
+                const isCertified = st.status === 'certified';
+                const isReviewed = st.status === 'reviewed';
 
-              return (
-                <tr key={sec.key} style={{ borderBottom: '1px solid #334155' }}>
-                  <td style={{ padding: '1rem', fontWeight: '600', color: '#f1f5f9' }}>
-                    {sec.name}
-                  </td>
-                  <td style={{ padding: '1rem' }}>
-                    {isCertified && (
-                      <span style={{ background: '#14532d', color: '#4ade80', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
-                        CERTIFIED
-                      </span>
-                    )}
-                    {isReviewed && (
-                      <span style={{ background: '#1e3a8a', color: '#60a5fa', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
-                        REVIEWED
-                      </span>
-                    )}
-                    {st.status === 'draft' && (
-                      <span style={{ background: '#334155', color: '#cbd5e1', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
-                        DRAFT
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '1rem', color: '#94a3b8' }}>
-                    {isCertified ? (
-                      <div>
-                        <div style={{ color: '#e2e8f0', fontWeight: '500' }}>{st.certified_by}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{st.certified_at ? new Date(st.certified_at).toLocaleString() : ''}</div>
+                return (
+                  <tr key={sec.key} className="hover:bg-gray-50/70 transition-colors">
+                    <td className="px-5 py-4 font-semibold text-gray-800">{sec.name}</td>
+                    <td className="px-5 py-4">
+                      {isCertified && <Badge variant="success" size="xs">CERTIFIED</Badge>}
+                      {isReviewed && <Badge variant="info" size="xs">REVIEWED</Badge>}
+                      {st.status === 'draft' && <Badge variant="neutral" size="xs">DRAFT</Badge>}
+                    </td>
+                    <td className="px-5 py-4 text-gray-500">
+                      {isCertified ? (
+                        <div>
+                          <div className="text-gray-800 font-medium">{st.certified_by}</div>
+                          <div className="text-caption">{st.certified_at ? new Date(st.certified_at).toLocaleString() : ''}</div>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Add review note…"
+                          value={actionNotes[sec.key] || ''}
+                          onChange={(e) => setActionNotes({ ...actionNotes, [sec.key]: e.target.value })}
+                          className="form-input-base !py-1.5 !text-[12px] !w-full"
+                        />
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-2">
+                        {!isCertified && (
+                          <>
+                            <button
+                              onClick={() => handleReview(sec.key)}
+                              className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                            >
+                              Mark Reviewed
+                            </button>
+                            <button
+                              onClick={() => handleCertify(sec.key)}
+                              className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold text-white bg-accent-500 hover:bg-accent-600 transition-colors cursor-pointer"
+                            >
+                              Certify
+                            </button>
+                          </>
+                        )}
+                        {isCertified && (
+                          <button
+                            onClick={() => handleUncertify(sec.key)}
+                            className="px-3 py-1.5 rounded-lg text-[11.5px] font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors cursor-pointer"
+                          >
+                            Revoke Certification
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="Add review note..."
-                        value={actionNotes[sec.key] || ''}
-                        onChange={(e) => setActionNotes({ ...actionNotes, [sec.key]: e.target.value })}
-                        style={{ background: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.85rem', width: '90%' }}
-                      />
-                    )}
-                  </td>
-                  <td style={{ padding: '1rem', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                      {!isCertified && (
-                        <>
-                          <button
-                            onClick={() => handleReview(sec.key)}
-                            style={{ background: '#334155', color: '#e2e8f0', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                          >
-                            Mark Reviewed
-                          </button>
-                          <button
-                            onClick={() => handleCertify(sec.key)}
-                            style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}
-                          >
-                            Certify
-                          </button>
-                        </>
-                      )}
-                      {isCertified && (
-                        <button
-                          onClick={() => handleUncertify(sec.key)}
-                          style={{ background: '#7f1d1d', color: '#fca5a5', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >
-                          Revoke Certification
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

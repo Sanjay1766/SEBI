@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { AlertTriangle, ClipboardList, Printer, Search, Loader2 } from 'lucide-react';
 import { apiFetch } from '../api';
+import Badge from './ui/Badge';
 
 export default function ComplianceMap() {
   const [clauses, setClauses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     async function loadMapping() {
@@ -23,97 +26,105 @@ export default function ComplianceMap() {
   }, []);
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>Loading Compliance Map...</div>;
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center py-24 text-gray-400 gap-2">
+        <Loader2 className="w-5 h-5 animate-spin" /> Loading Compliance Map…
+      </div>
+    );
   }
 
+  const filtered = query.trim()
+    ? clauses.filter(c =>
+        c.id?.toLowerCase().includes(query.toLowerCase()) ||
+        c.sebi_words?.toLowerCase().includes(query.toLowerCase()) ||
+        c.discharged_by?.toLowerCase().includes(query.toLowerCase())
+      )
+    : clauses;
+
+  const completeCount = clauses.filter(c => c.status === 'complete').length;
+
   return (
-    <div style={{ padding: '2rem', maxWidth: '1280px', margin: '0 auto', color: '#f8fafc' }}>
-      {/* Header Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-        padding: '1.75rem',
-        borderRadius: '12px',
-        border: '1px solid #334155',
-        marginBottom: '2rem',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#38bdf8', marginBottom: '0.5rem' }}>
-              📋 SEBI TechSprint Problem Statement Compliance Matrix
-            </h2>
-            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
-              Clause-by-clause mapping demonstrating how IPO Sherpa discharges every SEBI TechSprint mandate (PS-1 to PS-13).
-            </p>
-          </div>
-          <button
-            onClick={() => window.print()}
-            style={{
-              background: '#0284c7', color: '#fff', border: 'none', padding: '0.6rem 1.2rem',
-              borderRadius: '6px', fontWeight: '600', cursor: 'pointer'
-            }}
-          >
-            🖨️ Print Compliance Report
-          </button>
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in-up">
+      {/* Page header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-page-title flex items-center gap-2.5">
+            <ClipboardList className="w-7 h-7 text-accent-500" /> Compliance Matrix
+          </h1>
+          <p className="text-body mt-1">
+            Clause-by-clause mapping demonstrating how IPO Sherpa discharges every SEBI TechSprint mandate (PS-1 to PS-13).
+          </p>
+        </div>
+        <button onClick={() => window.print()} className="btn-secondary shrink-0">
+          <Printer className="w-3.5 h-3.5" /> Print Report
+        </button>
+      </div>
+
+      {/* Summary + search */}
+      <div className="card rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Badge variant="success">{completeCount} / {clauses.length} Complete</Badge>
+          <span className="text-caption">Problem statements PS-1 through PS-13</span>
+        </div>
+        <div className="relative w-full sm:w-64">
+          <Search className="w-3.5 h-3.5 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search clauses…"
+            className="form-input-base !pl-8 !py-2 !text-[12.5px]"
+          />
         </div>
       </div>
 
       {/* Matrix Table */}
-      <div style={{ background: '#1e293b', borderRadius: '12px', overflow: 'hidden', border: '1px solid #334155' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-          <thead>
-            <tr style={{ background: '#0f172a', borderBottom: '2px solid #334155', color: '#94a3b8' }}>
-              <th style={{ padding: '1rem', width: '70px' }}>Clause</th>
-              <th style={{ padding: '1rem', width: '220px' }}>SEBI Mandate Rationale</th>
-              <th style={{ padding: '1rem', width: '260px' }}>Technical Discharge Mechanism</th>
-              <th style={{ padding: '1rem' }}>Empirical Evidence & Implementation Proof</th>
-              <th style={{ padding: '1rem', width: '100px', textAlign: 'center' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clauses.map((item) => {
-              const isComplete = item.status === 'complete';
-              return (
-                <tr key={item.id} style={{ borderBottom: '1px solid #334155' }}>
-                  <td style={{ padding: '1rem', fontWeight: '700', color: '#38bdf8' }}>
-                    {item.id}
-                  </td>
-                  <td style={{ padding: '1rem', color: '#e2e8f0', fontStyle: 'italic' }}>
-                    "{item.sebi_words}"
-                  </td>
-                  <td style={{ padding: '1rem', color: '#f1f5f9', fontWeight: '500' }}>
-                    {item.discharged_by}
-                  </td>
-                  <td style={{ padding: '1rem', color: '#cbd5e1' }}>
-                    <div>{item.proof}</div>
-                    {item.caveat && (
-                      <div style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '0.3rem' }}>
-                        ⚠️ Caveat: {item.caveat}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
-                    {isComplete ? (
-                      <span style={{
-                        background: '#14532d', color: '#4ade80', padding: '0.25rem 0.6rem',
-                        borderRadius: '4px', fontSize: '0.8rem', fontWeight: '700'
-                      }}>
-                        COMPLETE
-                      </span>
-                    ) : (
-                      <span style={{
-                        background: '#78350f', color: '#fde047', padding: '0.25rem 0.6rem',
-                        borderRadius: '4px', fontSize: '0.8rem', fontWeight: '700'
-                      }}>
-                        PARTIAL
-                      </span>
-                    )}
+      <div className="card rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[12.5px] border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100 text-caption uppercase tracking-wide">
+                <th className="px-5 py-3.5 font-bold w-20">Clause</th>
+                <th className="px-5 py-3.5 font-bold w-56">SEBI Mandate Rationale</th>
+                <th className="px-5 py-3.5 font-bold w-64">Technical Discharge Mechanism</th>
+                <th className="px-5 py-3.5 font-bold">Empirical Evidence &amp; Implementation Proof</th>
+                <th className="px-5 py-3.5 font-bold w-28 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((item) => {
+                const isComplete = item.status === 'complete';
+                return (
+                  <tr key={item.id} className="hover:bg-gray-50/70 transition-colors">
+                    <td className="px-5 py-4 font-bold text-accent-600">{item.id}</td>
+                    <td className="px-5 py-4 text-gray-500 italic leading-relaxed">"{item.sebi_words}"</td>
+                    <td className="px-5 py-4 text-gray-800 font-medium leading-relaxed">{item.discharged_by}</td>
+                    <td className="px-5 py-4 text-gray-600 leading-relaxed">
+                      <div>{item.proof}</div>
+                      {item.caveat && (
+                        <div className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3 h-3 shrink-0" /> Caveat: {item.caveat}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <Badge variant={isComplete ? 'success' : 'warning'} size="xs">
+                        {isComplete ? 'COMPLETE' : 'PARTIAL'}
+                      </Badge>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-gray-400">
+                    No clauses match "{query}"
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
