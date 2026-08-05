@@ -1,5 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck } from 'lucide-react';
+import {
+  UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck,
+  BarChart3, Receipt, ScrollText, IdCard, BookOpen, Calculator, UserCog, Scale, LineChart,
+} from 'lucide-react';
+import Badge from './ui/Badge';
 
 export default function Uploader({
   sessionData,
@@ -7,33 +11,22 @@ export default function Uploader({
   apiFetch,
 }) {
 
-  const [uploading, setUploading] = useState({
-    financials: false,
-    gst: false,
-    incorporation: false,
-    compliance: false
-  });
-  
-  const [error, setError] = useState({
-    financials: '',
-    gst: '',
-    incorporation: '',
-    compliance: ''
-  });
+  const DOC_TYPES = [
+    'financials', 'gst', 'incorporation', 'compliance',
+    'moa_aoa', 'cap_table', 'dir12', 'litigation_schedule', 'industry_report', 'sales_register',
+  ];
+  const initFalse = () => Object.fromEntries(DOC_TYPES.map(t => [t, false]));
+  const initEmptyStr = () => Object.fromEntries(DOC_TYPES.map(t => [t, '']));
+  const initTrue = () => Object.fromEntries(DOC_TYPES.map(t => [t, true]));
+  const initNull = () => Object.fromEntries(DOC_TYPES.map(t => [t, null]));
 
-  const [dragging, setDragging] = useState({
-    financials: false,
-    gst: false,
-    incorporation: false,
-    compliance: false
-  });
+  const [uploading, setUploading] = useState(initFalse());
 
-  const [expandedJson, setExpandedJson] = useState({
-    financials: true,
-    gst: true,
-    incorporation: true,
-    compliance: true
-  });
+  const [error, setError] = useState(initEmptyStr());
+
+  const [dragging, setDragging] = useState(initFalse());
+
+  const [expandedJson, setExpandedJson] = useState(initTrue());
 
   const [vcModal, setVcModal] = useState(null);
 
@@ -54,14 +47,15 @@ export default function Uploader({
     gst: useRef(null),
     incorporation: useRef(null),
     compliance: useRef(null),
+    moa_aoa: useRef(null),
+    cap_table: useRef(null),
+    dir12: useRef(null),
+    litigation_schedule: useRef(null),
+    industry_report: useRef(null),
+    sales_register: useRef(null),
   };
 
-  const [jobState, setJobState] = useState({
-    financials: null,
-    gst: null,
-    incorporation: null,
-    compliance: null
-  });
+  const [jobState, setJobState] = useState(initNull());
 
   const handleUpload = async (docType, file) => {
     if (!file) return;
@@ -178,7 +172,7 @@ export default function Uploader({
       accentBg: 'bg-blue-50/60',
       accentBorder: 'border-blue-200/80',
       iconBg: 'bg-blue-100/80',
-      icon: '📊',
+      icon: BarChart3,
       extractedKeys: {
         fy_years: 'Fiscal Years',
         revenue_fy_latest: 'Latest Revenue',
@@ -195,7 +189,7 @@ export default function Uploader({
       accentBg: 'bg-emerald-50/60',
       accentBorder: 'border-emerald-200/80',
       iconBg: 'bg-emerald-100/80',
-      icon: '🧾',
+      icon: Receipt,
       extractedKeys: {
         gstin: 'GSTIN Registration',
         company_name: 'Taxpayer Legal Name',
@@ -211,7 +205,7 @@ export default function Uploader({
       accentBg: 'bg-blue-50/60',
       accentBorder: 'border-blue-200/80',
       iconBg: 'bg-blue-100/80',
-      icon: '📜',
+      icon: ScrollText,
       extractedKeys: {
         cin: 'RoC Corporate ID (CIN)',
         company_name: 'RoC Registered Name',
@@ -227,25 +221,109 @@ export default function Uploader({
       accentBg: 'bg-amber-50/60',
       accentBorder: 'border-amber-200/80',
       iconBg: 'bg-amber-100/80',
-      icon: '🪪',
+      icon: IdCard,
       extractedKeys: {
         pan: 'Company PAN No.',
         pan_name: 'Name on PAN',
         tan: 'Company TAN No.'
+      }
+    },
+    moa_aoa: {
+      title: 'MOA / AOA',
+      desc: 'Memorandum and Articles of Association (PDF).',
+      accentColor: 'text-indigo-600',
+      accentBg: 'bg-indigo-50/60',
+      accentBorder: 'border-indigo-200/80',
+      iconBg: 'bg-indigo-100/80',
+      icon: BookOpen,
+      extractedKeys: {
+        authorized_capital: 'Authorized Capital',
+        face_value_per_share: 'Face Value / Share',
+        objects_clause: 'Objects Clause'
+      }
+    },
+    cap_table: {
+      title: 'Register of Members / Cap Table',
+      desc: 'Shareholder register for pre-offer shareholding and promoter group (PDF).',
+      accentColor: 'text-violet-600',
+      accentBg: 'bg-violet-50/60',
+      accentBorder: 'border-violet-200/80',
+      iconBg: 'bg-violet-100/80',
+      icon: Calculator,
+      extractedKeys: {
+        promoter_shareholding_pre_pct: 'Promoter Shareholding %',
+        pre_offer_shareholding: 'Pre-Offer Shareholding Rows',
+        promoter_group_members: 'Promoter Group Members'
+      }
+    },
+    dir12: {
+      title: 'DIR-12 / Board Resolutions',
+      desc: 'Director/KMP appointment filings (PDF).',
+      accentColor: 'text-cyan-600',
+      accentBg: 'bg-cyan-50/60',
+      accentBorder: 'border-cyan-200/80',
+      iconBg: 'bg-cyan-100/80',
+      icon: UserCog,
+      extractedKeys: {
+        directors: 'Directors Found',
+        kmp: 'KMP Found'
+      }
+    },
+    litigation_schedule: {
+      title: 'Litigation Schedule',
+      desc: 'Structured litigation schedule from legal counsel (PDF) — not free-text scraped.',
+      accentColor: 'text-rose-600',
+      accentBg: 'bg-rose-50/60',
+      accentBorder: 'border-rose-200/80',
+      iconBg: 'bg-rose-100/80',
+      icon: Scale,
+      extractedKeys: {
+        litigation_summary: 'Litigation Summary Rows'
+      }
+    },
+    industry_report: {
+      title: 'Industry Report',
+      desc: 'CRISIL / CARE / ICRA industry report (PDF) — best-effort, low-confidence extraction.',
+      accentColor: 'text-teal-600',
+      accentBg: 'bg-teal-50/60',
+      accentBorder: 'border-teal-200/80',
+      iconBg: 'bg-teal-100/80',
+      icon: LineChart,
+      extractedKeys: {
+        industry_market_size: 'Market Size',
+        industry_cagr: 'CAGR',
+        industry_report_source: 'Report Source'
+      }
+    },
+    sales_register: {
+      title: 'Sales Register / GST Sales',
+      desc: 'Sales ledger or GST sales register for customer concentration (PDF).',
+      accentColor: 'text-orange-600',
+      accentBg: 'bg-orange-50/60',
+      accentBorder: 'border-orange-200/80',
+      iconBg: 'bg-orange-100/80',
+      icon: Receipt,
+      extractedKeys: {
+        top5_customer_revenue_table: 'Top-5 Customer Rows',
+        key_geographies_served: 'Geographies',
+        gst_annual_turnover: 'GST Turnover'
       }
     }
   };
 
   const formatValue = (key, val) => {
     if (val === null || val === undefined || val === '') {
-      return (
-        <span className="text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md text-[9px] uppercase select-none">
-          Missing
-        </span>
-      );
+      return <Badge variant="danger" size="xs" className="uppercase">Missing</Badge>;
     }
     if (typeof val === 'number') {
       return `₹ ${val.toFixed(2)} Cr`;
+    }
+    if (Array.isArray(val)) {
+      return val.length === 0 ? (
+        <span className="text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md text-[9px] uppercase select-none">
+          Missing
+        </span>
+      ) : `${val.length} row${val.length === 1 ? '' : 's'} found`;
     }
     return String(val);
   };
@@ -254,8 +332,8 @@ export default function Uploader({
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
       {/* Page header */}
       <div className="mb-2">
-        <h2 className="text-xl font-display font-700 text-gray-900">Document Vault</h2>
-        <p className="text-[12.5px] text-gray-400 font-medium mt-1 leading-normal">
+        <h1 className="text-page-title">Document Vault</h1>
+        <p className="text-body mt-1">
           Upload statutory certificates and financial documents for OCR extraction and compliance auditing.
         </p>
       </div>
@@ -285,16 +363,17 @@ export default function Uploader({
               <div>
                 <div className="flex justify-between items-start mb-3 select-none">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 ${config.iconBg} rounded-xl flex items-center justify-center text-lg`}>
-                      {config.icon}
+                    <div className={`w-10 h-10 ${config.iconBg} rounded-xl flex items-center justify-center`}>
+                      <config.icon className={`w-5 h-5 ${config.accentColor}`} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-[14px] text-gray-800">{config.title}</h3>
+                      <h3 className="text-card-title">{config.title}</h3>
                       {isUploaded && (
-                        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border mt-0.5 select-none w-fit ${extractionCompleted ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
-                          {extractionCompleted ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                          {extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
-                        </span>
+                        <div className="mt-0.5">
+                          <Badge variant={extractionCompleted ? 'success' : 'warning'} icon={extractionCompleted ? CheckCircle2 : AlertCircle}>
+                            {extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
+                          </Badge>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -335,9 +414,7 @@ export default function Uploader({
                           {jobState[type]?.filename || 'Processing Document'}
                         </span>
                       </div>
-                      <span className="text-[11px] font-extrabold text-accent-700 bg-accent-100/80 border border-accent-200 px-2 py-0.5 rounded-md font-mono">
-                        {jobState[type]?.progress || 15}%
-                      </span>
+                      <Badge variant="accent" className="font-mono">{jobState[type]?.progress || 15}%</Badge>
                     </div>
 
                     {/* Smooth Progress Bar */}
@@ -402,10 +479,9 @@ export default function Uploader({
 
                     {/* W3C VC Badge & Inspection Link */}
                     <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1 text-[9.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-mono">
-                        <ShieldCheck className="w-3 h-3 text-indigo-600" />
+                      <Badge variant="indigo" size="xs" icon={ShieldCheck} className="font-mono">
                         W3C VC: did:polygon:amoy:...
-                      </span>
+                      </Badge>
                       <button
                         onClick={() => fetchAndShowVC(type)}
                         className="text-[9.5px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
@@ -451,10 +527,7 @@ export default function Uploader({
                 />
                 
                 {isUploaded ? (
-                  <button
-                    onClick={() => triggerFileInput(type)}
-                    className="text-[11.5px] font-semibold text-gray-500 hover:text-gray-700 transition-colors w-full text-center py-2 hover:bg-gray-50 border border-gray-200 rounded-xl cursor-pointer"
-                  >
+                  <button onClick={() => triggerFileInput(type)} className="btn-secondary w-full !text-[11.5px]">
                     Re-upload Document
                   </button>
                 ) : (

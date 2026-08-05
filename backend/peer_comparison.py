@@ -12,7 +12,7 @@ logger = logging.getLogger("sebi-ipo-generator.peer_comparison")
 
 DEFAULT_SECTOR_PEERS = {
     "manufacturing": [
-        {"name": "Apex Technochem Ltd", "face_value": 10, "eps": 6.50, "nav": 42.10, "ronw": 15.4, "pe_ratio": 14.2, "listed_exchange": "BSE SME"},
+        {"name": "Precision Forge Industries Ltd", "face_value": 10, "eps": 6.50, "nav": 42.10, "ronw": 15.4, "pe_ratio": 14.2, "listed_exchange": "BSE SME"},
         {"name": "Sigma Polymers Ltd", "face_value": 10, "eps": 4.80, "nav": 35.80, "ronw": 13.4, "pe_ratio": 16.5, "listed_exchange": "NSE Emerge"},
         {"name": "Vanguard Precision Eng Ltd", "face_value": 10, "eps": 8.20, "nav": 58.40, "ronw": 14.0, "pe_ratio": 18.1, "listed_exchange": "BSE SME"},
     ],

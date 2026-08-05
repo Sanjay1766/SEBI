@@ -1,5 +1,6 @@
 services:
   backend:
+    image: jagadheesh1/sebi-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -37,6 +38,7 @@ services:
       retries: 3
 
   frontend:
+    image: jagadheesh1/sebi-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
