@@ -9,6 +9,24 @@ from consistency_checker import run_all_consistency_checks
 logger = logging.getLogger("sebi-ipo-generator.validator")
 
 
+def _is_empty_value(val: Any) -> bool:
+    """True if a session value should be treated as not-yet-filled.
+
+    Boolean False is a valid value (e.g. declaration_signed=False), so it is
+    never empty. list/dict values (the new list/table field types) are empty
+    only when they contain zero items — str(val) on a non-empty list is never
+    an empty string, so the old plain string-strip check silently treated
+    e.g. [] as "present".
+    """
+    if val is None:
+        return True
+    if isinstance(val, bool):
+        return False
+    if isinstance(val, (list, dict)):
+        return len(val) == 0
+    return str(val).strip() == ""
+
+
 def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
     """Runs deterministic validation against schema.json and consistency checks.
 
@@ -91,8 +109,7 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
                     total_blocking_fields += 1
 
                 val = merged.get(key)
-                # Special handling: boolean False is a valid value (e.g. declaration_signed=False)
-                if val is None or (not isinstance(val, bool) and str(val).strip() == ""):
+                if _is_empty_value(val):
                     missing.append(label)
                 else:
                     present.append(label)
@@ -102,7 +119,7 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
             else:
                 # Optional field
                 val = merged.get(key)
-                if val is not None and (isinstance(val, bool) or str(val).strip() != ""):
+                if not _is_empty_value(val):
                     present.append(label)
 
         # Determine section status

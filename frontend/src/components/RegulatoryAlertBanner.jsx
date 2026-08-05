@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, ShieldAlert, ExternalLink, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+import Badge from './ui/Badge';
 
 const SEBI_CIRCULARS_URL = 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=7&smid=0';
 
@@ -47,17 +48,16 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
           </div>
           <div className="overflow-hidden">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-800 bg-amber-100/90 border border-amber-300/80 px-2 py-0.5 rounded-md font-mono">
+              <Badge variant="warning" size="xs" className="uppercase tracking-widest font-mono">
                 SEBI Circular Update
-              </span>
-              <span className="text-[10px] font-bold text-gray-400 font-mono">
+              </Badge>
+              <span className="text-caption font-bold font-mono">
                 {alertsData.alerts.length} Active Circulars
               </span>
               {liveCount > 0 && (
-                <span className="flex items-center gap-1 text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-mono">
-                  <Radio className="w-2.5 h-2.5" />
+                <Badge variant="success" size="xs" icon={Radio} className="font-mono">
                   {liveCount} Live from SEBI
-                </span>
+                </Badge>
               )}
             </div>
             <h4 className="font-bold text-[13px] text-gray-800 truncate mt-0.5">
@@ -118,21 +118,15 @@ export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   {circ.is_live ? (
-                    <span className="flex items-center gap-1 font-mono text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md">
-                      <Radio className="w-2.5 h-2.5" /> LIVE
-                    </span>
+                    <Badge variant="success" size="xs" icon={Radio} className="font-mono">LIVE</Badge>
                   ) : (
-                    <span className="font-mono text-[10.5px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-md">
-                      {circ.circular_no}
-                    </span>
+                    <Badge variant="warning" size="xs" className="font-mono">{circ.circular_no}</Badge>
                   )}
                   <span className="text-[10px] text-gray-500 font-semibold font-mono">
                     {circ.date}
                   </span>
                   {circ.is_session_impacted && (
-                    <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-md animate-pulse">
-                      Action Needed on DRHP
-                    </span>
+                    <Badge variant="danger" size="xs" pulse className="uppercase">Action Needed on DRHP</Badge>
                   )}
                 </div>
 
