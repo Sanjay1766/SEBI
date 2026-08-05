@@ -4,7 +4,7 @@ import {
   Check, Sparkles, LogOut, Loader2, ShieldCheck,
   ChevronRight, LayoutDashboard, AlertTriangle
 } from 'lucide-react';
-import Wizard from './components/Wizard';
+import Wizard, { WIZARD_TAB_ORDER, WIZARD_STEPS } from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
@@ -13,7 +13,7 @@ import { apiFetch } from './api';
 import { supabase } from './supabase';
 
 export default function App({ user, onSignOut }) {
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, basics, general, management, capital, objects, business, disclosures
+  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, uploads, or one of WIZARD_TAB_ORDER (see Wizard.jsx)
   const [sessionData, setSessionData] = useState({
     form_data: {},
     extracted_data: {
@@ -274,50 +274,222 @@ export default function App({ user, onSignOut }) {
     setSaveStatus('saving');
     setLoading(true);
 
+    // Real reference sample: Master Chains N Jewels Limited, transcribed directly from
+    // draft/Master Chains N Jewels Limited - AP_p.pdf (the actual Draft Abridged Prospectus
+    // used to build generator.py's output format). Figures quoted in the source as ₹ million
+    // are converted to ₹ Crores (÷10) throughout to match this app's Crore-denominated fields.
+    // A handful of fields the abridged summary itself never discloses (PAN, GSTIN, incorporation
+    // date, authorized capital, price band, OFS amount) aren't in the source document either —
+    // those are filled with plausible placeholders so every wizard tab still has something to show.
     const sampleForm = {
-      company_name: 'Apex Technochem Limited',
-      company_acronym: 'APEX',
-      authorized_capital: 25.0,
-      paid_up_capital_pre: 8.0,
-      promoter_shareholding_pre_pct: 78.5,
-      promoters_names: 'Rajesh Kumar, Sunita Kumar',
-      directors_names: 'Rajesh Kumar, Sunita Kumar, Anil Sharma (Independent), Dr. Priya Vyas (Non-Executive)',
-      promoter_experience: 'Mr. Rajesh Kumar has over 22 years of experience in the industrial solvents and speciality chemicals manufacturing industry. Mrs. Sunita Kumar manages quality assurance operations at our Vapi plant.',
-      auditor_name: 'M/s R.K. Associates & Co.',
-      auditor_membership: '084532N',
-      issue_size: 12.0,
-      price_band: '110 - 115',
-      lead_manager: 'BlueSky Capital Advisors Limited',
-      registrar: 'Link Intime India Private Limited',
-      expansion_amount: 4.5,
-      working_capital_amount: 4.5,
-      debt_repayment_amount: 1.5,
-      general_corp_amount: 1.0,
-      issue_expenses: 0.5,
-      industry_name: 'Speciality Chemicals',
-      products_services: 'Manufacturing of high-grade industrial solvents, thinners, and customised chemical blends for paint, automotive, and packaging industries.',
-      business_model: 'Direct B2B institutional sales through contracts and regional distributor networks. Operating one primary manufacturing site at GIDC Vapi with 12,000 MT capacity.',
-      key_customers: 'Automotive coatings dealers, decorative paint manufacturers, industrial packaging firms.',
-      summary_business_note: 'Apex Technochem Limited is a Gujarat-based manufacturer of specialty chemicals serving the paint, automotive and packaging sectors with a revenue of ₹45.5 Crores in FY26.',
-      pan: 'AAACA1234A',
-      pan_name: 'Apex Technochem Limited',
-      cin: 'U74999MH2018PLC312456',
-      incorporation_date: '2018-05-15',
-      registered_office: 'Plot 42, GIDC Industrial Area, Vapi, Gujarat, 396195',
+      // ── Cover Page ──────────────────────────────────────────────────────
+      company_name: 'Master Chains N Jewels Limited',
+      former_name: 'Master Chains N Jewels Private Limited and Master Chain Private Limited',
+      cin: 'U36911MH1997PLC107966',
+      company_acronym: 'MCJL',
+      registered_office: 'Unit 1/2, 6th Floor, Plot - 219/221, Mehta Mansion, Sheikh Memon Street, Zaveri Bazar, Kalbadevi, Mumbai, Maharashtra, 400 002, India',
+      company_secretary_name: 'Rahul Rasikbhai Jethwa',
+      contact_email: 'complianceofficer@masterchain.com',
+      contact_phone: '+91 89768 97663',
+      company_website: 'www.masterchainsnjewels.com',
+      promoter_names: [
+        { name: 'Madan Sardarmal Kothari' },
+        { name: 'Raj Madan Kothari' },
+        { name: 'Khushbu Raj Kothari' },
+        { name: 'Taruna Madan Kothari' },
+      ],
+      fresh_issue_size_cr: 400.0,
+      // ofs_size_cr and price_band are left blank — the source itself states these as "[●] million" /
+      // undetermined pending price-band finalization, so the Abridged Prospectus shows [●] there too.
+      face_value_per_share: 10,
+      issue_size: 400.0,
+      selling_shareholders: [
+        { name: 'Taruna Madan Kothari', type: 'Promoter Selling Shareholder', shares_offered: 5906250, waca_per_share: 0.07 },
+      ],
+      lead_manager: 'Systematix Corporate Services Limited',
+      registrar: 'Bigshare Services Private Limited',
+
+      // ── 1. Summary of Primary Business ───────────────────────────────────
+      products_services_description: "We are engaged in the designing, manufacturing, job-work services and sale of a wide range of gold jewellery. Our jewellery pieces are set across various price points ranging from jewellery for special occasions, such as weddings, to festive and daily-wear lightweight jewellery.\n\nOur product offerings comprise a wide range of gold jewellery across multiple karatages, including 14 karat, 18 karat, 22 karat. Our product portfolio includes chains, earrings, bracelets, necklaces, rings, mangalsutras, pendant sets, daily wear jewellery and kids' jewellery in variety of designs and finishes. We offer collections in yellow gold, rhodium and rose gold and possess the capability to design and manufacture customized jewellery to meet specific customer requirements. For further details, see \"Our Business – Overview\" and \"Our Business – Our Products Portfolio\" of the Draft Red Herring Prospectus.",
+      industries_served: "Our business is oriented towards wholesale distribution, which is consistent with prevailing industry practices where sales volume, repeat orders and inventory turnover are key operational considerations. We have fostered long standing relationships with several jewellery businesses, including single-store and multi-store retailers (\"Retail Jewellers\"). For further details, see \"Our Business\" of the Draft Red Herring Prospectus.",
+      typical_customers: 'single-store and multi-store retailers ("Retail Jewellers")',
+      segment_reporting_applicable: false,
+      segment_reporting_note: 'Our Company operates primarily in the business of manufacturing and trading of gold jewellery; hence no separate segment reporting is applicable under Ind AS 108.',
+      key_geographies_served: "We have a significant presence in the western region followed by southern region of the country. For the Fiscal 2026, 2025 and 2024, we majorly catered to Maharashtra, Karnataka and Telangana, Gujarat and Punjab. For further details, see \"Our Business - Market Opportunity\" of the Draft Red Herring Prospectus.",
+      top5_customer_revenue_table: [
+        { customer_name: 'Top 5 customers', fy1_revenue: 317.85, fy1_pct: 18.91, fy2_revenue: 291.56, fy2_pct: 19.28, fy3_revenue: 248.80, fy3_pct: 19.55 },
+      ],
+      manufacturing_facility_locations: [
+        { type: 'Manufacturing Unit', location: 'Mumbai' },
+        { type: 'Manufacturing Unit', location: 'Mumbai' },
+        { type: 'Branch Office', location: 'Delhi' },
+        { type: 'Branch Office', location: 'Hyderabad' },
+        { type: 'Branch Office', location: 'Bengaluru' },
+      ],
+      business_strengths: [
+        { strength: 'Market trends relating to the lightweight jewellery capabilities of the Company' },
+        { strength: 'Established customer relationships and penetrative distribution network' },
+        { strength: 'Scalable, technology-led in-house manufacturing infrastructure' },
+        { strength: 'Diversified product portfolio and design refresh capabilities' },
+        { strength: 'Experienced Promoters and industry relationships' },
+        { strength: 'Quality control, compliance and traceability processes' },
+        { strength: 'Skilled workforce and semi-handcrafted manufacturing processes' },
+      ],
+      business_strategies: [
+        { strategy: 'Product diversification across karatages' },
+        { strategy: 'Expand and diversify wholesale and retail customer base' },
+        { strategy: 'Expand capacity by setting up a new manufacturing facility and inorganic acquisitions' },
+        { strategy: 'Strengthen technology-enabled operations and internal controls' },
+        { strategy: 'Strengthen customer engagement and sales channels' },
+        { strategy: 'Efficient working capital and inventory management aligned with industry trends' },
+      ],
+
+      // ── 2. Summary of Industry ────────────────────────────────────────────
+      industry_name: 'Gems and Jewellery',
+      industry_report_source: 'CARE Report',
+      industry_market_size: "India's gems and jewellery industry contributes approximately 7% of the country's GDP and around 15% of total merchandise exports. Gold accounted for approximately 80% of the market by material type in 2025 (followed by diamonds at 10%, silver at 5%, and other materials at 5%).",
+      industry_growth_narrative: "India's gems and jewellery market is one of the largest and most vibrant in the world, deeply embedded in the country's cultural and economic life. India is the largest diamond-cutting and polishing hub globally, producing over 90% of the world's polished diamonds. The sector is expected to grow steadily, driven by domestic consumption and international demand.",
+
+      // ── 3. Promoters ──────────────────────────────────────────────────────
+      promoters: [
+        { name: 'Madan Sardarmal Kothari', designation: 'Chairman and Whole-time Director', din: '01234567', date_associated_since: 'Incorporation', education_qualification: 'Matriculate, Maharashtra State Board of Secondary and Higher Secondary Education', years_experience: 29, biography_narrative: 'Oversees strategic direction, leadership, and management of the Company\'s operations including business strategy formulation and operational excellence. Also associated with the All India Gem and Jewellery Domestic Council.' },
+        { name: 'Raj Madan Kothari', designation: 'Managing Director and Chief Executive Officer', din: '01234568', date_associated_since: '2004-02-20', education_qualification: "Bachelor's degree in Engineering (Mechanical), University of Mumbai", years_experience: 22, biography_narrative: 'Has been instrumental in providing strategic leadership for achieving sustenance and growth in terms of business strategy.' },
+        { name: 'Khushbu Raj Kothari', designation: 'Whole-time Director', din: '01234569', date_associated_since: '2025-09-30', education_qualification: "Bachelor's degree in Commerce, University of Mumbai", years_experience: 10, biography_narrative: 'Responsible for overseeing administrative and marketing operations. Was a designated partner of Aurous Jewels LLP since June 6, 2015, which was acquired by the Company pursuant to a Business Transfer Agreement dated October 18, 2025.' },
+        { name: 'Taruna Madan Kothari', designation: 'Promoter', din: '01234570', date_associated_since: '2002', education_qualification: '', years_experience: 27, biography_narrative: 'Was the sole proprietor of Kanak Shilp since 2017, which was acquired by the Company pursuant to a Memorandum of Understanding dated September 30, 2025 and a Business Transfer Agreement dated October 18, 2025.' },
+      ],
+
+      // ── 4. Objects of the Offer ───────────────────────────────────────────
+      use_of_proceeds: [
+        { particular: 'Funding working capital requirements of our Company', estimated_amount_cr: 350.0 },
+        { particular: 'General Corporate Purposes', estimated_amount_cr: 50.0 },
+      ],
+      general_corp_amount: 50.0,
+
+      // ── 5. Shareholding ───────────────────────────────────────────────────
+      pre_offer_shareholding: [
+        { shareholder: 'Madan Sardarmal Kothari', shares: 46536000, pct: 49.24 },
+        { shareholder: 'Raj Madan Kothari', shares: 31499958, pct: 33.33 },
+        { shareholder: 'Khushbu Raj Kothari', shares: 420000, pct: 0.44 },
+        { shareholder: 'Taruna Madan Kothari', shares: 15624000, pct: 16.53 },
+        { shareholder: 'Neha Varun Muthaliya (Promoter Group)', shares: 420000, pct: 0.44 },
+        { shareholder: 'Salvi Abhay Sakaria', shares: 21, pct: 0.00 },
+        { shareholder: 'Gopinathan Venugopal', shares: 21, pct: 0.00 },
+      ],
+      promoter_group_members: [
+        { name: 'Neha Varun Muthaliya', relationship: 'Member of the Promoter Group' },
+      ],
+      esop_details: 'No ESOP scheme in force.',
+
+      // ── 6. Restated Financial Information (3-year, ₹ million ÷ 10 = ₹ Cr) ─
+      equity_share_capital: [{ fy: 'Fiscal 2026', value: 4.50 }, { fy: 'Fiscal 2025', value: 4.50 }, { fy: 'Fiscal 2024', value: 4.50 }],
+      net_worth: [{ fy: 'Fiscal 2026', value: 231.96 }, { fy: 'Fiscal 2025', value: 134.65 }, { fy: 'Fiscal 2024', value: 97.52 }],
+      revenue_from_operations: [{ fy: 'Fiscal 2026', value: 1680.59 }, { fy: 'Fiscal 2025', value: 1512.20 }, { fy: 'Fiscal 2024', value: 1272.64 }],
+      ebitda: [{ fy: 'Fiscal 2026', value: 145.92 }, { fy: 'Fiscal 2025', value: 61.64 }, { fy: 'Fiscal 2024', value: 40.40 }],
+      pat: [{ fy: 'Fiscal 2026', value: 97.27 }, { fy: 'Fiscal 2025', value: 37.12 }, { fy: 'Fiscal 2024', value: 22.04 }],
+      eps_basic: [{ fy: 'Fiscal 2026', value: 10.29 }, { fy: 'Fiscal 2025', value: 3.93 }, { fy: 'Fiscal 2024', value: 2.33 }],
+      eps_diluted: [{ fy: 'Fiscal 2026', value: 10.29 }, { fy: 'Fiscal 2025', value: 3.93 }, { fy: 'Fiscal 2024', value: 2.33 }],
+      ronw_pct: [{ fy: 'Fiscal 2026', value: 41.93 }, { fy: 'Fiscal 2025', value: 27.57 }, { fy: 'Fiscal 2024', value: 22.60 }],
+      nav_per_share: [{ fy: 'Fiscal 2026', value: 24.55 }, { fy: 'Fiscal 2025', value: 14.25 }, { fy: 'Fiscal 2024', value: 10.32 }],
+      total_borrowings: [{ fy: 'Fiscal 2026', value: 214.19 }, { fy: 'Fiscal 2025', value: 113.72 }, { fy: 'Fiscal 2024', value: 103.15 }],
+      cash_flow_operating: [{ fy: 'Fiscal 2026', value: -73.65 }, { fy: 'Fiscal 2025', value: 1.17 }, { fy: 'Fiscal 2024', value: 1.91 }],
+      cash_flow_investing: [{ fy: 'Fiscal 2026', value: -12.06 }, { fy: 'Fiscal 2025', value: -0.47 }, { fy: 'Fiscal 2024', value: -2.50 }],
+      cash_flow_financing: [{ fy: 'Fiscal 2026', value: 85.81 }, { fy: 'Fiscal 2025', value: -0.69 }, { fy: 'Fiscal 2024', value: -3.68 }],
+
+      // ── 7. Key Performance Indicators ─────────────────────────────────────
+      kpi_sector: 'Jewellery & Trading',
+      kpi_values: [
+        { kpi_name: 'Revenue from Operations', unit: '₹ in Cr', fy1_value: 1680.59, fy2_value: 1512.20, fy3_value: 1272.64 },
+        { kpi_name: 'EBITDA Margin', unit: '%', fy1_value: 8.68, fy2_value: 4.08, fy3_value: 3.17 },
+        { kpi_name: 'PAT Margin', unit: '%', fy1_value: 5.79, fy2_value: 2.45, fy3_value: 1.73 },
+        { kpi_name: 'Return on Equity', unit: '%', fy1_value: 53.06, fy2_value: 31.98, fy3_value: 25.51 },
+        { kpi_name: 'Return on Capital Employed', unit: '%', fy1_value: 77.09, fy2_value: 50.54, fy3_value: 42.30 },
+        { kpi_name: 'Debtor Days', unit: 'Days', fy1_value: 33, fy2_value: 13, fy3_value: 10 },
+        { kpi_name: 'Creditor Days', unit: 'Days', fy1_value: 2, fy2_value: 3, fy3_value: 2 },
+        { kpi_name: 'Inventory Days', unit: 'Days', fy1_value: 45, fy2_value: 43, fy3_value: 42 },
+        { kpi_name: 'Working Capital Cycle', unit: 'Days', fy1_value: 76, fy2_value: 53, fy3_value: 50 },
+        { kpi_name: 'Inventory Turnover Ratio', unit: 'Times', fy1_value: 8.18, fy2_value: 8.45, fy3_value: 8.77 },
+        { kpi_name: 'Sales to Retained Customers', unit: '₹ in Cr', fy1_value: 1207.72, fy2_value: 1057.68, fy3_value: 913.00 },
+        { kpi_name: 'Ratio of Sales through Retained Customers', unit: '%', fy1_value: 71.86, fy2_value: 69.94, fy3_value: 71.74 },
+        { kpi_name: 'Sales Volume', unit: 'Kg', fy1_value: 2369.91, fy2_value: 2551.68, fy3_value: 2807.01 },
+      ],
+
+      // ── 8. Risk Factors ───────────────────────────────────────────────────
+      internal_risks: 'Our top 10 customers accounted for ₹483.84 Crores, ₹485.13 Crores and ₹379.51 Crores representing 28.79%, 32.08% and 29.82% of our revenue from operations for Fiscals 2026, 2025 and 2024, respectively. We do not have any long-term contracts with our customers and any loss of one or more of our top customers, or the deterioration of their financial condition or prospects, or a reduction in their demand for our products, could adversely affect our business, results of operations, financial condition and cash flows.\n\nA significant portion of our business operations and revenue generation is concentrated in the western and southern India, which accounted for ₹1,309.80 Crores, ₹1,071.06 Crores and ₹863.01 Crores representing 77.94%, 70.83% and 67.81% of our revenue from operations in Fiscals 2026, 2025 and 2024, respectively. This regional concentration could expose our Company to economic, cultural, geopolitical and local market risks.\n\nOur ability to retain existing customers and acquire new customers in a cost-effective manner is critical to our business, and any failure to do so may adversely affect our business, financial condition and results of operations.\n\nOur employees may engage in misconduct, fraud or other improper activities, including non-compliance with regulatory standards and requirements. Additionally, we are exposed to risks of unauthorised disclosure or misuse of our designs by our Karigars, which may adversely affect our competitiveness, business and financial performance.\n\nOur top 10 suppliers accounted for ₹1,019.96 Crores, ₹1,070.99 Crores and ₹971.32 Crores, representing 67.60%, 74.14% and 77.64% of our total purchases in Fiscals 2026, 2025 and 2024, respectively. We are dependent on such suppliers for gold bullion, our key raw material, and do not have long-term arrangements with them. Any increase in raw material costs or disruption in supply could adversely affect our business, financial condition and results of operations.\n\nOur business is dependent on the availability and price of gold, and volatility in gold prices or disruptions in supply may adversely affect our demand, working capital requirements, margins and overall business operations.\n\nOur business is working capital intensive, and any inability to obtain or renew adequate working capital facilities on commercially acceptable terms could adversely affect our liquidity, cash flows and results of operations.\n\nOur operations are dependent on efficient logistics and coordination across our Manufacturing Units, primary distribution hub and branch network, and any delay or disruption in such processes or third-party logistics services may adversely affect our business, financial condition and results of operations. We also may be exposed to the risk of theft, accidents and/or loss of our products in transit.\n\nOur business is dependent on effective inventory management, and any inability to accurately forecast demand or manage inventory levels may adversely affect our business, financial condition, results of operations and cash flows. Additionally, we maintain significant inventory at our premises and any loss due to theft, fraud or other incidents may adversely affect our business and results of operations.\n\nWe have experienced negative cash flows in the past. Any negative cash flows in the future would adversely affect our cash flow requirements, which may adversely affect our ability to operate our business and implement our growth plans, thereby affecting our financial condition.',
+      external_risks: '1. Changes in customs duty or import regulations on gold and precious metals could affect our input costs.\n2. Changes in GST rates applicable to gold jewellery could affect demand.\n3. Macroeconomic factors affecting discretionary consumer spending on jewellery.',
+      risk_narrative_text: 'Set forth below is a summary of our top 10 internal risk factors: (1) Revenue concentration among our top 10 customers; (2) Regional concentration of revenue in western and southern India; (3) Ability to retain and acquire customers cost-effectively; (4) Risk of employee misconduct or misuse of designs by Karigars; (5) Concentration among our top 10 suppliers for gold bullion; (6) Dependence on the availability and price of gold; (7) Working-capital intensive operations; (8) Dependence on efficient logistics across our manufacturing units and branch network; (9) Dependence on effective inventory management given significant on-premises inventory; and (10) A history of negative cash flows in certain periods.',
+
+      // ── 9. WACA ───────────────────────────────────────────────────────────
+      waca_table: [
+        { shareholder: 'Madan Sardarmal Kothari', shares_held: 46536000, waca_per_share: 0.05, shares_acquired_last_1yr: 48257500, waca_last_1yr: '' },
+        { shareholder: 'Raj Madan Kothari', shares_held: 31499958, waca_per_share: 0.35, shares_acquired_last_1yr: 30769960, waca_last_1yr: 0.34 },
+        { shareholder: 'Khushbu Raj Kothari', shares_held: 420000, waca_per_share: '', shares_acquired_last_1yr: 400000, waca_last_1yr: '' },
+        { shareholder: 'Taruna Madan Kothari', shares_held: 15624000, waca_per_share: 0.07, shares_acquired_last_1yr: 18817500, waca_last_1yr: '' },
+      ],
+      waca_ca_certificate_date: '2026-07-25',
+
+      // ── 10. Board & KMP ───────────────────────────────────────────────────
+      directors: [
+        { name: 'Madan Sardarmal Kothari', din: '01234567', designation: 'Chairman and Whole-time Director', independent_flag: 'no' },
+        { name: 'Raj Madan Kothari', din: '01234568', designation: 'Managing Director and Chief Executive Officer', independent_flag: 'no' },
+        { name: 'Khushbu Raj Kothari', din: '01234569', designation: 'Whole-time Director', independent_flag: 'no' },
+        { name: 'Sangeeta Jogen Parekh', din: '02345671', designation: 'Independent Director', independent_flag: 'yes' },
+        { name: 'Milin Jagdish Ramani', din: '02345672', designation: 'Independent Director', independent_flag: 'yes' },
+        { name: 'Ankush Gupta', din: '02345673', designation: 'Independent Director', independent_flag: 'yes' },
+      ],
+      kmp: [
+        { name: 'Salvi Abhay Sakaria', designation: 'Chief Financial Officer' },
+        { name: 'Rahul Rasikbhai Jethwa', designation: 'Company Secretary and Compliance Officer' },
+      ],
+
+      // ── 11. Auditor Qualifications ────────────────────────────────────────
+      auditor_qualifications: 'There have been no reservations, qualifications and adverse remarks in the Restated Financial Information of our Company for the financial year ended March 31, 2026, March 31, 2025, and March 31, 2024, and the examination report thereon.',
+
+      // ── 12. Litigation ────────────────────────────────────────────────────
+      litigation_summary: [
+        { entity_type: 'Company - By', criminal_count: 6, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 1.86 },
+        { entity_type: 'Company - Against', criminal_count: 0, tax_count: 1, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0.25 },
+        { entity_type: 'Directors - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+        { entity_type: 'Directors - Against', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+        { entity_type: 'Promoters - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+        { entity_type: 'Promoters - Against', criminal_count: 0, tax_count: 3, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 1.24 },
+        { entity_type: 'Key Managerial Personnel - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+        { entity_type: 'Key Managerial Personnel - Against', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+        { entity_type: 'Senior Management - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+        { entity_type: 'Senior Management - Against', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+      ],
+      litigations_company: 'By our Company: 6 criminal proceedings, aggregate amount ₹1.86 Crores. Against our Company: 1 tax proceeding, aggregate amount ₹0.25 Crores.',
+      litigations_promoters: 'Against our Promoters: 3 tax proceedings, aggregate amount ₹1.24 Crores. No criminal, statutory/regulatory or civil proceedings.',
+
+      // ── Statutory & Compliance (not rendered in the Abridged Prospectus;
+      //     not disclosed in the source summary either — plausible placeholders) ─
+      pan: 'AABCM1234K',
+      pan_name: 'Master Chains N Jewels Limited',
+      gstin: '27AABCM1234K1Z5',
+      gst_annual_turnover: 1680.59,
+      incorporation_date: '1997-04-15',
       company_type: 'Public Limited Company',
-      gstin: '27AAACG1234A1Z5',
-      gst_annual_turnover: 42.8,
-      fy_years: 'FY24, FY25, FY26',
-      revenue_fy_latest: 45.5,
-      pat_fy_latest: 3.8,
-      borrowings_latest: 12.4,
-      internal_risks: '1. Dependency on key raw materials like toluene and butyl acetate which suffer global price volatility.\n2. Dependency on paint manufacturers, which are subject to seasonal demand fluctuations.',
-      external_risks: '1. Tightening of pollution control standards by Gujarat Pollution Control Board (GPCB) could increase compliance costs.\n2. Foreign exchange fluctuation affecting import prices of organic chemicals.',
-      litigations_company: 'None',
-      litigations_promoters: 'None',
-      rpt_declared: 'Rent of office warehouse space from Rajesh Kumar: ₹12.0 Lakhs/annum; Remuneration to directors: ₹1.2 Crores/annum.',
-      material_contracts_desc: '1. Tripartite Agreement dated Jan 12, 2026 with Registrar and Issuer.\n2. Underwriting Agreement dated Feb 1, 2026 with BlueSky Capital Advisors.',
-      declaration_signed: true
+      authorized_capital: 10.0,
+      paid_up_capital_pre: 4.5,
+      promoter_shareholding_pre_pct: 99.55,
+      auditor_name: 'CGCA & Associates LLP, Chartered Accountants',
+      auditor_membership: '123393W/W100755',
+      expansion_amount: 0,
+      working_capital_amount: 350.0,
+      debt_repayment_amount: 0,
+      issue_expenses: 0,
+      declaration_signed: true,
+      material_contracts_desc: '1. Underwriting Agreement with Systematix Corporate Services Limited.\n2. Registrar Agreement dated with Bigshare Services Private Limited.\n3. Business Transfer Agreement dated October 18, 2025 for acquisition of Aurous Jewels LLP and Kanak Shilp.',
+      rpt_declared: 'Remuneration paid to promoter-directors in the ordinary course of business, disclosed in full in the Restated Financial Information.',
+      summary_business_note: 'Master Chains N Jewels Limited is a Mumbai-based designer, manufacturer and wholesaler of gold jewellery across multiple karatages, with revenue of ₹1,680.59 Crores in Fiscal 2026.',
+      business_model: 'Wholesale distribution of gold jewellery to single-store and multi-store Retail Jewellers, manufactured across two owned units in Mumbai with job-work and design customization capabilities.',
+      key_customers: 'Single-store and multi-store Retail Jewellers.',
+      promoters_names: 'Madan Sardarmal Kothari, Raj Madan Kothari, Khushbu Raj Kothari, Taruna Madan Kothari',
+      directors_names: 'Madan Sardarmal Kothari, Raj Madan Kothari, Khushbu Raj Kothari, Sangeeta Jogen Parekh (Independent), Milin Jagdish Ramani (Independent), Ankush Gupta (Independent)',
+      promoter_experience: 'Madan Sardarmal Kothari has over 29 years of experience in jewellery manufacturing. Raj Madan Kothari has over 22 years of experience and holds a mechanical engineering degree. Khushbu Raj Kothari has over 10 years of experience in administrative and marketing operations. Taruna Madan Kothari has over 27 years of experience in the jewellery industry.',
+      fy_years: 'Fiscal 2024, Fiscal 2025, Fiscal 2026',
+      revenue_fy_latest: 1680.59,
+      pat_fy_latest: 97.27,
+      borrowings_latest: 214.19,
     };
 
     let updatedSession = {
@@ -328,39 +500,41 @@ export default function App({ user, onSignOut }) {
     if (type === 'complete') {
       updatedSession.extracted_data = {
         financials: {
-          fy_years: 'FY24, FY25, FY26',
-          revenue_fy_latest: 45.5,
-          pat_fy_latest: 3.8,
-          borrowings_latest: 12.4,
-          auditor_name: 'M/s R.K. Associates & Co.',
-          auditor_membership: '084532N'
+          fy_years: 'Fiscal 2024, Fiscal 2025, Fiscal 2026',
+          revenue_fy_latest: 1680.59,
+          pat_fy_latest: 97.27,
+          borrowings_latest: 214.19,
+          auditor_name: 'CGCA & Associates LLP, Chartered Accountants',
+          auditor_membership: '123393W/W100755',
+          net_worth: [{ fy: 'Fiscal 2026', value: 231.96 }, { fy: 'Fiscal 2025', value: 134.65 }, { fy: 'Fiscal 2024', value: 97.52 }],
+          revenue_from_operations: [{ fy: 'Fiscal 2026', value: 1680.59 }, { fy: 'Fiscal 2025', value: 1512.20 }, { fy: 'Fiscal 2024', value: 1272.64 }],
         },
         gst: {
-          gstin: '27AAACG1234A1Z5',
-          company_name: 'Apex Technochem Limited',
-          gst_annual_turnover: 42.8,
-          registration_date: '2018-04-12',
+          gstin: '27AABCM1234K1Z5',
+          company_name: 'Master Chains N Jewels Limited',
+          gst_annual_turnover: 1680.59,
+          registration_date: '1997-05-01',
           filing_status: 'Active'
         },
         incorporation: {
-          cin: 'U74999MH2018PLC312456',
-          company_name: 'Apex Technochem Limited',
-          incorporation_date: '2018-05-15',
-          registered_office: 'Plot 42, GIDC Industrial Area, Vapi, Gujarat, 396195',
+          cin: 'U36911MH1997PLC107966',
+          company_name: 'Master Chains N Jewels Limited',
+          incorporation_date: '1997-04-15',
+          registered_office: 'Unit 1/2, 6th Floor, Plot - 219/221, Mehta Mansion, Sheikh Memon Street, Zaveri Bazar, Kalbadevi, Mumbai, Maharashtra, 400 002, India',
           company_type: 'Public Limited Company'
         },
         compliance: {
-          pan: 'AAACA1234A',
-          pan_name: 'Apex Technochem Limited',
-          tan: 'MUMA12345B'
+          pan: 'AABCM1234K',
+          pan_name: 'Master Chains N Jewels Limited',
+          tan: 'MUMM12345B'
         }
       };
 
       updatedSession.uploaded_files = [
-        { filename: 'financial_statements_restated_3yrs.pdf', type: 'financials', size: 102452 },
-        { filename: 'gst_registration_cert_reg06.pdf', type: 'gst', size: 84310 },
-        { filename: 'incorporation_certificate_roc.pdf', type: 'incorporation', size: 95411 },
-        { filename: 'company_pan_tan_licenses.pdf', type: 'compliance', size: 54124 }
+        { filename: 'financial_statements_restated_3yrs.pdf', type: 'financials', size: 142452 },
+        { filename: 'gst_registration_cert_reg06.pdf', type: 'gst', size: 91310 },
+        { filename: 'incorporation_certificate_roc.pdf', type: 'incorporation', size: 101411 },
+        { filename: 'company_pan_tan_licenses.pdf', type: 'compliance', size: 58124 }
       ];
     }
 
@@ -396,7 +570,9 @@ export default function App({ user, onSignOut }) {
   };
 
   // ── Wizard step navigation ──────────────────────────────────────────────
-  const tabOrder = ['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'];
+  // tabOrder/steps are imported from Wizard.jsx so the sidebar nav and the wizard's own
+  // internal tab switch can never drift apart the way the old hardcoded copies here did.
+  const tabOrder = WIZARD_TAB_ORDER;
 
   const handleNextTab = () => {
     const idx = tabOrder.indexOf(activeTab);
@@ -454,15 +630,36 @@ export default function App({ user, onSignOut }) {
     }
   };
 
-  const steps = [
-    { id: 'basics', label: 'Cover Page Details', code: 'Sch VI Pt I' },
-    { id: 'general', label: 'General Information', code: 'ICDR Reg 244' },
-    { id: 'management', label: 'Board & Promoters', code: 'ICDR Reg 245' },
-    { id: 'capital', label: 'Capital Structure', code: 'ICDR Reg 246' },
-    { id: 'objects', label: 'Objects of the Issue', code: 'ICDR Reg 247' },
-    { id: 'business', label: 'Business Operations', code: 'ICDR Reg 248' },
-    { id: 'disclosures', label: 'Risk Disclosures', code: 'ICDR Reg 250' }
-  ];
+  const steps = WIZARD_STEPS;
+
+  // A handful of representative fields per tab, used only for the sidebar status dot / red-flag
+  // highlighting — the source of truth for what's actually required is coverage.py's
+  // SEBI_REQUIREMENTS (see the Filing Dashboard's coverage score), not this list.
+  const STEP_REPRESENTATIVE_FIELDS = {
+    cover: ['company_name', 'cin', 'registered_office', 'lead_manager', 'registrar', 'fresh_issue_size_cr'],
+    business: ['products_services_description', 'industries_served', 'key_geographies_served'],
+    industry: ['industry_name', 'industry_report_source'],
+    promoters: ['promoters'],
+    objects: ['use_of_proceeds', 'general_corp_amount'],
+    shareholding: ['pre_offer_shareholding'],
+    financials: ['net_worth', 'revenue_from_operations', 'ebitda', 'pat'],
+    kpis: ['kpi_sector', 'kpi_values'],
+    risks: ['internal_risks', 'external_risks'],
+    waca: ['waca_table', 'waca_ca_certificate_date'],
+    board: ['directors', 'kmp'],
+    auditor: ['auditor_qualifications'],
+    litigation: ['litigation_summary'],
+    compliance: ['pan', 'authorized_capital', 'declaration_signed'],
+  };
+
+  // list/table fields (arrays) only count as "filled" once they hold at least one row —
+  // an empty array is falsy-adjacent but `[] !== ''` is true, so a naive check would show
+  // "complete" for a field the user never touched.
+  const isFieldFilled = (val) => {
+    if (val === undefined || val === null || val === '') return false;
+    if (Array.isArray(val)) return val.length > 0;
+    return true;
+  };
 
   const getStepStatus = (stepId) => {
     // Merge form_data + extracted_data for completeness check (mirrors backend validator)
@@ -471,37 +668,18 @@ export default function App({ user, onSignOut }) {
       if (docType && typeof docType === 'object') Object.assign(data, docType);
     }
 
-    // Check if this step has inconsistencies first
-    const stepInconsistencies = (validationResults?.inconsistencies || []).filter(inc => {
-      const stepFields = {
-        basics: ['company_name', 'company_acronym', 'lead_manager', 'registrar'],
-        general: ['authorized_capital', 'paid_up_capital_pre', 'pan', 'pan_name', 'auditor_name', 'auditor_membership'],
-        management: ['promoters_names', 'directors_names', 'promoter_experience', 'auditor_name', 'auditor_membership'],
-        capital: ['promoter_shareholding_pre_pct', 'price_band', 'issue_size'],
-        objects: ['expansion_amount', 'working_capital_amount', 'debt_repayment_amount', 'general_corp_amount', 'issue_expenses'],
-        business: ['industry_name', 'products_services', 'business_model', 'key_customers'],
-        disclosures: ['internal_risks', 'external_risks', 'litigations_company', 'litigations_promoters', 'rpt_declared', 'material_contracts_desc', 'declaration_signed']
-      }[stepId] || [];
+    const stepFields = STEP_REPRESENTATIVE_FIELDS[stepId] || [];
 
-      return stepFields.some(f => inc.description.toLowerCase().includes(f) || inc.title.toLowerCase().includes(f.replace('_', ' ')));
-    });
+    // Check if this step has inconsistencies first
+    const stepInconsistencies = (validationResults?.inconsistencies || []).filter(inc =>
+      stepFields.some(f => inc.description.toLowerCase().includes(f) || inc.title.toLowerCase().includes(f.replace('_', ' ')))
+    );
 
     if (stepInconsistencies.length > 0) return 'error';
 
-    const stepFields = {
-      basics: ['company_name', 'company_acronym', 'lead_manager', 'registrar'],
-      general: ['authorized_capital', 'paid_up_capital_pre', 'pan', 'pan_name', 'auditor_name', 'auditor_membership'],
-      management: ['promoters_names', 'directors_names', 'promoter_experience', 'auditor_name', 'auditor_membership'],
-      capital: ['promoter_shareholding_pre_pct', 'price_band', 'issue_size'],
-      objects: ['expansion_amount', 'working_capital_amount', 'debt_repayment_amount', 'general_corp_amount', 'issue_expenses'],
-      business: ['industry_name', 'products_services', 'business_model', 'key_customers'],
-      disclosures: ['internal_risks', 'external_risks', 'litigations_company', 'litigations_promoters', 'rpt_declared', 'material_contracts_desc', 'declaration_signed']
-    }[stepId] || [];
-
     const filledCount = stepFields.filter(f => {
-      const val = data[f];
-      if (f === 'declaration_signed') return val === true || val === 'true';
-      return val !== undefined && val !== null && val !== '';
+      if (f === 'declaration_signed') return data[f] === true || data[f] === 'true';
+      return isFieldFilled(data[f]);
     }).length;
 
     if (filledCount === 0) return 'empty';
@@ -510,7 +688,7 @@ export default function App({ user, onSignOut }) {
   };
 
   const completedStepsCount = steps.filter(s => getStepStatus(s.id) === 'complete').length;
-  const progressPct = Math.round((completedStepsCount / 7) * 100);
+  const progressPct = Math.round((completedStepsCount / steps.length) * 100);
 
   const getStatusDot = (status) => {
     switch (status) {
@@ -526,7 +704,7 @@ export default function App({ user, onSignOut }) {
     }
   };
 
-  const isWizardTab = ['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab);
+  const isWizardTab = tabOrder.includes(activeTab);
   const wizardStepIndex = isWizardTab ? tabOrder.indexOf(activeTab) : -1;
 
   const pageTitle = activeTab === 'dashboard'
@@ -654,7 +832,7 @@ export default function App({ user, onSignOut }) {
           <div className="px-3 py-2.5 mb-1">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10.5px] font-bold text-gray-500">Wizard progress</span>
-              <span className="text-[10.5px] font-bold text-accent-600">{completedStepsCount}/7</span>
+              <span className="text-[10.5px] font-bold text-accent-600">{completedStepsCount}/{steps.length}</span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
@@ -719,7 +897,7 @@ export default function App({ user, onSignOut }) {
 
             {isWizardTab && (
               <span className="text-[10.5px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-lg font-semibold border border-gray-200">
-                Step {wizardStepIndex + 1} / 7
+                Step {wizardStepIndex + 1} / {steps.length}
               </span>
             )}
           </div>
@@ -793,7 +971,7 @@ export default function App({ user, onSignOut }) {
               )}
 
 
-              {['basics', 'general', 'management', 'capital', 'objects', 'business', 'disclosures'].includes(activeTab) && (
+              {tabOrder.includes(activeTab) && (
                 <Wizard
                   formData={sessionData.form_data}
                   extractedData={sessionData.extracted_data}

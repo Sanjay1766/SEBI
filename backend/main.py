@@ -178,7 +178,11 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv(
 def empty_session() -> Dict[str, Any]:
     return {
         "form_data": {},
-        "extracted_data": {"financials": {}, "gst": {}, "incorporation": {}, "compliance": {}},
+        "extracted_data": {
+            "financials": {}, "gst": {}, "incorporation": {}, "compliance": {},
+            "moa_aoa": {}, "cap_table": {}, "dir12": {}, "litigation_schedule": {},
+            "industry_report": {}, "sales_register": {},
+        },
         "uploaded_files": [],
     }
 
@@ -602,7 +606,10 @@ async def upload_document(
     file: UploadFile = File(...),
     user: Dict[str, Any] = Depends(get_current_user),
 ):
-    valid_types = ["financials", "gst", "incorporation", "compliance"]
+    valid_types = [
+        "financials", "gst", "incorporation", "compliance",
+        "moa_aoa", "cap_table", "dir12", "litigation_schedule", "industry_report", "sales_register",
+    ]
     if doc_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Invalid document type. Must be one of: {valid_types}")
     
