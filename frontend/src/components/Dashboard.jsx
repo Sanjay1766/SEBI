@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  CheckCircle2, AlertTriangle, XCircle, FileDown, 
+import {
+  CheckCircle2, AlertTriangle, XCircle, FileDown,
   ChevronDown, ChevronUp, Loader2, Sparkles, ArrowRight,
-  Shield, BarChart3, Clock, Zap,
-  BookOpen, HelpCircle, Lightbulb, Cpu, ShieldCheck,
-  ExternalLink, ScrollText
+  BarChart3, Clock, Zap,
+  BookOpen, Lightbulb, Cpu, ShieldCheck,
+  ScrollText
 } from 'lucide-react';
 import ComplianceScoreMeter from './ComplianceScoreMeter';
 import RegulatoryAlertBanner from './RegulatoryAlertBanner';
 import DueDiligenceManager from './DueDiligenceManager';
+import Badge from './ui/Badge';
+import StatTile from './ui/StatTile';
 import { lookupRegulation } from '../data/icdrRegulations';
 import { WIZARD_STEPS } from './Wizard';
 
@@ -100,37 +102,36 @@ export default function Dashboard({
   };
 
   const getStatusBadge = (status, sectionId) => {
-    const base = 'flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-1 rounded-lg shrink-0 select-none cursor-pointer transition-all';
     switch (status) {
       case 'complete':
         return (
-          <span onClick={(e) => handleBadgeClick(e, sectionId)}
-            className={`${base} text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100`}
-            title="Verified. Click to view in wizard.">
-            <CheckCircle2 className="w-3 h-3" /> Verified
-          </span>
+          <Badge variant="success" icon={CheckCircle2} onClick={(e) => handleBadgeClick(e, sectionId)} title="Verified. Click to view in wizard.">
+            Verified
+          </Badge>
         );
       case 'inconsistent':
         return (
-          <span onClick={(e) => handleBadgeClick(e, sectionId)}
-            className={`${base} text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 animate-soft-pulse`}
-            title="Data conflict found. Click to review.">
-            <AlertTriangle className="w-3 h-3" /> Conflict
-          </span>
+          <Badge variant="danger" icon={AlertTriangle} pulse onClick={(e) => handleBadgeClick(e, sectionId)} title="Data conflict found. Click to review.">
+            Conflict
+          </Badge>
         );
       default:
         return (
-          <span onClick={(e) => handleBadgeClick(e, sectionId)}
-            className={`${base} text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100`}
-            title="Draft pending. Click to complete.">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /> Pending
-          </span>
+          <Badge variant="warning" dot onClick={(e) => handleBadgeClick(e, sectionId)} title="Draft pending. Click to complete.">
+            Pending
+          </Badge>
         );
     }
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
+
+      {/* ── Page Title ── */}
+      <div>
+        <h1 className="text-page-title">Filing Dashboard</h1>
+        <p className="text-body mt-1">Live SEBI ICDR Chapter IX compliance tracking for your draft prospectus.</p>
+      </div>
 
       {/* ── SEBI Regulatory Change Alert Banner ── */}
       <RegulatoryAlertBanner apiFetch={apiFetch} onNavigateTab={onNavigateTab} />
@@ -139,28 +140,17 @@ export default function Dashboard({
       <ComplianceScoreMeter validationResults={validationResults} />
 
       {/* ── Top Stats Row (2-col: Chapter Status + Compiler) ── */}
-
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Chapter Status */}
         <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between">
-          <p className="text-[10.5px] font-bold uppercase tracking-widest text-gray-400 mb-4">Prospectus Chapters</p>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-xl py-3 px-2 bg-emerald-50 border border-emerald-100">
-              <span className="text-2xl font-display font-700 text-emerald-600 block">{status_counts.complete}</span>
-              <span className="text-[9.5px] font-bold text-emerald-600/70 uppercase tracking-wide">Verified</span>
-            </div>
-            <div className="rounded-xl py-3 px-2 bg-amber-50 border border-amber-100">
-              <span className="text-2xl font-display font-700 text-amber-500 block">{status_counts.incomplete}</span>
-              <span className="text-[9.5px] font-bold text-amber-500/70 uppercase tracking-wide">Pending</span>
-            </div>
-            <div className="rounded-xl py-3 px-2 bg-red-50 border border-red-100">
-              <span className="text-2xl font-display font-700 text-red-500 block">{status_counts.inconsistent}</span>
-              <span className="text-[9.5px] font-bold text-red-500/70 uppercase tracking-wide">Conflicts</span>
-            </div>
+          <p className="text-caption font-bold uppercase tracking-widest mb-4">Prospectus Chapters</p>
+          <div className="grid grid-cols-3 gap-3">
+            <StatTile value={status_counts.complete} label="Verified" tone="success" />
+            <StatTile value={status_counts.incomplete} label="Pending" tone="warning" />
+            <StatTile value={status_counts.inconsistent} label="Conflicts" tone="danger" />
           </div>
-          <p className="text-[10.5px] text-gray-400 font-medium mt-4 leading-relaxed">
+          <p className="text-caption mt-4">
             {sections.length} chapters tracked · Click any chapter below to expand
           </p>
         </div>
@@ -169,19 +159,15 @@ export default function Dashboard({
         <div className="card rounded-2xl p-6 border border-gray-100 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-accent-500/8 rounded-full blur-2xl pointer-events-none" />
           <div>
-            <p className="text-[10.5px] font-bold uppercase tracking-widest text-accent-600 flex items-center gap-1.5 mb-1">
+            <p className="text-caption font-bold uppercase tracking-widest text-accent-600 flex items-center gap-1.5 mb-1">
               <Zap className="w-3.5 h-3.5" /> Prospectus Compiler
             </p>
-            <p className="text-[12.5px] text-gray-500 leading-relaxed">
+            <p className="text-body">
               Compile form data into a SEBI-formatted <code className="text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded-md text-[10.5px] font-mono">.docx</code> draft.
             </p>
           </div>
           <div className="space-y-2 mt-5">
-            <button
-              onClick={onGenerate}
-              disabled={generating}
-              className="w-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700 text-white rounded-xl py-2.5 px-3 text-[12px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-accent disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={onGenerate} disabled={generating} className="btn-primary w-full">
               {generating ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /><span>Compiling…</span></>
               ) : (
@@ -192,7 +178,7 @@ export default function Dashboard({
             {onPreFill && (
               <button
                 onClick={() => onPreFill('complete')}
-                className="w-full bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 rounded-xl py-2 px-4 text-[11px] font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-gray-200 hover:border-gray-300"
+                className="btn-secondary w-full"
                 title="Load all form fields with sample data for Master Chains N Jewels Limited"
               >
                 <Sparkles className="w-3.5 h-3.5 text-accent-400" />
@@ -213,10 +199,10 @@ export default function Dashboard({
       {inconsistencies.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-extrabold text-red-600 flex items-center gap-2">
+            <h3 className="text-[15px] font-bold text-red-600 flex items-center gap-2">
               <XCircle className="w-4 h-4" /> SEBI Statutory Mismatches & Conflict Checks ({inconsistencies.length})
             </h3>
-            <span className="text-[10.5px] text-red-500 font-mono font-bold">SEBI ICDR Audit Engine</span>
+            <span className="text-caption font-mono font-bold text-red-500">SEBI ICDR Audit Engine</span>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -238,32 +224,24 @@ export default function Dashboard({
                       <div className="p-1.5 bg-red-50 text-red-600 rounded-lg border border-red-100">
                         <AlertTriangle className="w-4 h-4" />
                       </div>
-                      <h4 className="font-extrabold text-sm text-gray-900">{inc.title}</h4>
-                      
-                      <span className="text-[9.5px] uppercase tracking-wider bg-red-50 text-red-600 px-2 py-0.5 rounded-md font-mono border border-red-200 font-bold">
-                        {inc.severity}
-                      </span>
+                      <h4 className="font-bold text-sm text-gray-800">{inc.title}</h4>
+
+                      <Badge variant="danger" size="xs" className="uppercase">{inc.severity}</Badge>
                       {inc.blocking && (
-                        <span className="text-[9px] uppercase tracking-wider bg-amber-50 text-amber-600 px-2 py-0.5 rounded-md font-mono border border-amber-200 font-bold">
-                          Blocking Issue
-                        </span>
+                        <Badge variant="warning" size="xs" className="uppercase">Blocking Issue</Badge>
                       )}
                     </div>
 
                     {/* Clickable SEBI Regulation Badge */}
                     {inc.sebi_ref && (
-                      <span
-                        title="SEBI ICDR Statutory Regulation Reference"
-                        className="text-[11px] font-extrabold font-mono bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shrink-0 self-start md:self-auto cursor-pointer hover:bg-blue-100 transition-colors"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-                        <span>{inc.sebi_ref}</span>
-                      </span>
+                      <Badge variant="info" icon={BookOpen} title="SEBI ICDR Statutory Regulation Reference" className="self-start md:self-auto font-mono">
+                        {inc.sebi_ref}
+                      </Badge>
                     )}
                   </div>
 
                   {/* Main Description */}
-                  <p className="text-xs text-gray-700 leading-relaxed pl-2 font-medium">{inc.description}</p>
+                  <p className="text-body pl-2">{inc.description}</p>
 
                   {/* Clean Actionable Fix Steps (Visible directly) */}
                   {inc.fix_steps && inc.fix_steps.length > 0 && (
@@ -294,7 +272,7 @@ export default function Dashboard({
                       }`}
                     >
                       <Cpu className="w-3.5 h-3.5 text-purple-600" />
-                      <span>{showCoT ? 'Hide Technical Audit Details' : '🧠 Technical CoT & ICDR Text'}</span>
+                      <span>{showCoT ? 'Hide Technical Audit Details' : 'Technical CoT & ICDR Text'}</span>
                     </button>
 
                     {inc.section_id && SECTION_TO_TAB[inc.section_id] && (
@@ -408,16 +386,10 @@ export default function Dashboard({
                   {/* Section Header & Risk Badge */}
                   <div className="flex items-center gap-3 shrink-0 ml-5">
                     {sec.risk_score && (
-                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border font-mono select-none flex items-center gap-1 ${
-                        sec.risk_level === 'high' 
-                          ? 'bg-red-50 text-red-700 border-red-200' 
-                          : sec.risk_level === 'medium' 
-                          ? 'bg-amber-50 text-amber-700 border-amber-200' 
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}>
+                      <Badge variant={sec.risk_level === 'high' ? 'danger' : sec.risk_level === 'medium' ? 'warning' : 'success'} className="font-mono">
                         <span>Risk: {sec.risk_score}/10</span>
-                        <span className="opacity-75 uppercase text-[9px]">({sec.risk_level})</span>
-                      </span>
+                        <span className="opacity-75 uppercase text-[9px] ml-1">({sec.risk_level})</span>
+                      </Badge>
                     )}
                     {getStatusBadge(sec.status, sec.section_id)}
                     {isExpanded
@@ -472,13 +444,9 @@ export default function Dashboard({
                         {hasPresent ? (
                           <div className="flex flex-wrap gap-1.5">
                             {sec.present_fields.map((f) => (
-                              <span key={f}
-                                onClick={() => onNavigateTab && onNavigateTab(SECTION_TO_TAB[sec.section_id])}
-                                className="text-[10.5px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5 cursor-pointer hover:bg-emerald-100 transition-colors leading-none"
-                                title="Click to view in wizard."
-                              >
-                                <CheckCircle2 className="w-3 h-3 shrink-0" /> {f}
-                              </span>
+                              <Badge key={f} variant="success" icon={CheckCircle2} onClick={() => onNavigateTab && onNavigateTab(SECTION_TO_TAB[sec.section_id])} title="Click to view in wizard.">
+                                {f}
+                              </Badge>
                             ))}
                           </div>
                         ) : (
@@ -492,13 +460,9 @@ export default function Dashboard({
                         {hasMissing ? (
                           <div className="flex flex-wrap gap-1.5">
                             {sec.missing_fields.map((f) => (
-                              <span key={f}
-                                onClick={() => onNavigateTab && onNavigateTab(SECTION_TO_TAB[sec.section_id])}
-                                className="text-[10.5px] bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5 cursor-pointer hover:bg-amber-100 transition-colors leading-none"
-                                title="Click to fill in wizard."
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /> {f}
-                              </span>
+                              <Badge key={f} variant="warning" dot onClick={() => onNavigateTab && onNavigateTab(SECTION_TO_TAB[sec.section_id])} title="Click to fill in wizard.">
+                                {f}
+                              </Badge>
                             ))}
                           </div>
                         ) : (
