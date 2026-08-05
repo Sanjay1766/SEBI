@@ -4,8 +4,9 @@ import {
   Building2, Users, DollarSign, Briefcase, AlertTriangle, HelpCircle,
   CheckCircle2, BookOpen, AlertCircle, FileText, ArrowRight, Loader2,
   ChevronRight, ChevronLeft, Info, Sparkles, Lock, Plus, Trash2, Scale, TrendingUp,
-  Landmark, Gavel, ClipboardList
+  Landmark, Gavel, ClipboardList, Link2, PenLine
 } from 'lucide-react';
+import Badge from './ui/Badge';
 
 // BACKEND_URL is exported from config.js as API_URL
 
@@ -290,9 +291,9 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           </label>
           <div className="flex items-center gap-1.5">
             {hasExtracted && (
-              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-accent-700 bg-accent-50 border border-accent-200 px-1.5 py-0.5 rounded-md select-none" title="Rows available from an uploaded document">
-                🔗 {extractedRows.length} row{extractedRows.length === 1 ? '' : 's'} extracted
-              </span>
+              <Badge variant="accent" size="xs" icon={Link2} title="Rows available from an uploaded document">
+                {extractedRows.length} row{extractedRows.length === 1 ? '' : 's'} extracted
+              </Badge>
             )}
             <span className="text-[10px] text-gray-400 font-mono font-semibold">{rows.length} row{rows.length === 1 ? '' : 's'}</span>
           </div>
@@ -304,11 +305,11 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
             onClick={applyExtracted}
             className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-accent-700 hover:text-accent-800 bg-accent-50 hover:bg-accent-100 border border-accent-200 px-2.5 py-1 rounded-lg cursor-pointer transition-all"
           >
-            🔗 Use {extractedRows.length} extracted row{extractedRows.length === 1 ? '' : 's'}
+            <Link2 className="w-3 h-3" /> Use {extractedRows.length} extracted row{extractedRows.length === 1 ? '' : 's'}
           </button>
         )}
 
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
+        <div className="rounded-2xl border border-gray-200 overflow-hidden">
           {rows.length === 0 ? (
             <div className="p-4 text-center text-[11.5px] text-gray-400 font-medium bg-gray-50">No entries yet.</div>
           ) : (
@@ -384,15 +385,15 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               if (!hasCurrent) return null;
               if (hasExtracted && String(currentVal) === String(extractedVal)) {
                 return (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-accent-700 bg-accent-50 border border-accent-200 px-1.5 py-0.5 rounded-md select-none" title="Value auto-extracted from uploaded document">
-                    🔗 Auto-extracted
-                  </span>
+                  <Badge variant="accent" size="xs" icon={Link2} title="Value auto-extracted from uploaded document">
+                    Auto-extracted
+                  </Badge>
                 );
               }
               return (
-                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-md select-none" title="Manually entered by user">
-                  ✍️ Manual
-                </span>
+                <Badge variant="neutral" size="xs" icon={PenLine} title="Manually entered by user">
+                  Manual
+                </Badge>
               );
             })()}
             {/* Character counter for textareas */}
@@ -400,19 +401,13 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
 
             {/* Validation badge */}
             {validation.status === 'valid' && !isCheckbox && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                <CheckCircle2 className="w-3 h-3" /> Passed
-              </span>
+              <Badge variant="success" size="xs" icon={CheckCircle2}>Passed</Badge>
             )}
             {validation.status === 'warning' && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md" title={validation.message}>
-                <AlertTriangle className="w-3 h-3" /> Advisory
-              </span>
+              <Badge variant="warning" size="xs" icon={AlertTriangle} title={validation.message}>Advisory</Badge>
             )}
             {validation.status === 'error' && (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md" title={validation.message}>
-                <AlertCircle className="w-3 h-3" /> Error
-              </span>
+              <Badge variant="danger" size="xs" icon={AlertCircle} title={validation.message}>Error</Badge>
             )}
 
             {/* AI Assist button for textareas */}
@@ -889,7 +884,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               </div>
 
               {formData.kpi_sector ? (
-                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="divide-y divide-gray-100">
                     {(Array.isArray(formData.kpi_values) ? formData.kpi_values : []).map((row, idx) => (
                       <div key={idx} className="p-3 bg-white flex flex-wrap gap-2.5 items-end">
@@ -952,7 +947,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>⚡ Auto-Generate Risk Factors</span>
+                      <span>Auto-Generate Risk Factors</span>
                     </>
                   )}
                 </button>
