@@ -10,35 +10,37 @@ import ComplianceScoreMeter from './ComplianceScoreMeter';
 import RegulatoryAlertBanner from './RegulatoryAlertBanner';
 import DueDiligenceManager from './DueDiligenceManager';
 import { lookupRegulation } from '../data/icdrRegulations';
+import { WIZARD_STEPS } from './Wizard';
 
+// Maps each backend/schema.json section id to the wizard tab that actually houses its
+// fields — kept in sync with Wizard.jsx's 14-tab structure (Cover Page + the 12 numbered
+// Abridged Prospectus sections + the Statutory & Compliance catch-all for fields the
+// abridged summary itself doesn't render).
 const SECTION_TO_TAB = {
-
-  'cover_page': 'basics',
-  'definitions': 'basics',
-  'risk_factors': 'disclosures',
-  'summary_offer': 'business',
-  'general_info': 'general',
-  'capital_structure': 'capital',
+  'cover_page': 'cover',
+  'offer_details': 'cover',
+  'definitions': 'cover',
+  'risk_factors': 'risks',
+  'summary_offer': 'compliance',
+  'general_info': 'compliance',
+  'capital_structure': 'compliance',
   'objects_issue': 'objects',
   'business_overview': 'business',
-  'industry_overview': 'business',
-  'management': 'management',
-  'rpt': 'management',
-  'financials': 'general',
-  'compliance_certs': 'general',
-  'material_contracts': 'disclosures',
-  'declaration': 'disclosures'
+  'industry_overview': 'industry',
+  'promoters': 'promoters',
+  'board_kmp': 'board',
+  'rpt': 'compliance',
+  'financials': 'financials',
+  'kpis': 'kpis',
+  'shareholding': 'shareholding',
+  'waca': 'waca',
+  'legal_disclosures': 'litigation',
+  'compliance_certs': 'compliance',
+  'material_contracts': 'compliance',
+  'declaration': 'compliance',
 };
 
-const TAB_NAMES = {
-  'basics': 'Cover Page Details',
-  'general': 'General Information',
-  'management': 'Board & Promoters',
-  'capital': 'Capital Structure',
-  'objects': 'Objects of the Issue',
-  'business': 'Business Operations',
-  'disclosures': 'Risk Disclosures'
-};
+const TAB_NAMES = Object.fromEntries(WIZARD_STEPS.map(s => [s.id, s.label]));
 
 export default function Dashboard({ 
   validationResults, 
@@ -191,10 +193,10 @@ export default function Dashboard({
               <button
                 onClick={() => onPreFill('complete')}
                 className="w-full bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 rounded-xl py-2 px-4 text-[11px] font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-gray-200 hover:border-gray-300"
-                title="Load all form fields with sample data for Apex Technochem Limited"
+                title="Load all form fields with sample data for Master Chains N Jewels Limited"
               >
                 <Sparkles className="w-3.5 h-3.5 text-accent-400" />
-                <span>Load sample — Apex Technochem Ltd</span>
+                <span>Load sample — Master Chains N Jewels</span>
               </button>
             )}
           </div>
