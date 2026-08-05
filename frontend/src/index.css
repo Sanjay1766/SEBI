@@ -5,16 +5,18 @@
 
 /* ─── Tailwind v4 CSS-first theme tokens ────────────────────── */
 @theme {
-  /* Accent — Groww & Stripe inspired premium emerald teal */
-  --color-accent-50:  #e6faf5;
-  --color-accent-100: #bbf2e2;
-  --color-accent-200: #7ee6c7;
-  --color-accent-300: #42d4a9;
-  --color-accent-400: #14b886;
-  --color-accent-500: #00b386;
-  --color-accent-600: #00946e;
-  --color-accent-700: #007557;
-  --color-accent-800: #005a43;
+  /* Accent — warm logistics orange */
+  --color-accent-50:  #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-200: #fed7aa;
+  --color-accent-300: #fdba74;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
+  --color-accent-700: #c2410c;
+  --color-accent-800: #9a3412;
+  --color-accent-900: #7c2d12;
+  --color-accent-950: #431407;
 
   /* Surface system (light) */
   --color-surface-0:   #ffffff;
@@ -54,18 +56,65 @@
   --font-sans:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-display: 'Outfit', sans-serif;
   --font-mono:    'JetBrains Mono', monospace;
+
+  /* Soft elevation — small, layered, low-opacity shadows only.
+     These tokens were previously only defined in the (inert) legacy
+     tailwind.config.js, so every shadow-card/-md/-lg/-accent class used
+     across the app rendered with zero elevation; defining them here in the
+     @theme block Tailwind v4 actually reads is what makes them apply. */
+  --shadow-card:     0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.06);
+  --shadow-card-md:  0 2px 6px -1px rgba(15, 23, 42, 0.07), 0 4px 10px -3px rgba(15, 23, 42, 0.06);
+  --shadow-card-lg:  0 8px 20px -6px rgba(15, 23, 42, 0.10), 0 3px 8px -3px rgba(15, 23, 42, 0.06);
+  --shadow-accent:   0 4px 14px -2px rgba(249, 115, 22, 0.22);
 }
 
 /* ─── Base ──────────────────────────────────────────────────── */
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #F8F9FB;
+  color: #1F2937;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* ─── Typography scale ───────────────────────────────────────
+   Named scale so pages can move off scattered arbitrary text-[Npx]
+   values without guessing sizes. Applied incrementally per page. ── */
+.text-page-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #1F2937;
+  letter-spacing: -0.01em;
+}
+.text-section-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: #1F2937;
+}
+.text-card-title {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #1F2937;
+}
+.text-body {
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 500;
+  color: #334155;
+}
+.text-caption {
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: #94a3b8;
 }
 
 /* ─── Scrollbar ────────────────────────────────────────────── */
@@ -112,13 +161,13 @@ body {
 }
 .glass-hover:hover {
   background: #ffffff;
-  border-color: #00b386;
-  box-shadow: 0 12px 24px -6px rgba(0, 179, 134, 0.14), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+  border-color: #f97316;
+  box-shadow: 0 12px 24px -6px rgba(249, 115, 22, 0.14), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
 }
 
 .glass-accent {
-  background: linear-gradient(135deg, #e6faf5 0%, #ffffff 100%);
-  border: 1px solid rgba(0, 179, 134, 0.3);
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  border: 1px solid rgba(249, 115, 22, 0.3);
 }
 
 /* ─── Font Display ──────────────────────────────────────────── */
@@ -151,9 +200,9 @@ body {
 
 .form-input-base:focus {
   outline: none;
-  border-color: #00b386;
+  border-color: #f97316;
   background: #ffffff;
-  box-shadow: 0 0 0 3.5px rgba(0, 179, 134, 0.14), 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  box-shadow: 0 0 0 3.5px rgba(249, 115, 22, 0.14), 0 1px 2px 0 rgba(15, 23, 42, 0.04);
   color: #0f172a;
 }
 
@@ -201,48 +250,11 @@ select.form-input-base {
   font-weight: 600;
   transition: color 0.2s;
 }
-.char-counter.active { color: #00b386; }
+.char-counter.active { color: #f97316; }
 .char-counter.warn   { color: #f59e0b; }
 
-/* ─── Validation Badges ─────────────────────────────────────── */
-.badge-valid {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #047857;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  padding: 3px 9px;
-  border-radius: 8px;
-}
-
-.badge-warning {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #b45309;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  padding: 3px 9px;
-  border-radius: 8px;
-}
-
-.badge-error {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  padding: 3px 9px;
-  border-radius: 8px;
-}
+/* Badge styling now lives in the <Badge> component (src/components/ui/Badge.jsx)
+   so variant/icon/size stay in one reusable place instead of duplicated CSS. */
 
 /* ─── Animations ────────────────────────────────────────────── */
 @keyframes fade-in-up {
@@ -270,8 +282,8 @@ select.form-input-base {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 179, 134, 0.4); }
-  50%      { box-shadow: 0 0 0 8px rgba(0, 179, 134, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
 }
 .animate-pulse-glow {
   animation: pulse-glow 2.5s infinite;
@@ -283,7 +295,7 @@ select.form-input-base {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #00b386 0%, #00946e 100%);
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   color: #ffffff;
   font-weight: 700;
   font-size: 13px;
@@ -292,16 +304,16 @@ select.form-input-base {
   border: none;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 10px rgba(0, 179, 134, 0.28);
+  box-shadow: 0 2px 10px rgba(249, 115, 22, 0.28);
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #00c997 0%, #009e76 100%);
-  box-shadow: 0 6px 18px rgba(0, 179, 134, 0.38);
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.38);
   transform: translateY(-1.5px);
 }
 .btn-primary:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(0, 179, 134, 0.2);
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.2);
 }
 .btn-primary:disabled {
   opacity: 0.55;
@@ -334,9 +346,80 @@ select.form-input-base {
   transform: translateY(-1px);
 }
 
+/* ─── Danger button ─────────────────────────────────────────── */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #dc2626;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 10px rgba(220, 38, 38, 0.22);
+}
+.btn-danger:hover {
+  background: #b91c1c;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
+  transform: translateY(-1px);
+}
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ─── Ghost button (no border, no fill) ─────────────────────── */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.btn-ghost:hover {
+  background: #f1f5f9;
+  color: #1F2937;
+}
+
+/* ─── Outline button ─────────────────────────────────────────── */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  color: #ea580c;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1.5px solid #fdba74;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.btn-outline:hover {
+  background: #fff7ed;
+  border-color: #f97316;
+}
+
 /* ─── Glow accent ───────────────────────────────────────────── */
 .glow-accent {
-  box-shadow: 0 0 0 1px rgba(0, 179, 134, 0.15), 0 10px 30px -10px rgba(0, 179, 134, 0.2);
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.15), 0 10px 30px -10px rgba(249, 115, 22, 0.2);
 }
 
 /* ─── Smooth ring progress animation ───────────────────────── */

@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { ScrollText, Package, Search, Link2, AlertTriangle, FileEdit, ShieldCheck, RotateCw, History, Loader2 } from 'lucide-react';
 import { apiFetch } from '../api';
+import Badge from './ui/Badge';
+import StatTile from './ui/StatTile';
+
+const ACTION_TYPES = [
+  { value: '', label: 'All Action Types' },
+  { value: 'section.certify', label: 'section.certify' },
+  { value: 'section.review', label: 'section.review' },
+  { value: 'export.docx', label: 'export.docx' },
+  { value: 'export.blocked', label: 'export.blocked' },
+  { value: 'validation.run', label: 'validation.run' },
+  { value: 'contradiction.found', label: 'contradiction.found' },
+  { value: 'blockchain.anchor', label: 'blockchain.anchor' },
+];
 
 export default function AuditTrail() {
   const [auditData, setAuditData] = useState(null);
@@ -24,120 +38,96 @@ export default function AuditTrail() {
 
   useEffect(() => {
     fetchAuditLog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAction]);
 
   const entries = auditData?.entries || [];
   const summary = auditData?.summary || {};
 
   const getActionIcon = (action) => {
-    if (action.startsWith('section.certify')) return '📜';
-    if (action.startswith && action.startsWith('export')) return '📦';
-    if (action.startsWith('validation')) return '🔍';
-    if (action.startsWith('blockchain')) return '🔗';
-    if (action.startsWith('contradiction')) return '⚠️';
-    return '📝';
+    if (action.startsWith('section.certify')) return ScrollText;
+    if (action.startsWith('export')) return Package;
+    if (action.startsWith('validation')) return Search;
+    if (action.startsWith('blockchain')) return Link2;
+    if (action.startsWith('contradiction')) return AlertTriangle;
+    return FileEdit;
   };
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', color: '#f8fafc' }}>
-      {/* Header Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-        padding: '1.75rem',
-        borderRadius: '12px',
-        border: '1px solid #334155',
-        marginBottom: '2rem',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#38bdf8', marginBottom: '0.5rem' }}>
-              🛡️ Statutory Audit & Compliance Event Log
-            </h2>
-            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
-              Immutable append-only JSONL log recording every user action, validation check, certification event, and export attempt.
-            </p>
-          </div>
-          <button
-            onClick={fetchAuditLog}
-            style={{
-              background: '#334155', color: '#38bdf8', border: '1px solid #0284c7',
-              padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '600'
-            }}
-          >
-            🔄 Refresh Log
-          </button>
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in-up">
+      {/* Page header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-page-title flex items-center gap-2.5">
+            <History className="w-7 h-7 text-accent-500" /> Audit Trail
+          </h1>
+          <p className="text-body mt-1">
+            Immutable append-only log recording every user action, validation check, certification event, and export attempt.
+          </p>
         </div>
+        <button onClick={fetchAuditLog} className="btn-secondary shrink-0">
+          <RotateCw className="w-3.5 h-3.5" /> Refresh Log
+        </button>
       </div>
 
-      {/* Summary Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ background: '#1e293b', padding: '1.2rem', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ color: '#94a3b8', fontSize: '0.8rem', textTransform: 'uppercase' }}>Total Audit Events</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: '700', color: '#38bdf8' }}>{summary.total_events || 0}</div>
-        </div>
-        <div style={{ background: '#1e293b', padding: '1.2rem', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ color: '#94a3b8', fontSize: '0.8rem', textTransform: 'uppercase' }}>Contradictions Flagged</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: '700', color: '#fbbf24' }}>{summary.total_contradictions_found || 0}</div>
-        </div>
-        <div style={{ background: '#1e293b', padding: '1.2rem', borderRadius: '8px', border: '1px solid #334155' }}>
-          <div style={{ color: '#94a3b8', fontSize: '0.8rem', textTransform: 'uppercase' }}>Banker Certifications</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: '700', color: '#4ade80' }}>{summary.total_sections_certified || 0}</div>
-        </div>
+      {/* Summary stat tiles */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatTile icon={ShieldCheck} value={summary.total_events || 0} label="Total Audit Events" tone="accent" />
+        <StatTile icon={AlertTriangle} value={summary.total_contradictions_found || 0} label="Contradictions Flagged" tone="warning" />
+        <StatTile icon={ScrollText} value={summary.total_sections_certified || 0} label="Banker Certifications" tone="success" />
       </div>
 
-      {/* Filter Control */}
-      <div style={{ background: '#1e293b', padding: '1rem 1.5rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Filter by Event Type:</span>
+      {/* Filter control */}
+      <div className="card rounded-2xl p-4 flex items-center gap-3 flex-wrap">
+        <span className="text-caption font-bold">Filter by Event Type</span>
         <select
           value={selectedAction}
           onChange={(e) => setSelectedAction(e.target.value)}
-          style={{ background: '#0f172a', border: '1px solid #475569', color: '#fff', padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.9rem' }}
+          className="form-input-base !w-auto !py-2 !text-[12.5px]"
         >
-          <option value="">All Action Types</option>
-          <option value="section.certify">section.certify</option>
-          <option value="section.review">section.review</option>
-          <option value="export.docx">export.docx</option>
-          <option value="export.blocked">export.blocked</option>
-          <option value="validation.run">validation.run</option>
-          <option value="contradiction.found">contradiction.found</option>
-          <option value="blockchain.anchor">blockchain.anchor</option>
+          {ACTION_TYPES.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
         </select>
       </div>
 
-      {/* Event Timeline List */}
-      <div style={{ background: '#1e293b', borderRadius: '12px', padding: '1.5rem', border: '1px solid #334155' }}>
+      {/* Event timeline */}
+      <div className="card rounded-2xl p-5">
         {loading ? (
-          <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading log entries...</div>
+          <div className="flex items-center justify-center gap-2 py-16 text-gray-400">
+            <Loader2 className="w-5 h-5 animate-spin" /> Loading log entries…
+          </div>
         ) : entries.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No audit events found for selected criteria.</div>
+          <div className="text-center text-gray-400 py-16">No audit events found for selected criteria.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="flex flex-col gap-3">
             {entries.map((entry, idx) => {
               const isSuccess = entry.outcome === 'success';
               const isDenied = entry.outcome === 'denied';
+              const ActionIcon = getActionIcon(entry.action);
+              const borderColor = isSuccess ? 'border-l-emerald-500' : isDenied ? 'border-l-red-500' : 'border-l-amber-400';
               return (
-                <div key={idx} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: '1rem',
-                  padding: '1rem', background: '#0f172a', borderRadius: '8px',
-                  borderLeft: isSuccess ? '4px solid #22c55e' : isDenied ? '4px solid #ef4444' : '4px solid #f59e0b'
-                }}>
-                  <div style={{ fontSize: '1.4rem' }}>{getActionIcon(entry.action)}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
-                      <span style={{ fontWeight: '700', color: '#f1f5f9' }}>{entry.action}</span>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                <div key={idx} className={`flex items-start gap-3.5 p-4 rounded-xl bg-gray-50 border border-gray-100 border-l-4 ${borderColor}`}>
+                  <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-400 shrink-0">
+                    <ActionIcon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[13px] text-gray-800">{entry.action}</span>
+                        <Badge variant={isSuccess ? 'success' : isDenied ? 'danger' : 'warning'} size="xs">
+                          {entry.outcome || 'logged'}
+                        </Badge>
+                      </div>
+                      <span className="text-caption shrink-0">
                         {new Date(entry.timestamp).toLocaleString()}
                       </span>
                     </div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                      Resource: <code style={{ color: '#38bdf8' }}>{entry.resource}</code>
+                    <div className="text-[12px] text-gray-500">
+                      Resource: <code className="text-accent-600 font-mono">{entry.resource}</code>
                     </div>
                     {entry.detail && Object.keys(entry.detail).length > 0 && (
-                      <pre style={{
-                        background: '#1e293b', padding: '0.4rem 0.8rem', borderRadius: '4px',
-                        color: '#cbd5e1', fontSize: '0.75rem', marginTop: '0.4rem', overflowX: 'auto'
-                      }}>
+                      <pre className="bg-slate-900 text-slate-300 px-3 py-2 rounded-lg text-[11px] mt-2 overflow-x-auto">
                         {JSON.stringify(entry.detail, null, 2)}
                       </pre>
                     )}
