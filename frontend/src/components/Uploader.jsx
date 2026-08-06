@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
-  UploadCloud, FileText, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck,
-  BarChart3, Receipt, ScrollText, IdCard, BookOpen, Calculator, UserCog, Scale, LineChart,
+  Eye, EyeOff, Loader2, X, ShieldCheck,
+  BarChart3, Receipt, ScrollText, IdCard, BookOpen, Calculator, UserCog, Scale, LineChart, Sparkles, Clock,
 } from 'lucide-react';
 import Badge from './ui/Badge';
 
@@ -25,9 +25,9 @@ export default function Uploader({
 
   const [dragging, setDragging] = useState(initFalse());
 
-  // Collapsed by default — cards stay compact; clicking the eye icon expands
-  // the extracted-fields panel in place (with its own internal scroll) so
-  // opening one card's detail never grows the grid or forces the page to scroll.
+  // Collapsed by default in the row layout — each row stays compact and
+  // scannable; clicking the eye icon expands just that row's extracted
+  // fields in place, rather than every row permanently taking extra height.
   const [expandedJson, setExpandedJson] = useState(initFalse());
 
   const [vcModal, setVcModal] = useState(null);
@@ -59,9 +59,10 @@ export default function Uploader({
 
   const [jobState, setJobState] = useState(initNull());
 
-  const handleUpload = async (docType, file) => {
-    if (!file) return;
-    
+  // Uploads exactly one document and resolves only once its background job has
+  // fully finished (completed or failed) — unlike a plain fetch, so the queue
+  // below can safely await it before starting the next one.
+  const uploadOne = (docType, file) => new Promise((resolve) => {
     setUploading(prev => ({ ...prev, [docType]: true }));
     setError(prev => ({ ...prev, [docType]: '' }));
     setJobState(prev => ({
@@ -69,80 +70,157 @@ export default function Uploader({
       [docType]: { progress: 15, stage: 'Validating document integrity & hash...', status: 'processing', filename: file.name }
     }));
 
-    const formData = new FormData();
-    formData.append('doc_type', docType);
-    formData.append('file', file);
-
-    try {
-      const response = await apiFetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to upload and parse document.');
-      }
-
-      const result = await response.json();
-      const jobId = result.job_id;
-
-      if (!jobId) {
-        onUploadSuccess(docType, result.extracted, { filename: result.filename, size: file.size, extraction_status: result.extraction_status, extraction_error: result.extraction_error });
-        setUploading(prev => ({ ...prev, [docType]: false }));
-        setJobState(prev => ({ ...prev, [docType]: null }));
-        return;
-      }
-
-      // Poll background job status endpoint (/api/jobs/{id}/status)
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusRes = await apiFetch(`/api/jobs/${jobId}/status`);
-          if (statusRes.ok) {
-            const jobData = await statusRes.json();
-            setJobState(prev => ({
-              ...prev,
-              [docType]: {
-                progress: jobData.progress || 15,
-                stage: jobData.stage || 'Processing document...',
-                status: jobData.status,
-                filename: file.name
-              }
-            }));
-
-            if (jobData.status === 'completed') {
-              clearInterval(pollInterval);
-              onUploadSuccess(
-                docType,
-                jobData.extracted_data || {},
-                {
-                  filename: file.name,
-                  size: file.size,
-                  extraction_status: 'completed',
-                  extraction_error: null
-                }
-              );
-              setTimeout(() => {
-                setUploading(prev => ({ ...prev, [docType]: false }));
-                setJobState(prev => ({ ...prev, [docType]: null }));
-              }, 1200);
-            } else if (jobData.status === 'failed') {
-              clearInterval(pollInterval);
-              setError(prev => ({ ...prev, [docType]: jobData.error || 'Extraction failed.' }));
-              setUploading(prev => ({ ...prev, [docType]: false }));
-              setJobState(prev => ({ ...prev, [docType]: null }));
-            }
-          }
-        } catch (pollErr) {
-          console.error("Polling job status error:", pollErr);
-        }
-      }, 750);
-
-    } catch (err) {
-      console.error(err);
-      setError(prev => ({ ...prev, [docType]: err.message || 'An error occurred.' }));
+    const finish = () => {
       setUploading(prev => ({ ...prev, [docType]: false }));
       setJobState(prev => ({ ...prev, [docType]: null }));
+      resolve();
+    };
+
+    (async () => {
+      const formData = new FormData();
+      formData.append('doc_type', docType);
+      formData.append('file', file);
+
+      try {
+        const response = await apiFetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Failed to upload and parse document.');
+        }
+
+        const result = await response.json();
+        const jobId = result.job_id;
+
+        if (!jobId) {
+          onUploadSuccess(docType, result.extracted, { filename: result.filename, size: file.size, extraction_status: result.extraction_status, extraction_error: result.extraction_error });
+          finish();
+          return;
+        }
+
+        // Poll background job status endpoint (/api/jobs/{id}/status)
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await apiFetch(`/api/jobs/${jobId}/status`);
+            if (statusRes.ok) {
+              const jobData = await statusRes.json();
+              setJobState(prev => ({
+                ...prev,
+                [docType]: {
+                  progress: jobData.progress || 15,
+                  stage: jobData.stage || 'Processing document...',
+                  status: jobData.status,
+                  filename: file.name
+                }
+              }));
+
+              if (jobData.status === 'completed') {
+                clearInterval(pollInterval);
+                onUploadSuccess(
+                  docType,
+                  jobData.extracted_data || {},
+                  {
+                    filename: file.name,
+                    size: file.size,
+                    extraction_status: 'completed',
+                    extraction_error: null
+                  }
+                );
+                setTimeout(finish, 1200);
+              } else if (jobData.status === 'failed') {
+                clearInterval(pollInterval);
+                setError(prev => ({ ...prev, [docType]: jobData.error || 'Extraction failed.' }));
+                finish();
+              }
+            }
+          } catch (pollErr) {
+            console.error("Polling job status error:", pollErr);
+          }
+        }, 750);
+
+      } catch (err) {
+        console.error(err);
+        setError(prev => ({ ...prev, [docType]: err.message || 'An error occurred.' }));
+        finish();
+      }
+    })();
+  });
+
+  // ── Upload queue ──────────────────────────────────────────────────────────
+  // Documents extract one at a time instead of all firing concurrently.
+  // Concurrent extraction jobs each do their own load-session -> merge ->
+  // save-session round trip; running several at once let a slower job's stale
+  // in-memory session snapshot overwrite fields a faster job had just saved
+  // (e.g. a stale company_name surviving a fresh batch upload). A backend lock
+  // now also guards that critical section, but queuing here keeps only one
+  // OCR/LLM extraction — and one card's "Analyzing…" spinner — active at a
+  // time, which is both the fix and the honest UI for what's happening.
+  const [queuedTypes, setQueuedTypes] = useState(initFalse());
+  const uploadQueueRef = useRef([]);
+  const isDrainingQueueRef = useRef(false);
+
+  const drainQueue = async () => {
+    if (isDrainingQueueRef.current) return;
+    isDrainingQueueRef.current = true;
+    while (uploadQueueRef.current.length > 0) {
+      const { docType, file } = uploadQueueRef.current.shift();
+      setQueuedTypes(prev => ({ ...prev, [docType]: false }));
+      await uploadOne(docType, file);
+    }
+    isDrainingQueueRef.current = false;
+  };
+
+  const handleUpload = (docType, file) => {
+    if (!file) return;
+    // Re-selecting a doc_type already waiting in the queue just replaces the
+    // pending file rather than queuing a second entry for the same card.
+    uploadQueueRef.current = uploadQueueRef.current.filter(item => item.docType !== docType);
+    uploadQueueRef.current.push({ docType, file });
+    setQueuedTypes(prev => ({ ...prev, [docType]: true }));
+    drainQueue();
+  };
+
+  const [loadingDemo, setLoadingDemo] = useState(false);
+
+  // One-click demo loader — pulls the bundled sample document set from the
+  // server (backend/demo_files/) and feeds each one through the exact same
+  // handleUpload() path a manual click-to-select would use, so it gets the
+  // same progress bar, job polling, and extracted-field display per card.
+  // Skips any doc_type that already has a document, so it only ever fills
+  // empty slots rather than clobbering something already uploaded.
+  const handleLoadDemoFiles = async () => {
+    setLoadingDemo(true);
+    try {
+      const res = await apiFetch('/api/demo/manifest');
+      if (!res.ok) throw new Error('Failed to load demo document manifest.');
+      const { files } = await res.json();
+
+      const uploadedTypes = new Set((sessionData.uploaded_files || []).map(f => f.type));
+      const pending = files.filter(f => !uploadedTypes.has(f.doc_type));
+
+      // Fetch each sample file's bytes and hand it to the same queue a manual
+      // upload uses — handleUpload() only enqueues, so this loop just fills
+      // the queue; drainQueue() (already running from the first call) works
+      // through it one document at a time.
+      for (const { doc_type, filename } of pending) {
+        try {
+          const fileRes = await apiFetch(`/api/demo/file/${doc_type}`);
+          if (!fileRes.ok) throw new Error(`Failed to fetch demo file for ${doc_type}`);
+          const blob = await fileRes.blob();
+          const file = new File([blob], filename, { type: 'application/pdf' });
+          handleUpload(doc_type, file);
+        } catch (err) {
+          console.error(`Demo load failed for ${doc_type}:`, err);
+          setError(prev => ({ ...prev, [doc_type]: 'Failed to load demo document.' }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load demo documents:', err);
+    } finally {
+      setLoadingDemo(false);
     }
   };
 
@@ -187,10 +265,10 @@ export default function Uploader({
     gst: {
       title: 'GST Registration & Returns',
       desc: 'GSTR-3B summary or GSTIN Certificate.',
-      accentColor: 'text-emerald-600',
-      accentBg: 'bg-emerald-50/60',
-      accentBorder: 'border-emerald-200/80',
-      iconBg: 'bg-emerald-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: Receipt,
       extractedKeys: {
         gstin: 'GSTIN Registration',
@@ -219,10 +297,10 @@ export default function Uploader({
     compliance: {
       title: 'PAN & TAN Licenses',
       desc: 'Statutory company PAN, TAN or local operating licenses (PDF/Image).',
-      accentColor: 'text-amber-600',
-      accentBg: 'bg-amber-50/60',
-      accentBorder: 'border-amber-200/80',
-      iconBg: 'bg-amber-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: IdCard,
       extractedKeys: {
         pan: 'Company PAN No.',
@@ -233,10 +311,10 @@ export default function Uploader({
     moa_aoa: {
       title: 'MOA / AOA',
       desc: 'Memorandum and Articles of Association (PDF).',
-      accentColor: 'text-indigo-600',
-      accentBg: 'bg-indigo-50/60',
-      accentBorder: 'border-indigo-200/80',
-      iconBg: 'bg-indigo-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: BookOpen,
       extractedKeys: {
         authorized_capital: 'Authorized Capital',
@@ -247,10 +325,10 @@ export default function Uploader({
     cap_table: {
       title: 'Register of Members / Cap Table',
       desc: 'Shareholder register for pre-offer shareholding and promoter group (PDF).',
-      accentColor: 'text-violet-600',
-      accentBg: 'bg-violet-50/60',
-      accentBorder: 'border-violet-200/80',
-      iconBg: 'bg-violet-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: Calculator,
       extractedKeys: {
         promoter_shareholding_pre_pct: 'Promoter Shareholding %',
@@ -261,10 +339,10 @@ export default function Uploader({
     dir12: {
       title: 'DIR-12 / Board Resolutions',
       desc: 'Director/KMP appointment filings (PDF).',
-      accentColor: 'text-cyan-600',
-      accentBg: 'bg-cyan-50/60',
-      accentBorder: 'border-cyan-200/80',
-      iconBg: 'bg-cyan-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: UserCog,
       extractedKeys: {
         directors: 'Directors Found',
@@ -274,10 +352,10 @@ export default function Uploader({
     litigation_schedule: {
       title: 'Litigation Schedule',
       desc: 'Structured litigation schedule from legal counsel (PDF) — not free-text scraped.',
-      accentColor: 'text-rose-600',
-      accentBg: 'bg-rose-50/60',
-      accentBorder: 'border-rose-200/80',
-      iconBg: 'bg-rose-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: Scale,
       extractedKeys: {
         litigation_summary: 'Litigation Summary Rows'
@@ -286,10 +364,10 @@ export default function Uploader({
     industry_report: {
       title: 'Industry Report',
       desc: 'CRISIL / CARE / ICRA industry report (PDF) — best-effort, low-confidence extraction.',
-      accentColor: 'text-teal-600',
-      accentBg: 'bg-teal-50/60',
-      accentBorder: 'border-teal-200/80',
-      iconBg: 'bg-teal-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: LineChart,
       extractedKeys: {
         industry_market_size: 'Market Size',
@@ -300,10 +378,10 @@ export default function Uploader({
     sales_register: {
       title: 'Sales Register / GST Sales',
       desc: 'Sales ledger or GST sales register for customer concentration (PDF).',
-      accentColor: 'text-orange-600',
-      accentBg: 'bg-orange-50/60',
-      accentBorder: 'border-orange-200/80',
-      iconBg: 'bg-orange-100/80',
+      accentColor: 'text-blue-600',
+      accentBg: 'bg-blue-50/60',
+      accentBorder: 'border-blue-200/80',
+      iconBg: 'bg-blue-100/80',
       icon: Receipt,
       extractedKeys: {
         top5_customer_revenue_table: 'Top-5 Customer Rows',
@@ -333,19 +411,34 @@ export default function Uploader({
   return (
     <div className="w-full space-y-3 animate-fade-in-up">
       {/* Page header — compact single line, no wasted vertical space */}
-      <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-page-title">Document Vault</h1>
-        <p className="text-[11.5px] text-gray-400 font-medium">10 statutory documents · click a card to upload</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-page-title">Document Vault</h1>
+          <p className="text-[11.5px] text-gray-400 font-medium">10 statutory documents · click a card to upload</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLoadDemoFiles}
+          disabled={loadingDemo}
+          title="Fills every empty card with the bundled sample document set — for demos only."
+          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-accent-700 hover:text-accent-800 transition-all cursor-pointer bg-accent-50 hover:bg-accent-100 border border-accent-200 hover:border-accent-300 px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+        >
+          {loadingDemo ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Loading Demo Set…</span></>
+          ) : (
+            <><Sparkles className="w-3.5 h-3.5" /><span>Load Demo Documents</span></>
+          )}
+        </button>
       </div>
 
-      {/* 5×2 on desktop — each card is deliberately compact (no long description,
-          extracted fields collapsed by default) so the whole vault fits in one
-          viewport with zero page scrolling. Degrades to fewer columns on
-          narrower screens rather than forcing 5 cramped columns everywhere. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* 2×5 layout — two wide columns, five rows, so every item still reads
+          as a horizontal row (not a narrow stacked card) but the vault is
+          half the scroll height of a single full-width column. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
         {Object.entries(docConfig).map(([type, config]) => {
           const isUploading = uploading[type];
+          const isQueued = queuedTypes[type] && !isUploading;
           const hasError = error[type];
           const isDragging = dragging[type];
           const extractedData = sessionData.extracted_data?.[type] || {};
@@ -357,171 +450,138 @@ export default function Uploader({
             const v = extractedData[k];
             return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
           }).length;
+          const isEmptyInteractive = !isUploaded && !isUploading && !isQueued;
 
           return (
             <div
               key={type}
-              title={config.desc}
-              className={`bg-white border rounded-xl p-3 flex flex-col shadow-card transition-all duration-200 ${
-                isUploaded
-                  ? 'border-gray-200 shadow-card'
-                  : 'border-gray-100 hover:border-gray-200 hover:shadow-card-md'
+              className={`bg-white border rounded-2xl shadow-card overflow-hidden transition-colors animate-fade-in-up ${
+                isUploaded ? 'border-gray-200' : 'border-gray-100'
               }`}
             >
-              {/* Compact header: icon + title + status dot, one line */}
-              <div className="flex items-center gap-2 mb-2 select-none min-w-0">
-                <div className={`w-7 h-7 ${config.iconBg} rounded-lg flex items-center justify-center shrink-0`}>
-                  <config.icon className={`w-3.5 h-3.5 ${config.accentColor}`} />
+              <div
+                onClick={isEmptyInteractive ? () => triggerFileInput(type) : undefined}
+                onDragOver={isEmptyInteractive ? (e) => handleDragOver(e, type) : undefined}
+                onDragLeave={isEmptyInteractive ? () => handleDragLeave(type) : undefined}
+                onDrop={isEmptyInteractive ? (e) => handleDrop(e, type) : undefined}
+                className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${
+                  isEmptyInteractive ? 'cursor-pointer' : ''
+                } ${isDragging ? `${config.accentBg}` : 'hover:bg-gray-50/70'}`}
+              >
+                {/* Icon */}
+                <div className={`w-9 h-9 ${config.iconBg} rounded-xl flex items-center justify-center shrink-0`}>
+                  <config.icon className={`w-4 h-4 ${config.accentColor}`} />
                 </div>
-                <h3 className="text-[11.5px] font-bold text-gray-800 leading-tight truncate flex-1 min-w-0">{config.title}</h3>
-                {isUploaded && (
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${extractionCompleted ? 'bg-emerald-500' : 'bg-amber-400'}`}
-                    title={extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
-                  />
-                )}
-              </div>
 
-              {/* Short blurb — reserves a fixed 2-line height (line-clamp) so every
-                  card stays the same height regardless of description length. */}
-              <p className="text-[9px] text-gray-400 leading-snug line-clamp-2 mb-2 min-h-[22px]">
-                {config.desc}
-              </p>
-
-              {/* Upload Zone */}
-              {!isUploaded && !isUploading && (
-                <div
-                  onClick={() => triggerFileInput(type)}
-                  onDragOver={(e) => handleDragOver(e, type)}
-                  onDragLeave={() => handleDragLeave(type)}
-                  onDrop={(e) => handleDrop(e, type)}
-                  className={`flex-1 border-2 border-dashed rounded-lg p-2.5 text-center cursor-pointer transition-all flex flex-col items-center justify-center group min-h-[68px] ${
-                    isDragging
-                      ? `${config.accentBorder} ${config.accentBg}`
-                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <UploadCloud className={`w-4 h-4 mb-1 transition-colors ${
-                    isDragging ? config.accentColor : 'text-gray-300 group-hover:text-gray-400'
-                  }`} />
-                  <p className="text-[10px] text-gray-500 font-semibold leading-tight">
-                    {isDragging ? 'Drop to upload' : 'Click or drop file'}
+                {/* Title + status/description — flexible, fills the row */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[12.5px] font-bold text-gray-800 leading-tight truncate">{config.title}</h3>
+                    {isUploaded && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${extractionCompleted ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                        title={extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
+                      />
+                    )}
+                  </div>
+                  <p className="text-[10.5px] text-gray-400 leading-snug truncate mt-0.5">
+                    {hasError ? (
+                      <span className="text-red-500 font-semibold">{hasError}</span>
+                    ) : isUploaded ? (
+                      extractionCompleted ? `${uploadedFileObj?.filename || 'Uploaded'} · ${extractedCount} field${extractedCount === 1 ? '' : 's'}` : (uploadedFileObj?.filename || 'Uploaded')
+                    ) : isQueued ? (
+                      <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Queued — waiting…</span>
+                    ) : isUploading ? (
+                      `${jobState[type]?.stage || 'Analyzing…'} ${jobState[type]?.progress ? `(${jobState[type].progress}%)` : ''}`
+                    ) : (
+                      config.desc
+                    )}
                   </p>
-                </div>
-              )}
-
-              {/* Uploading State — slim progress bar */}
-              {isUploading && (
-                <div className="flex-1 border border-accent-200 bg-accent-50/40 rounded-lg p-2 select-none space-y-1.5 animate-fade-in-up min-h-[68px] flex flex-col justify-center">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Loader2 className="w-3 h-3 text-accent-600 animate-spin shrink-0" />
-                      <span className="text-[9.5px] font-bold text-gray-700 truncate">
-                        {jobState[type]?.stage || 'Analyzing…'}
-                      </span>
-                    </div>
-                    <span className="text-[9px] font-mono font-bold text-accent-700 shrink-0">{jobState[type]?.progress || 15}%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden border border-gray-200">
-                    <div
-                      className="bg-gradient-to-r from-accent-500 via-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${jobState[type]?.progress || 15}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Error State */}
-              {hasError && (
-                <div className="mt-1.5 p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[9.5px] flex gap-1.5 items-start animate-fade-in-up">
-                  <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                  <p className="text-red-500 leading-tight flex-1">{hasError}</p>
-                  <button
-                    onClick={() => setError(prev => ({ ...prev, [type]: '' }))}
-                    className="p-0.5 hover:bg-red-100 rounded shrink-0 transition-colors cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-
-              {/* Uploaded File Info — one compact row */}
-              {isUploaded && !isUploading && (
-                <div className="flex-1 bg-gray-50 rounded-lg border border-gray-100 p-1.5 select-none min-h-[68px] flex flex-col justify-between gap-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5 overflow-hidden min-w-0">
-                      <FileText className="w-3 h-3 text-gray-400 shrink-0" />
-                      <p className="text-[10px] text-gray-700 font-semibold truncate">{uploadedFileObj?.filename || 'Uploaded'}</p>
-                    </div>
-                    <button
-                      onClick={() => setExpandedJson(prev => ({ ...prev, [type]: !prev[type] }))}
-                      className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 transition-colors shrink-0 cursor-pointer"
-                      title="Inspect extracted fields"
-                    >
-                      {showJson ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[9px] text-gray-400 font-medium truncate">
-                      {extractionCompleted ? `${extractedCount} field${extractedCount === 1 ? '' : 's'} extracted` : 'Manual entry needed'}
-                    </span>
-                    <button
-                      onClick={() => fetchAndShowVC(type)}
-                      className="text-[8.5px] font-bold text-indigo-500 hover:text-indigo-700 shrink-0 cursor-pointer"
-                      title="Inspect W3C Verifiable Credential"
-                    >
-                      VC ↗
-                    </button>
-                  </div>
-
-                  {/* Extracted Properties — expands in place with its own scroll,
-                      so opening it never grows the grid or forces page scroll. */}
-                  {showJson && (
-                    <div className={`mt-0.5 p-1.5 rounded-lg ${config.accentBg} border ${config.accentBorder} max-h-24 overflow-y-auto space-y-1 animate-fade-in-up`}>
-                      {Object.entries(config.extractedKeys).map(([key, label]) => {
-                        const val = extractedData[key];
-                        return (
-                          <div key={key} className="flex justify-between items-start gap-2">
-                            <span className="text-[8.5px] text-gray-500 font-semibold shrink-0">{label}</span>
-                            <span className="text-[8.5px] text-gray-800 font-bold text-right truncate font-mono">
-                              {formatValue(key, val)}
-                            </span>
-                          </div>
-                        );
-                      })}
+                  {isUploading && (
+                    <div className="w-full bg-gray-100 h-1 rounded-full overflow-hidden border border-gray-200 mt-1.5">
+                      <div
+                        className="bg-gradient-to-r from-accent-500 via-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${jobState[type]?.progress || 15}%` }}
+                      />
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Action Button */}
-              <div className="mt-1.5 select-none">
-                <input
-                  type="file"
-                  ref={fileInputs[type]}
-                  onChange={(e) => handleUpload(type, e.target.files[0])}
-                  className="hidden"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                />
+                {/* Actions */}
+                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="file"
+                    ref={fileInputs[type]}
+                    onChange={(e) => handleUpload(type, e.target.files[0])}
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                  />
 
-                {isUploaded ? (
-                  <button onClick={() => triggerFileInput(type)} className="btn-secondary w-full !text-[10px] !py-1.5">
-                    Re-upload
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => triggerFileInput(type)}
-                    disabled={isUploading}
-                    className={`text-[10px] font-bold transition-all w-full text-center py-1.5 rounded-lg cursor-pointer border ${
-                      isUploading
-                        ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                        : `${config.accentBg} ${config.accentColor} ${config.accentBorder} hover:opacity-80`
-                    }`}
-                  >
-                    {isUploading ? 'Analyzing…' : 'Select File'}
-                  </button>
-                )}
+                  {hasError && (
+                    <button
+                      onClick={() => setError(prev => ({ ...prev, [type]: '' }))}
+                      className="p-1.5 hover:bg-red-50 rounded-lg text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+                      title="Dismiss error"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {isUploaded && !isUploading && (
+                    <>
+                      <button
+                        onClick={() => fetchAndShowVC(type)}
+                        className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 px-1.5 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer shrink-0"
+                        title="Inspect W3C Verifiable Credential"
+                      >
+                        VC ↗
+                      </button>
+                      <button
+                        onClick={() => setExpandedJson(prev => ({ ...prev, [type]: !prev[type] }))}
+                        className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                        title="Inspect extracted fields"
+                      >
+                        {showJson ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={() => triggerFileInput(type)} className="btn-secondary !text-[10px] !py-1.5 !px-2.5">
+                        Re-upload
+                      </button>
+                    </>
+                  )}
+
+                  {!isUploaded && (
+                    <button
+                      onClick={() => triggerFileInput(type)}
+                      disabled={isUploading || isQueued}
+                      className={`text-[10px] font-bold transition-all py-1.5 px-2.5 rounded-lg cursor-pointer border shrink-0 ${
+                        isUploading || isQueued
+                          ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          : `${config.accentBg} ${config.accentColor} ${config.accentBorder} hover:opacity-80`
+                      }`}
+                    >
+                      {isUploading ? 'Analyzing…' : isQueued ? 'Queued…' : 'Select File'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Extracted Properties — expands in place under the row, its own
+                  scroll if long, so opening it never disturbs other items. */}
+              {isUploaded && showJson && (
+                <div className={`mx-4 mb-3.5 p-3 rounded-xl ${config.accentBg} border ${config.accentBorder} max-h-48 overflow-y-auto space-y-1.5 animate-fade-in-up`}>
+                  {Object.entries(config.extractedKeys).map(([key, label]) => {
+                    const val = extractedData[key];
+                    return (
+                      <div key={key} className="flex justify-between items-start gap-2">
+                        <span className="text-[10px] text-gray-500 font-semibold shrink-0">{label}</span>
+                        <span className="text-[10px] text-gray-800 font-bold text-right truncate font-mono">
+                          {formatValue(key, val)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}

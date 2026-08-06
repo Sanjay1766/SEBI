@@ -1,8 +1,7 @@
-import os
 import json
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 # ── Sentence-Transformers semantic engine (F2) ───────────────────────────────
 # Loaded once at module startup; all calls share the same model instance.
@@ -332,6 +331,12 @@ def nlp_analyze_full_session(session_data: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(v, str) and len(v.strip()) > 15:
             all_texts.append(v)
 
+    for doc_fields in extracted_data.values():
+        if isinstance(doc_fields, dict):
+            for v in doc_fields.values():
+                if isinstance(v, str) and len(v.strip()) > 15:
+                    all_texts.append(v)
+
     combined_text = " ".join(all_texts)
     entities = nlp_extract_entities(combined_text)
     quality = nlp_assess_readability_and_quality(combined_text)
@@ -523,8 +528,8 @@ def generate_sebi_risk_factors(
         internal = [
             f"Raw Material Price Volatility: Key chemical input prices (accounting for ~64% of cost of sales for {company_name}) fluctuate based on global petrochemical crude trends. Unhedged price spikes could reduce EBITDA margin.",
             f"Working Capital Intensity: {company_name} requires significant working capital. Trade receivables stood at ₹12.4 Cr as of FY23. Delays in customer payments may constrain operating cash flows.",
-            f"Customer Concentration: Top 5 clients account for ~42% of total operational revenue. Loss of key accounts or contract non-renewal would adversely affect business operations.",
-            f"Capacity Utilization & Environmental Compliance: Operations at Unit-II facility require active State Pollution Control Board (SPCB) consent-to-operate renewals. Non-compliance could lead to temporary disruption."
+            "Customer Concentration: Top 5 clients account for ~42% of total operational revenue. Loss of key accounts or contract non-renewal would adversely affect business operations.",
+            "Capacity Utilization & Environmental Compliance: Operations at Unit-II facility require active State Pollution Control Board (SPCB) consent-to-operate renewals. Non-compliance could lead to temporary disruption."
         ]
         external = [
             "Regulatory & Environmental Norms: Changes in statutory Indian chemical manufacturing regulations (e.g. REACH/CPCB norms) may increase ongoing compliance expenditure.",

@@ -1,5 +1,3 @@
-import os
-import json
 import logging
 from typing import Dict, Any, List, Optional
 
@@ -96,7 +94,7 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
                     f"1. Extracted Financial Figures: Restated PAT = ₹{pat} Cr vs Restated Operating Revenue = ₹{revenue} Cr.",
                     f"2. Calculated PAT Margin = ({pat} / {revenue}) * 100 = {pat_margin}%.",
                     f"3. Sector Benchmark ({benchmarks['label']}): Industry median range is {benchmarks['pat_margin_normal'][0]}%–{benchmarks['pat_margin_normal'][1]}%; realistic upper cap is {benchmarks['pat_margin_max']}%.",
-                    f"4. Therefore: Flagged for potential earnings management or unrecorded operating expenses under SEBI ICDR Schedule VI."
+                    "4. Therefore: Flagged for potential earnings management or unrecorded operating expenses under SEBI ICDR Schedule VI."
                 ],
                 "severity": "high",
                 "blocking": True,
@@ -129,7 +127,7 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
                     f"1. Extracted Financial Figures: EBITDA = ₹{ebitda} Cr vs Operating Revenue = ₹{revenue} Cr.",
                     f"2. Calculated EBITDA Margin = {ebitda_margin}%.",
                     f"3. Benchmark Threshold: {benchmarks['ebitda_margin_max']}% upper cap.",
-                    f"4. Therefore: Flagged for mandatory operating expense reconciliation."
+                    "4. Therefore: Flagged for mandatory operating expense reconciliation."
                 ],
                 "severity": "medium",
                 "blocking": False,
@@ -160,7 +158,7 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
                     f"1. Extracted Capital Figures: Total Borrowings = ₹{total_debt} Cr vs Net Worth / Equity = ₹{total_equity} Cr.",
                     f"2. Calculated D/E Ratio = {total_debt} / {total_equity} = {de_ratio}x.",
                     f"3. Benchmark Ceiling: {benchmarks['de_ratio_max']}x for SME issuers.",
-                    f"4. Therefore: High insolvency exposure; capital allocation must prioritize debt reduction."
+                    "4. Therefore: High insolvency exposure; capital allocation must prioritize debt reduction."
                 ],
                 "severity": "high",
                 "blocking": True,
@@ -192,7 +190,7 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
                     f"1. Extracted Pricing Figures: Offer Price = ₹{issue_price}, Restated EPS = ₹{eps}.",
                     f"2. Calculated P/E Multiple = {issue_price} / {eps} = {pe_ratio}x.",
                     f"3. Sector Valuation Benchmark: Median range is {benchmarks['pe_ratio_normal'][0]}x–{benchmarks['pe_ratio_normal'][1]}x.",
-                    f"4. Therefore: Pricing justification in Basis of Issue Price section requires peer comparisons."
+                    "4. Therefore: Pricing justification in Basis of Issue Price section requires peer comparisons."
                 ],
                 "severity": "medium",
                 "blocking": False,
@@ -223,7 +221,7 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
                     f"1. Extracted Figures: Net Profit = ₹{pat} Cr, Shareholders Equity = ₹{total_equity} Cr.",
                     f"2. Calculated Pre-IPO ROE = ({pat} / {total_equity}) * 100 = {roe}%.",
                     f"3. Realistic Threshold: Upper limit of {benchmarks['roe_max']}%.",
-                    f"4. Therefore: Flagged for net worth verification."
+                    "4. Therefore: Flagged for net worth verification."
                 ],
                 "severity": "medium",
                 "blocking": False,

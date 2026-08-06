@@ -22,7 +22,6 @@ export default function BankerDashboard() {
   const [loading, setLoading] = useState(true);
   const [bankerName, setBankerName] = useState('Senior Merchant Banker');
   const [actionNotes, setActionNotes] = useState({});
-  const [activeModalSection, setActiveModalSection] = useState(null);
 
   const fetchStatus = async () => {
     try {
@@ -66,7 +65,6 @@ export default function BankerDashboard() {
         body: JSON.stringify({ banker_name: bankerName, banker_notes: note })
       });
       if (res.ok) {
-        setActiveModalSection(null);
         fetchStatus();
       }
     } catch (err) {
@@ -103,7 +101,7 @@ export default function BankerDashboard() {
         const errData = await res.json();
         alert(`Export Blocked: ${errData.message || 'All sections must be certified.'}`);
       }
-    } catch (err) {
+    } catch {
       alert('Error initiating bundle export');
     }
   };
