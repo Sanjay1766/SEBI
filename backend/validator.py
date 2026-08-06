@@ -1,7 +1,5 @@
-import os
-import json
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from consistency_checker import run_all_consistency_checks
 

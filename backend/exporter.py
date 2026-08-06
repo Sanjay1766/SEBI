@@ -6,16 +6,13 @@ Abridged Prospectus (Schedule VI Part E), and exports ZIP bundles complete with 
 coverage reports, contradiction findings, and blockchain signatures.
 """
 
-import os
 import json
 import zipfile
-import tempfile
 import logging
 from io import BytesIO
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
-import docx
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -217,7 +214,7 @@ def generate_sebi_drhp_docx(session_data: Dict[str, Any]) -> bytes:
 
         if title == "SECTION VI — BASIS OF ISSUE PRICE":
             # Add Peer Comparison Table
-            p = doc.add_paragraph("The Issue Price will be determined by the Issuer in consultation with the Lead Manager based on the financial performance metrics below vs listed peers:")
+            doc.add_paragraph("The Issue Price will be determined by the Issuer in consultation with the Lead Manager based on the financial performance metrics below vs listed peers:")
             try:
                 from peer_comparison import generate_peer_comparison_data
                 peer_data = generate_peer_comparison_data(form_data)
@@ -295,7 +292,6 @@ def generate_abridged_prospectus_docx(session_data: Dict[str, Any]) -> bytes:
 
 def create_export_zip_bundle(session_data: Dict[str, Any], user_id: str = "default_user") -> bytes:
     """Packages DRHP DOCX, Abridged DOCX, Audit Log, Coverage Report, and Contradiction Findings into a ZIP bundle."""
-    from certification import CertificationStore
     from coverage import compute_coverage
     from consistency_checker import ContradictionDetector
     from audit_log import AuditLog

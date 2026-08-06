@@ -1,7 +1,5 @@
-import os
-import json
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
