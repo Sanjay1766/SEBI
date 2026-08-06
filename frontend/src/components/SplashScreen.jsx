@@ -52,7 +52,7 @@ export default function SplashScreen({ onFinish }) {
         width: 400,
         height: 400,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(249,115,22,0.18) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(58,124,165,0.18) 0%, transparent 70%)',
         animation: 'splashGlow 2s ease-out forwards',
       }} />
 
@@ -82,7 +82,7 @@ export default function SplashScreen({ onFinish }) {
         {/* Logo */}
         <div style={{
           position: 'relative',
-          filter: 'drop-shadow(0 8px 32px rgba(249,115,22,0.35))',
+          filter: 'drop-shadow(0 8px 32px rgba(58,124,165,0.35))',
         }}>
           <img
             src="/logo.png"
@@ -124,7 +124,7 @@ export default function SplashScreen({ onFinish }) {
         }}>
           <div style={{
             height: '100%',
-            background: 'linear-gradient(90deg, #f97316, #fb923c)',
+            background: 'linear-gradient(90deg, #3A7CA5, #55A3C6)',
             borderRadius: 999,
             animation: 'splashBar 2s cubic-bezier(0.4,0,0.2,1) 0.7s forwards',
             width: '0%',
@@ -234,7 +234,7 @@ export default function SplashScreen({ onFinish }) {
             width: 5,
             height: 5,
             borderRadius: '50%',
-            background: '#f97316',
+            background: '#3A7CA5',
             display: 'inline-block',
             animation: 'livePulse 1.2s ease-in-out infinite',
           }} />
