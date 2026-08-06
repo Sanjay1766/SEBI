@@ -43,7 +43,7 @@ print('[Dockerfile] sentence-transformers model cached.')"
 # running app actually uses — the two configs drifting apart previously
 # left this step caching models the app never loads at runtime.
 # llm_client.py is copied too since extractor.py imports it at module load.
-COPY extractor.py llm_client.py .
+COPY extractor.py llm_client.py ./
 RUN python -c "\
 import extractor; \
 print('[Dockerfile] PaddleOCR models cached:', extractor.OCR_STATUS)"
@@ -56,7 +56,7 @@ print('[Dockerfile] PaddleOCR models cached:', extractor.OCR_STATUS)"
 # connection, which defeats a "one command run" experience entirely. Caches
 # to /root/.cache/chroma/, under the same /root/.cache tree already copied
 # to the runtime stage below for the HuggingFace model — no extra COPY needed.
-COPY rag_engine.py sebi_icdr_corpus.py .
+COPY rag_engine.py sebi_icdr_corpus.py ./
 RUN python -c "\
 import rag_engine; \
 print('[Dockerfile] ChromaDB embedding model cached.')"
@@ -97,6 +97,15 @@ COPY --from=builder /root/.paddlex /root/.paddlex
 
 # Copy application source
 COPY . .
+
+# Pre-create every path the app writes runtime state to, so the named volumes
+# mounted onto them in docker-compose.yml bind cleanly on first `up` instead
+# of Docker creating an empty directory where a file (session_state.json) is
+# expected, or the app hitting ENOENT on a directory that was never created.
+# Without this, `docker compose down && up` silently wiped the demo user's
+# entire in-progress session (session_state.json), audit trail (audit/*.jsonl),
+# and the seeded ChromaDB corpus (chroma_db/) on every restart.
+RUN mkdir -p temp_uploads audit chroma_db && touch session_state.json
 
 # Expose FastAPI port
 EXPOSE 8000
