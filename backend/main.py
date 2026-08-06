@@ -102,7 +102,6 @@ try:
     from certification import CertificationStore
     from audit_log import AuditLog
     from coverage import compute_coverage
-    from ps_mapping import get_ps_mapping
 except ImportError as err:
     logger.warning(f"Upgrade modules import warning: {err}")
 
@@ -1261,13 +1260,6 @@ def export_zip_bundle_endpoint(user: Dict[str, Any] = Depends(get_current_user))
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
-
-
-# ── SECTION 8b: Problem Statement Mapping Endpoint ───────────────────────────
-
-@app.get("/api/ps-mapping")
-def get_ps_mapping_endpoint():
-    return {"clauses": get_ps_mapping()}
 
 
 # ── SECTION 9a: Blockchain Trail Endpoint ────────────────────────────────────

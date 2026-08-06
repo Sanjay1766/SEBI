@@ -134,7 +134,7 @@ export default function ComplianceScoreMeter({ validationResults }) {
       label: 'Chapters Verified',
       value: `${status_counts.complete} / ${sections.length || 14}`,
       pct: sections.length ? Math.round((status_counts.complete / sections.length) * 100) : 0,
-      color: '#f97316',
+      color: '#3A7CA5',
       Icon: CheckCircle2,
     },
     {
