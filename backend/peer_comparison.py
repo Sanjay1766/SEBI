@@ -61,7 +61,6 @@ def calculate_peer_comparison_and_valuation(
         }
 
     # Safe float conversion
-    revenue = float(rev_val) if rev_val is not None else 0.0
     pat = float(pat_val) if pat_val is not None else 0.0
     net_worth = float(nw_val) if nw_val is not None else 0.0
     existing_shares_cr = float(ex_shares_val) if ex_shares_val is not None else 1.0

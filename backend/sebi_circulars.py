@@ -7,7 +7,6 @@ statutory amendments, classifying their impact on SME IPO prospectus sections.
 
 import logging
 import re
-import asyncio
 from typing import Dict, Any, List, Optional
 try:
     import httpx

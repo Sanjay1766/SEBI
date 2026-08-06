@@ -5,9 +5,8 @@ Tracks DRHP draft revision snapshots dynamically from live workspace session dat
 """
 
 import logging
-import json
 import difflib
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 
 logger = logging.getLogger("sebi-ipo-generator.version_tracker")

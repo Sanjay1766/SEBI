@@ -89,7 +89,7 @@ except ImportError:
     fetch_sebi_regulatory_alerts = None
 
 try:
-    from due_diligence import get_due_diligence_summary, generate_form_a_certificate
+    from due_diligence import get_due_diligence_summary
     from peer_comparison import calculate_peer_comparison_and_valuation
     from version_tracker import get_version_history_summary, create_version_snapshot
     from exporter import create_export_zip_bundle
@@ -166,6 +166,24 @@ ALLOWED_UPLOADS = {
     ".png": b"\x89PNG\r\n\x1a\n",
     ".jpg": b"\xff\xd8\xff",
     ".jpeg": b"\xff\xd8\xff",
+}
+
+# ── One-click demo document set ──────────────────────────────────────────────
+# Bundled inside backend/demo_files/ (not the repo-root /files/ folder) so it
+# ships inside the Docker image via the existing `COPY . .` — no extra volume
+# mount needed. Maps each of the 10 upload doc_types to its sample filename.
+DEMO_FILES_DIR = os.path.join(os.path.dirname(__file__), "demo_files")
+DEMO_DOC_FILES = {
+    "financials": "Audited_Financial_Statement.pdf",
+    "gst": "gst_registration_certificate.pdf",
+    "incorporation": "roc_certificate_of_incorporation.pdf",
+    "compliance": "pan_tan_certificate.pdf",
+    "moa_aoa": "MOA_AOA.pdf",
+    "cap_table": "Register_of_Members_Cap_Table.pdf",
+    "dir12": "DIR12_Board_Resolutions.pdf",
+    "litigation_schedule": "Litigation_Schedule.pdf",
+    "industry_report": "Industry_Report.pdf",
+    "sales_register": "Sales_Register_GST_Sales.pdf",
 }
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -279,6 +297,24 @@ def save_session(user_id: str, data: Dict[str, Any]) -> None:
     except Exception as e:
         logger.error(f"Failed to write local session_state.json: {e}")
 
+# ── Per-user session write lock ──────────────────────────────────────────────
+# Background upload jobs each do load_session -> merge -> save_session. With
+# multiple documents uploaded around the same time (e.g. the Document Vault's
+# "Load Demo Documents" button, or just two quick manual uploads), those jobs
+# run concurrently and raced on this read-modify-write: whichever job's
+# save_session() landed last won outright, silently discarding any fields
+# another job had just merged in — observed concretely as a stale company_name
+# from an earlier session surviving a fresh batch upload because the slowest
+# job's stale in-memory snapshot overwrote everything the faster jobs had
+# already saved. Serializing the critical section per user_id closes that race
+# without limiting how many files can extract (the slow OCR/LLM work) in parallel.
+_session_locks: Dict[str, asyncio.Lock] = {}
+
+def get_session_lock(user_id: str) -> asyncio.Lock:
+    if user_id not in _session_locks:
+        _session_locks[user_id] = asyncio.Lock()
+    return _session_locks[user_id]
+
 class FormDataPayload(BaseModel):
     form_data: Dict[str, Any]
 
@@ -290,6 +326,8 @@ class FullSessionPayload(BaseModel):
 class DraftPayload(BaseModel):
     field_key: str
     form_data: Dict[str, Any]
+    field_label: Optional[str] = None
+    existing_text: Optional[str] = None
 
 class RAGQueryPayload(BaseModel):
     query: str
@@ -355,7 +393,9 @@ Guidelines for responding:
    [SUGGESTION:field_key]
    Your drafted text here...
    [/SUGGESTION]
-   Where `field_key` is one of: 'promoter_experience', 'products_services', 'business_model', 'internal_risks', 'external_risks', 'litigations_company', 'litigations_promoters', 'rpt_declared', 'material_contracts_desc'. The frontend will parse this and show an "Apply Draft" button.
+   `field_key` MUST be copied verbatim (exact spelling, exact underscores) from this exact list — never invent, abbreviate, or paraphrase a key, even if a different name would read more naturally, because the frontend matches it literally against a real form field:
+   'promoter_experience', 'products_services_description', 'business_model', 'internal_risks', 'external_risks', 'risk_narrative_text', 'litigations_company', 'litigations_promoters', 'rpt_declared', 'material_contracts_desc', 'industry_growth_narrative', 'esop_details', 'auditor_qualifications', 'summary_business_note'.
+   If none of these keys actually matches what the user asked you to draft, do not emit a [SUGGESTION] tag at all — just give the drafted text in your normal reply.
 4. Keep answers concise, helpful, and legally sound. Do not make up fake financials or numbers not present in the workspace.
 """
     return system_prompt
@@ -431,60 +471,95 @@ def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_u
 
     company_name = form_data.get("company_name", "[Company Name]")
     industry_name = form_data.get("industry_name", "the sector")
-    products = form_data.get("products_services", "primary products")
+    products = form_data.get("products_services_description", "primary products")
     model = form_data.get("business_model", "operating model")
-    
+
     promoters = form_data.get("promoters_names", "")
-    rpt = form_data.get("rpt_declared", "")
-    
-    # Field specific descriptions for prompt
+
+    # Field specific descriptions for prompt — keys must match the wizard's actual
+    # form_data field keys (Wizard.jsx renderInput calls), not just plausible names.
     field_descriptions = {
         "promoter_experience": f"Professional experience and qualifications of promoters ({promoters}) at {company_name}.",
-        "products_services": f"Detailed description of key products and services offered by {company_name}.",
+        "products_services_description": f"Detailed description of key products and services offered by {company_name}.",
         "business_model": f"Operational overview, manufacturing capacity, and business model of {company_name}.",
         "internal_risks": f"Internal risks, customer dependencies, and operational risks for {company_name}.",
         "external_risks": f"External risks, regulatory compliance, and market risks in the {industry_name} sector.",
+        "risk_narrative_text": f"Consolidated, numbered top-10 risk factor narrative for {company_name}, synthesizing internal and external risks.",
         "litigations_company": f"Litigations and legal matters concerning {company_name}.",
         "litigations_promoters": f"Litigations concerning the promoters ({promoters}).",
         "rpt_declared": f"Related party transactions summary for {company_name}.",
-        "material_contracts_desc": f"Material contracts for inspection for the IPO of {company_name}."
+        "material_contracts_desc": f"Material contracts for inspection for the IPO of {company_name}.",
+        "industry_growth_narrative": f"Industry growth narrative for the {industry_name} sector — demand drivers, competitive landscape, and outlook.",
+        "esop_details": f"Employee Stock Option Plan (ESOP) scheme reference and vesting schedule for {company_name}, or a statement that no ESOP scheme is in force.",
+        "auditor_qualifications": f"Statutory auditor qualifications or reservations on {company_name}'s restated financial statements, or a statement that none exist.",
+        "summary_business_note": f"One-paragraph Offer Summary business note for {company_name}.",
+        "industries_served": f"Industries and sectors that {company_name}'s customers belong to.",
+        "key_geographies_served": f"Primary states/regions/countries generating revenue for {company_name}.",
     }
-    
-    desc = field_descriptions.get(field_key, "detailed narrative")
-    
+
+    # The wizard sends the field's actual on-screen label (e.g. "Internal Risk
+    # Factors") — prefer that as the authoritative heading over the guessed
+    # per-key description dict, which only covers a fixed set of known keys.
+    desc = payload.field_label.strip() if payload.field_label and payload.field_label.strip() else field_descriptions.get(field_key, "detailed narrative")
+
+    existing_text = (payload.existing_text or "").strip()
+
     local_drafts = {
         "promoter_experience": f"The promoters of {company_name}, including Mr./Mrs. {promoters.split(',')[0] if promoters else 'Rajesh Kumar'}, possess extensive experience in the {industry_name} sector. They have successfully guided the company through key growth milestones and manage critical operational divisions.",
-        "products_services": f"{company_name} specializes in {products or 'manufacturing and industrial services'}. Our offerings are engineered to high standards, serving clients across key industry verticals with customizable features.",
+        "products_services_description": f"{company_name} specializes in {products or 'manufacturing and industrial services'}. Our offerings are engineered to high standards, serving clients across key industry verticals with customizable features.",
         "business_model": f"Our business model centers on B2B distribution and direct sales. Operating in the {industry_name} sector, we utilize regional networks and production capacities to capture high-margin contracts.",
-        "internal_risks": f"1. We are highly dependent on key raw materials. Any price fluctuation or supply disruption could impact margins.\n2. We depend on a concentrated customer base; loss of any major client would negatively affect sales.",
-        "external_risks": f"1. We operate in a highly regulated sector and are subject to strict environmental laws (e.g. State Pollution Control Boards).\n2. Changes in government policy or taxation norms could adversely impact our financial position.",
+        "internal_risks": "1. We are highly dependent on key raw materials. Any price fluctuation or supply disruption could impact margins.\n2. We depend on a concentrated customer base; loss of any major client would negatively affect sales.",
+        "external_risks": "1. We operate in a highly regulated sector and are subject to strict environmental laws (e.g. State Pollution Control Boards).\n2. Changes in government policy or taxation norms could adversely impact our financial position.",
+        "risk_narrative_text": "1. We are highly dependent on key raw materials, and any price fluctuation or supply disruption could impact margins.\n2. We operate in a highly regulated sector and are subject to strict environmental and statutory compliance norms.\n3. We depend on a concentrated customer base; loss of any major client would negatively affect sales.",
         "litigations_company": "No material legal or regulatory litigations are currently pending against our company.",
         "litigations_promoters": "No material legal or regulatory litigations are currently pending against our promoters.",
         "rpt_declared": f"All related party transactions entered by {company_name} are conducted on an arm's length basis in the ordinary course of business. Refer to Restated Financial Statements for full disclosures.",
-        "material_contracts_desc": "1. Tripartite Agreement with Lead Manager and Registrar.\n2. Underwriting Agreement with Lead Manager.\n3. Registered Office warehouse lease agreement."
+        "material_contracts_desc": "1. Tripartite Agreement with Lead Manager and Registrar.\n2. Underwriting Agreement with Lead Manager.\n3. Registered Office warehouse lease agreement.",
+        "industry_growth_narrative": f"The {industry_name} sector has demonstrated steady demand growth, driven by rising domestic consumption and supportive government policy. The competitive landscape remains fragmented, with organized players gaining share through quality and compliance differentiation.",
+        "esop_details": "No Employee Stock Option Plan (ESOP) scheme is currently in force.",
+        "auditor_qualifications": "There are no qualifications, reservations, or adverse remarks by the statutory auditors on the restated financial statements as of the date of this Draft Red Herring Prospectus.",
+        "summary_business_note": f"{company_name} is engaged in the {industry_name.lower() if industry_name != 'the sector' else 'speciality'} sector, with an established operating track record and a focus on compliant, scalable growth ahead of this Offer.",
+        "industries_served": f"Our products and services primarily serve the {industry_name.lower() if industry_name != 'the sector' else 'speciality'} sector, with long-standing relationships across our customer base.",
+        "key_geographies_served": "We have a diversified regional presence, with revenue contributions across multiple states in India.",
     }
     
     if not llm.is_available():
-        return {"draft": local_drafts.get(field_key, "Offline Auto-Draft placeholder text.")}
+        # Offline mode can't rewrite/expand arbitrary user text without an LLM —
+        # returning the canned template would silently overwrite whatever the
+        # user already typed, so leave it untouched if there's anything there.
+        return {"draft": existing_text or local_drafts.get(field_key, "Offline Auto-Draft placeholder text.")}
 
     try:
+        if existing_text:
+            existing_text_block = f"""
+        The user has already written the following draft/notes for this field — expand it into
+        detailed, professional prospectus-ready content. Preserve their intent and every specific
+        fact, name, or figure they've already included; do not discard or contradict any of it,
+        only elaborate, structure, and polish it into a complete, well-formed narrative:
+        ---
+        {existing_text}
+        ---
+        """
+        else:
+            existing_text_block = "\n        The field is currently empty — draft it from scratch using the facts below.\n        "
+
         prompt = f"""
         You are a SEBI merchant banker drafting an SME IPO Prospectus section.
-        Draft the narrative/content for the field '{field_key}' ({desc}) for the company '{company_name}'.
-        
+        Draft the narrative/content for the field labelled '{desc}' (internal key: '{field_key}') for the company '{company_name}'.
+        {existing_text_block}
         Facts to use if available:
         - Industry: {industry_name}
         - Products/services details: {products}
         - Business model details: {model}
         - Promoters names: {promoters}
-        
+
         Guidelines:
         1. Write in a formal, legal, and professional corporate tone.
         2. Do NOT invent/hallucinate figures, financial metrics, or dates. Only state the provided facts or standard professional boilerplate templates if facts are missing.
         3. Keep it under 150 words.
         4. Do NOT include markdown styling or formatting in your text (no bolding, asterisks, etc.).
         5. Provide ONLY the text content of the draft, with no intro or outro remarks.
-        
+
         Draft:
         """
         draft_text = llm.complete(
@@ -495,7 +570,7 @@ def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_u
         return {"draft": draft_text}
     except Exception as e:
         logger.error(f"Auto-draft failed for {field_key} ({llm.provider}): {e}. Returning fallback template.")
-        return {"draft": local_drafts.get(field_key, "Auto-draft fallback placeholder.")}
+        return {"draft": existing_text or local_drafts.get(field_key, "Auto-draft fallback placeholder.")}
 
 @app.get("/api/ocr_status")
 def get_ocr_status():
@@ -681,51 +756,57 @@ async def upload_document(
             if job_manager:
                 job_manager.update_job(job_id, progress=75, stage="Structuring entities & SEBI ICDR compliance fields...")
 
-            session = load_session(user_id)
-            session["extracted_data"][doc_type] = extracted or {}
+            # Serialize the load -> merge -> save cycle per user so concurrent
+            # uploads (multiple documents in flight at once) can never race on
+            # session_state.json — see get_session_lock() for the failure mode
+            # this closes. Only this bookkeeping is serialized; the slow OCR/LLM
+            # extraction above already ran outside the lock.
+            async with get_session_lock(user_id):
+                session = load_session(user_id)
+                session["extracted_data"][doc_type] = extracted or {}
 
-            if isinstance(extracted, dict):
-                for k, v in extracted.items():
-                    if v is not None and k != "missing_fields":
-                        session["form_data"][k] = v
+                if isinstance(extracted, dict):
+                    for k, v in extracted.items():
+                        if v is not None and k != "missing_fields":
+                            session["form_data"][k] = v
 
-            file_meta = {
-                "filename": original_filename,
-                "type": doc_type,
-                "size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
-                "extraction_status": "completed" if extracted else "failed",
-                "extraction_error": None if extracted else "No fields could be reliably extracted.",
-            }
-            if doc_hash:
-                file_meta["doc_hash"] = doc_hash
-
-            # Issue W3C Verifiable Credential
-            if issue_document_vc and doc_hash:
-                try:
-                    company_name = session.get("form_data", {}).get("company_name", "Your Company")
-                    w3c_vc = issue_document_vc(
-                        doc_type=doc_type,
-                        doc_hash=doc_hash,
-                        filename=original_filename,
-                        company_name=company_name
-                    )
-                    file_meta["w3c_vc"] = w3c_vc
-                except Exception as vc_err:
-                    logger.warning(f"W3C VC issuance failed for {original_filename}: {vc_err}")
-
-            if blockchain_record:
-                file_meta["blockchain"] = {
-                    "mode": blockchain_record.get("mode"),
-                    "status": blockchain_record.get("status"),
-                    "tx_hash": blockchain_record.get("tx_hash"),
-                    "explorer_url": blockchain_record.get("explorer_url"),
-                    "network": blockchain_record.get("network"),
+                file_meta = {
+                    "filename": original_filename,
+                    "type": doc_type,
+                    "size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                    "extraction_status": "completed" if extracted else "failed",
+                    "extraction_error": None if extracted else "No fields could be reliably extracted.",
                 }
+                if doc_hash:
+                    file_meta["doc_hash"] = doc_hash
 
-            session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
-            session["uploaded_files"].append(file_meta)
+                # Issue W3C Verifiable Credential
+                if issue_document_vc and doc_hash:
+                    try:
+                        company_name = session.get("form_data", {}).get("company_name", "Your Company")
+                        w3c_vc = issue_document_vc(
+                            doc_type=doc_type,
+                            doc_hash=doc_hash,
+                            filename=original_filename,
+                            company_name=company_name
+                        )
+                        file_meta["w3c_vc"] = w3c_vc
+                    except Exception as vc_err:
+                        logger.warning(f"W3C VC issuance failed for {original_filename}: {vc_err}")
 
-            save_session(user_id, session)
+                if blockchain_record:
+                    file_meta["blockchain"] = {
+                        "mode": blockchain_record.get("mode"),
+                        "status": blockchain_record.get("status"),
+                        "tx_hash": blockchain_record.get("tx_hash"),
+                        "explorer_url": blockchain_record.get("explorer_url"),
+                        "network": blockchain_record.get("network"),
+                    }
+
+                session["uploaded_files"] = [f for f in session["uploaded_files"] if f.get("type") != doc_type]
+                session["uploaded_files"].append(file_meta)
+
+                save_session(user_id, session)
 
             if job_manager:
                 job_manager.update_job(
@@ -755,6 +836,29 @@ async def upload_document(
         "doc_type": doc_type,
         "message": "Document queued for OCR & LLM background extraction."
     }
+
+@app.get("/api/demo/manifest")
+def get_demo_manifest():
+    """Lists the bundled sample documents available for the Document Vault's
+    one-click demo upload — only entries whose file actually exists on disk."""
+    files = []
+    for doc_type, filename in DEMO_DOC_FILES.items():
+        path = os.path.join(DEMO_FILES_DIR, filename)
+        if os.path.exists(path):
+            files.append({"doc_type": doc_type, "filename": filename, "size": os.path.getsize(path)})
+    return {"files": files}
+
+@app.get("/api/demo/file/{doc_type}")
+def get_demo_file(doc_type: str):
+    """Serves a bundled sample document's raw bytes so the frontend can feed it
+    through the exact same /api/upload path used for a real user upload."""
+    filename = DEMO_DOC_FILES.get(doc_type)
+    if not filename:
+        raise HTTPException(status_code=404, detail=f"No demo document configured for doc_type '{doc_type}'.")
+    path = os.path.join(DEMO_FILES_DIR, filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Demo document '{filename}' is not bundled with this server.")
+    return FileResponse(path, media_type="application/pdf", filename=filename)
 
 @app.get("/api/validate")
 def get_validation(user: Dict[str, Any] = Depends(get_current_user)):
@@ -1266,7 +1370,6 @@ def export_zip_bundle_endpoint(user: Dict[str, Any] = Depends(get_current_user))
 
 @app.get("/api/blockchain/trail")
 def get_blockchain_trail_endpoint(user: Dict[str, Any] = Depends(get_current_user)):
-    session = load_session(user["id"])
     entries = audit_logger.get_log(user["id"], limit=500)
     bc_events = [e.model_dump(mode="json") for e in entries if e.action.startswith("blockchain.")]
     return {

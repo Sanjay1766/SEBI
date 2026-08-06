@@ -1059,6 +1059,34 @@ def extract_document_data(
         logger.error(f"Unknown document type: {doc_type}")
         return {}
 
+    # Fields each prompt above actually asks the LLM to return, per doc_type. Models
+    # (especially via Groq/Llama) routinely ignore "return ONLY the requested keys" and
+    # add unrequested bonus fields they noticed in the document — e.g. a financial
+    # statement's letterhead company name coming back as a stray "company_name" key on a
+    # "financials" upload, which then silently overwrote the user's real Cover Page company
+    # name (form_data["company_name"] = v, unconditional). Filtering the LLM's JSON response
+    # down to exactly what each doc_type's prompt requested keeps unrequested/hallucinated
+    # fields from ever reaching form_data.
+    EXPECTED_FIELDS = {
+        "financials": {
+            "fy_years", "revenue_fy_latest", "pat_fy_latest", "borrowings_latest",
+            "authorized_capital", "paid_up_capital_pre", "auditor_name", "auditor_membership",
+            "auditor_qualifications", "segment_reporting_applicable",
+            "equity_share_capital", "net_worth", "revenue_from_operations", "ebitda", "pat",
+            "eps_basic", "eps_diluted", "ronw_pct", "nav_per_share", "total_borrowings",
+            "cash_flow_operating", "cash_flow_investing", "cash_flow_financing",
+        },
+        "moa_aoa": {"authorized_capital", "face_value_per_share", "objects_clause"},
+        "cap_table": {"pre_offer_shareholding", "promoter_group_members", "promoter_shareholding_pre_pct"},
+        "dir12": {"directors", "kmp"},
+        "litigation_schedule": {"litigation_summary"},
+        "industry_report": {"industry_market_size", "industry_cagr", "industry_report_source"},
+        "sales_register": {"top5_customer_revenue_table", "key_geographies_served", "gst_annual_turnover"},
+        "gst": {"gstin", "company_name", "gst_annual_turnover", "registration_date", "filing_status"},
+        "incorporation": {"cin", "company_name", "incorporation_date", "registered_office", "company_type"},
+        "compliance": {"pan", "pan_name", "tan"},
+    }
+
     try:
         response_text = llm.complete(
             messages=[
@@ -1093,7 +1121,17 @@ def extract_document_data(
                 extracted_data = json.loads(match.group(0))
             else:
                 raise je
-        
+
+        # Drop any key the LLM returned that wasn't actually requested for this doc_type
+        # (see EXPECTED_FIELDS comment above) — always keep 'missing_fields'.
+        allowed_keys = EXPECTED_FIELDS.get(doc_type)
+        if allowed_keys is not None and isinstance(extracted_data, dict):
+            dropped = [k for k in extracted_data if k != "missing_fields" and k not in allowed_keys]
+            if dropped:
+                logger.warning(f"Dropping unrequested field(s) {dropped} from LLM {doc_type} extraction response.")
+                for k in dropped:
+                    del extracted_data[k]
+
         # Clean numeric fields (ensure floats)
         for key in ["revenue_fy_latest", "pat_fy_latest", "borrowings_latest", "gst_annual_turnover",
                     "authorized_capital", "paid_up_capital_pre", "face_value_per_share",
