@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
-  UploadCloud, FileText, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck,
+  UploadCloud, FileText, AlertCircle, Eye, EyeOff, Loader2, X, ShieldCheck,
   BarChart3, Receipt, ScrollText, IdCard, BookOpen, Calculator, UserCog, Scale, LineChart,
 } from 'lucide-react';
 import Badge from './ui/Badge';
@@ -17,7 +17,6 @@ export default function Uploader({
   ];
   const initFalse = () => Object.fromEntries(DOC_TYPES.map(t => [t, false]));
   const initEmptyStr = () => Object.fromEntries(DOC_TYPES.map(t => [t, '']));
-  const initTrue = () => Object.fromEntries(DOC_TYPES.map(t => [t, true]));
   const initNull = () => Object.fromEntries(DOC_TYPES.map(t => [t, null]));
 
   const [uploading, setUploading] = useState(initFalse());
@@ -26,7 +25,10 @@ export default function Uploader({
 
   const [dragging, setDragging] = useState(initFalse());
 
-  const [expandedJson, setExpandedJson] = useState(initTrue());
+  // Collapsed by default — cards stay compact; clicking the eye icon expands
+  // the extracted-fields panel in place (with its own internal scroll) so
+  // opening one card's detail never grows the grid or forces the page to scroll.
+  const [expandedJson, setExpandedJson] = useState(initFalse());
 
   const [vcModal, setVcModal] = useState(null);
 
@@ -329,16 +331,18 @@ export default function Uploader({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
-      {/* Page header */}
-      <div className="mb-2">
+    <div className="w-full space-y-3 animate-fade-in-up">
+      {/* Page header — compact single line, no wasted vertical space */}
+      <div className="flex items-baseline justify-between gap-3">
         <h1 className="text-page-title">Document Vault</h1>
-        <p className="text-body mt-1">
-          Upload statutory certificates and financial documents for OCR extraction and compliance auditing.
-        </p>
+        <p className="text-[11.5px] text-gray-400 font-medium">10 statutory documents · click a card to upload</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 5×2 on desktop — each card is deliberately compact (no long description,
+          extracted fields collapsed by default) so the whole vault fits in one
+          viewport with zero page scrolling. Degrades to fewer columns on
+          narrower screens rather than forcing 5 cramped columns everywhere. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
 
         {Object.entries(docConfig).map(([type, config]) => {
           const isUploading = uploading[type];
@@ -349,175 +353,149 @@ export default function Uploader({
           const extractionCompleted = uploadedFileObj?.extraction_status === 'completed';
           const isUploaded = Object.keys(extractedData).length > 0 || !!uploadedFileObj;
           const showJson = expandedJson[type];
+          const extractedCount = Object.keys(config.extractedKeys).filter(k => {
+            const v = extractedData[k];
+            return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+          }).length;
 
           return (
-            <div 
+            <div
               key={type}
-              className={`bg-white border rounded-2xl p-5 flex flex-col justify-between shadow-card transition-all duration-200 ${
-                isUploaded 
-                  ? 'border-gray-200 shadow-card' 
+              title={config.desc}
+              className={`bg-white border rounded-xl p-3 flex flex-col shadow-card transition-all duration-200 ${
+                isUploaded
+                  ? 'border-gray-200 shadow-card'
                   : 'border-gray-100 hover:border-gray-200 hover:shadow-card-md'
               }`}
             >
-              {/* Card header */}
-              <div>
-                <div className="flex justify-between items-start mb-3 select-none">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 ${config.iconBg} rounded-xl flex items-center justify-center`}>
-                      <config.icon className={`w-5 h-5 ${config.accentColor}`} />
-                    </div>
-                    <div>
-                      <h3 className="text-card-title">{config.title}</h3>
-                      {isUploaded && (
-                        <div className="mt-0.5">
-                          <Badge variant={extractionCompleted ? 'success' : 'warning'} icon={extractionCompleted ? CheckCircle2 : AlertCircle}>
-                            {extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+              {/* Compact header: icon + title + status dot, one line */}
+              <div className="flex items-center gap-2 mb-2 select-none min-w-0">
+                <div className={`w-7 h-7 ${config.iconBg} rounded-lg flex items-center justify-center shrink-0`}>
+                  <config.icon className={`w-3.5 h-3.5 ${config.accentColor}`} />
                 </div>
-
-                <p className="text-[12px] text-gray-400 leading-relaxed mb-4 font-medium">{config.desc}</p>
-                
-                {/* Upload Zone */}
-                {!isUploaded && !isUploading && (
-                  <div 
-                    onClick={() => triggerFileInput(type)}
-                    onDragOver={(e) => handleDragOver(e, type)}
-                    onDragLeave={() => handleDragLeave(type)}
-                    onDrop={(e) => handleDrop(e, type)}
-                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center group ${
-                      isDragging 
-                        ? `${config.accentBorder} ${config.accentBg}`
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <UploadCloud className={`w-7 h-7 mb-2 transition-colors ${
-                      isDragging ? config.accentColor : 'text-gray-300 group-hover:text-gray-400'
-                    }`} />
-                    <p className="text-[12.5px] text-gray-600 font-semibold">
-                      {isDragging ? 'Drop to upload' : 'Click or drag & drop'}
-                    </p>
-                    <p className="text-[10.5px] text-gray-400 mt-1 font-medium">PDF, PNG, or JPG · Max 10 MB</p>
-                  </div>
+                <h3 className="text-[11.5px] font-bold text-gray-800 leading-tight truncate flex-1 min-w-0">{config.title}</h3>
+                {isUploaded && (
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${extractionCompleted ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                    title={extractionCompleted ? 'Extracted — review required' : 'Manual review required'}
+                  />
                 )}
+              </div>
 
-                {/* Uploading State with Animated Progress Bar */}
-                {isUploading && (
-                  <div className="border border-accent-200 bg-gradient-to-b from-accent-50/40 to-white rounded-xl p-4 select-none space-y-2.5 animate-fade-in-up shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 text-accent-600 animate-spin" />
-                        <span className="text-[12.5px] font-bold text-gray-800 truncate max-w-[200px]">
-                          {jobState[type]?.filename || 'Processing Document'}
-                        </span>
-                      </div>
-                      <Badge variant="accent" className="font-mono">{jobState[type]?.progress || 15}%</Badge>
-                    </div>
+              {/* Short blurb — reserves a fixed 2-line height (line-clamp) so every
+                  card stays the same height regardless of description length. */}
+              <p className="text-[9px] text-gray-400 leading-snug line-clamp-2 mb-2 min-h-[22px]">
+                {config.desc}
+              </p>
 
-                    {/* Smooth Progress Bar */}
-                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden p-0.5 border border-gray-200">
-                      <div 
-                        className="bg-gradient-to-r from-accent-500 via-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300 shadow-sm"
-                        style={{ width: `${jobState[type]?.progress || 15}%` }}
-                      />
-                    </div>
+              {/* Upload Zone */}
+              {!isUploaded && !isUploading && (
+                <div
+                  onClick={() => triggerFileInput(type)}
+                  onDragOver={(e) => handleDragOver(e, type)}
+                  onDragLeave={() => handleDragLeave(type)}
+                  onDrop={(e) => handleDrop(e, type)}
+                  className={`flex-1 border-2 border-dashed rounded-lg p-2.5 text-center cursor-pointer transition-all flex flex-col items-center justify-center group min-h-[68px] ${
+                    isDragging
+                      ? `${config.accentBorder} ${config.accentBg}`
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <UploadCloud className={`w-4 h-4 mb-1 transition-colors ${
+                    isDragging ? config.accentColor : 'text-gray-300 group-hover:text-gray-400'
+                  }`} />
+                  <p className="text-[10px] text-gray-500 font-semibold leading-tight">
+                    {isDragging ? 'Drop to upload' : 'Click or drop file'}
+                  </p>
+                </div>
+              )}
 
-                    {/* Stage Label & Steps Indicator */}
-                    <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
-                      <p className="truncate max-w-[260px] text-accent-800 font-semibold text-[11px]">
-                        {jobState[type]?.stage || 'Scanning document text...'}
-                      </p>
-                      <span className="text-[10px] text-gray-400 font-mono shrink-0 ml-2">
-                        Stage {(jobState[type]?.progress || 15) >= 100 ? '4/4' : (jobState[type]?.progress || 15) >= 75 ? '3/4' : (jobState[type]?.progress || 15) >= 45 ? '2/4' : '1/4'}
+              {/* Uploading State — slim progress bar */}
+              {isUploading && (
+                <div className="flex-1 border border-accent-200 bg-accent-50/40 rounded-lg p-2 select-none space-y-1.5 animate-fade-in-up min-h-[68px] flex flex-col justify-center">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Loader2 className="w-3 h-3 text-accent-600 animate-spin shrink-0" />
+                      <span className="text-[9.5px] font-bold text-gray-700 truncate">
+                        {jobState[type]?.stage || 'Analyzing…'}
                       </span>
                     </div>
+                    <span className="text-[9px] font-mono font-bold text-accent-700 shrink-0">{jobState[type]?.progress || 15}%</span>
                   </div>
-                )}
+                  <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden border border-gray-200">
+                    <div
+                      className="bg-gradient-to-r from-accent-500 via-blue-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${jobState[type]?.progress || 15}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
-                {/* Error State */}
-                {hasError && (
-                  <div className="mt-3 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[11.5px] flex gap-2.5 items-start animate-fade-in-up">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-[12px]">Extraction Failed</p>
-                      <p className="text-red-500 mt-0.5">{hasError}</p>
+              {/* Error State */}
+              {hasError && (
+                <div className="mt-1.5 p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-[9.5px] flex gap-1.5 items-start animate-fade-in-up">
+                  <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                  <p className="text-red-500 leading-tight flex-1">{hasError}</p>
+                  <button
+                    onClick={() => setError(prev => ({ ...prev, [type]: '' }))}
+                    className="p-0.5 hover:bg-red-100 rounded shrink-0 transition-colors cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Uploaded File Info — one compact row */}
+              {isUploaded && !isUploading && (
+                <div className="flex-1 bg-gray-50 rounded-lg border border-gray-100 p-1.5 select-none min-h-[68px] flex flex-col justify-between gap-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1.5 overflow-hidden min-w-0">
+                      <FileText className="w-3 h-3 text-gray-400 shrink-0" />
+                      <p className="text-[10px] text-gray-700 font-semibold truncate">{uploadedFileObj?.filename || 'Uploaded'}</p>
                     </div>
                     <button
-                      onClick={() => setError(prev => ({ ...prev, [type]: '' }))}
-                      className="ml-auto p-0.5 hover:bg-red-100 rounded shrink-0 transition-colors cursor-pointer"
+                      onClick={() => setExpandedJson(prev => ({ ...prev, [type]: !prev[type] }))}
+                      className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 transition-colors shrink-0 cursor-pointer"
+                      title="Inspect extracted fields"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      {showJson ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                     </button>
                   </div>
-                )}
-
-                {/* Uploaded File Info */}
-                {isUploaded && !isUploading && (
-                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 shadow-inner select-none mb-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5 overflow-hidden">
-                        <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-                          <FileText className="w-4 h-4 text-gray-400" />
-                        </div>
-                        <div className="overflow-hidden">
-                          <p className="text-[12px] text-gray-700 font-semibold truncate">{uploadedFileObj?.filename || 'Uploaded File'}</p>
-                          <p className="text-[10px] text-gray-400 font-medium">{(uploadedFileObj?.size ? (uploadedFileObj.size / 1024).toFixed(0) : '0')} KB · {extractionCompleted ? 'Extracted — confirm fields' : 'Manual entry needed'}</p>
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={() => setExpandedJson(prev => ({ ...prev, [type]: !prev[type] }))}
-                        className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-gray-600 transition-colors shrink-0 cursor-pointer"
-                        title="Inspect extracted fields"
-                      >
-                        {showJson ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-
-                    {/* W3C VC Badge & Inspection Link */}
-                    <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between">
-                      <Badge variant="indigo" size="xs" icon={ShieldCheck} className="font-mono">
-                        W3C VC: did:polygon:amoy:...
-                      </Badge>
-                      <button
-                        onClick={() => fetchAndShowVC(type)}
-                        className="text-[9.5px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                      >
-                        Inspect W3C VC JSON-LD ↗
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] text-gray-400 font-medium truncate">
+                      {extractionCompleted ? `${extractedCount} field${extractedCount === 1 ? '' : 's'} extracted` : 'Manual entry needed'}
+                    </span>
+                    <button
+                      onClick={() => fetchAndShowVC(type)}
+                      className="text-[8.5px] font-bold text-indigo-500 hover:text-indigo-700 shrink-0 cursor-pointer"
+                      title="Inspect W3C Verifiable Credential"
+                    >
+                      VC ↗
+                    </button>
                   </div>
-                )}
 
-                {/* Extracted Properties */}
-                {isUploaded && (
-                  <div className={`mt-2 p-3.5 rounded-xl ${config.accentBg} border ${config.accentBorder} animate-fade-in-up`}>
-                    <h4 className={`text-[9.5px] uppercase font-bold tracking-wider ${config.accentColor} mb-3 flex items-center gap-1.5`}>
-                      <CheckCircle2 className="w-3 h-3" /> Extracted Properties
-                    </h4>
-                    
-                    <div className="space-y-2">
+                  {/* Extracted Properties — expands in place with its own scroll,
+                      so opening it never grows the grid or forces page scroll. */}
+                  {showJson && (
+                    <div className={`mt-0.5 p-1.5 rounded-lg ${config.accentBg} border ${config.accentBorder} max-h-24 overflow-y-auto space-y-1 animate-fade-in-up`}>
                       {Object.entries(config.extractedKeys).map(([key, label]) => {
                         const val = extractedData[key];
                         return (
-                          <div key={key} className="flex justify-between items-start gap-4">
-                            <span className="text-[10px] text-gray-500 font-semibold">{label}</span>
-                            <span className="text-[10.5px] text-gray-800 font-bold text-right max-w-[60%] truncate font-mono">
+                          <div key={key} className="flex justify-between items-start gap-2">
+                            <span className="text-[8.5px] text-gray-500 font-semibold shrink-0">{label}</span>
+                            <span className="text-[8.5px] text-gray-800 font-bold text-right truncate font-mono">
                               {formatValue(key, val)}
                             </span>
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
-              {/* Action Buttons */}
-              <div className="mt-4 pt-3 border-t border-gray-100 select-none">
+              {/* Action Button */}
+              <div className="mt-1.5 select-none">
                 <input
                   type="file"
                   ref={fileInputs[type]}
@@ -525,17 +503,17 @@ export default function Uploader({
                   className="hidden"
                   accept=".pdf,.png,.jpg,.jpeg"
                 />
-                
+
                 {isUploaded ? (
-                  <button onClick={() => triggerFileInput(type)} className="btn-secondary w-full !text-[11.5px]">
-                    Re-upload Document
+                  <button onClick={() => triggerFileInput(type)} className="btn-secondary w-full !text-[10px] !py-1.5">
+                    Re-upload
                   </button>
                 ) : (
                   <button
                     onClick={() => triggerFileInput(type)}
                     disabled={isUploading}
-                    className={`text-[12px] font-bold transition-all w-full text-center py-2.5 rounded-xl cursor-pointer border ${
-                      isUploading 
+                    className={`text-[10px] font-bold transition-all w-full text-center py-1.5 rounded-lg cursor-pointer border ${
+                      isUploading
                         ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
                         : `${config.accentBg} ${config.accentColor} ${config.accentBorder} hover:opacity-80`
                     }`}

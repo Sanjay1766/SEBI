@@ -12,8 +12,6 @@ from docx.oxml.ns import nsdecls, qn
 # Configure logger
 logger = logging.getLogger("sebi-ipo-generator.generator")
 
-from llm_client import get_llm_client
-
 # Custom XML styling helpers for python-docx (shading, padding, borders)
 def set_cell_background(cell, hex_color: str):
     """Sets background color of a table cell."""
@@ -225,77 +223,6 @@ KPI_DEFINITIONS = {
 }
 
 
-def generate_deterministic_section(section_key: str, session: Dict[str, Any]) -> str:
-    form_data = session.get("form_data", session)
-    company = form_data.get("company_name", "MASTER CHAINS N JEWELS LIMITED")
-    cin = form_data.get("cin", "U36911MH1997PLC107966")
-    industry = form_data.get("industry_name", "jewellery manufacturing")
-
-    base_text = (
-        f"{company} is engaged in the designing, manufacturing, job-work services and sale of a wide range of gold jewellery. "
-        f"Our product offerings comprise a wide range of gold jewellery across multiple karatages including 14 karat, 18 karat, and 22 karat. "
-        f"The company operates under CIN {cin} and serves wholesale and retail customers across western and southern India."
-    )
-    return base_text
-
-
-def generate_narrative_text(section_id: str, data: Dict[str, Any], prompt_desc: str) -> Dict[str, Any]:
-    from hallucination_guard import HallucinationGuard
-
-    llm = get_llm_client()
-    guard = HallucinationGuard()
-
-    if not llm.is_available():
-        tmpl = generate_deterministic_section(section_id, data)
-        return {
-            "section": section_id,
-            "content": tmpl,
-            "generation_mode": "template",
-            "hallucination_check": {"passed": True, "violations_found": [], "retry_count": 0}
-        }
-
-    attempt = 0
-    max_attempts = 3
-    last_violations = []
-    company_name = data.get("company_name", "MASTER CHAINS N JEWELS LIMITED")
-
-    while attempt < max_attempts:
-        attempt += 1
-        try:
-            extra_prompt = ""
-            if last_violations:
-                allowed_nums = list(guard.extract_numbers_from_session(data))[:20]
-                extra_prompt = f"\nYour previous response contained unverified numbers: {last_violations}. Rewrite using ONLY numbers from: {allowed_nums}."
-
-            prompt = f"""
-            Draft narrative section '{section_id}' ({prompt_desc}) for '{company_name}'.
-            Use facts provided in session data only. Keep under 200 words. Formal tone.{extra_prompt}
-            """
-
-            output_text = llm.complete(messages=[{"role": "user", "content": prompt}], temperature=0.3)
-            check_res = guard.check(output_text, data)
-            if check_res.passed:
-                return {
-                    "section": section_id,
-                    "content": output_text,
-                    "generation_mode": "llm",
-                    "hallucination_check": {"passed": True, "violations_found": [], "retry_count": attempt - 1}
-                }
-            else:
-                last_violations = check_res.violations
-        except Exception as e:
-            logger.error(f"LLM generation failed attempt {attempt}: {e}")
-            break
-
-    tmpl = generate_deterministic_section(section_id, data)
-    return {
-        "section": section_id,
-        "content": tmpl,
-        "generation_mode": "template",
-        "hallucination_check": {"passed": False, "violations_found": last_violations, "retry_count": max_attempts}
-    }
-
-
 def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_path: str):
     """Generates the Draft Abridged Prospectus matching the exact cover layout and structure."""
     form_data = session.get("form_data", {})
@@ -326,7 +253,7 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
     normal_font.size = Pt(9.5)
     normal_font.color.rgb = RGBColor(0, 0, 0)
 
-    company_name = g("company_name", "MASTER CHAINS N JEWELS LIMITED")
+    company_name = g("company_name", "[Company Name]")
     promoters = merged.get("promoters")
     promoter_names_list = merged.get("promoter_names")
     has_promoter = (isinstance(promoters, list) and len(promoters) > 0) or (isinstance(promoter_names_list, list) and len(promoter_names_list) > 0)
@@ -402,11 +329,14 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
     has_selling_shareholders = isinstance(selling_shareholders, list) and len(selling_shareholders) > 0
     responsibility_subject = "PROMOTER SELLING SHAREHOLDERS’" if (has_promoter and has_selling_shareholders) else "SELLING SHAREHOLDERS’" if has_selling_shareholders else "SELLING SHAREHOLDERS’"
 
-    # Verbatim (page-number references generalized to [●], since pagination is specific to
-    # the source document and won't match a freshly generated one) from
-    # draft/Master Chains N Jewels Limited - AP_p.docx's own cover-page boilerplate.
-    _add_section_block(
-        "RISKS IN RELATION TO THE FIRST OFFER",
+    # Standard SEBI ICDR boilerplate (page-number references generalized to [●], since
+    # pagination is specific to the source document and won't match a freshly generated
+    # one), verbatim from draft/Master Chains N Jewels Limited - AP_p.docx — used as the
+    # fallback only. Each is a schema field (risks_first_offer_text / general_risk_text /
+    # company_responsibility_text / listing_text, editable in the Wizard's Cover Page tab)
+    # so a banker/legal reviewer can override the exact wording; an untouched session still
+    # renders correct, regulation-standard text rather than a blank/missing section.
+    default_risks_first_offer_text = (
         f"This being the first public issue of Equity Shares of our Company, there has been no formal market for the Equity Shares. The face value of "
         f"each Equity Shares is ₹{g('face_value_per_share')}. The Offer Price, Floor Price and the Cap Price determined by our Company in consultation with "
         f"the book running lead manager (“BRLM”), in accordance with the SEBI ICDR Regulations and on the basis of the assessment of market demand for the "
@@ -414,8 +344,9 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
         f"should not be considered to be indicative of the market price of the Equity Shares after the Equity Shares are listed. No assurance can be given "
         f"regarding an active and/or sustained trading in the Equity Shares or regarding the price at which the Equity Shares will be traded after listing."
     )
-    _add_section_block(
-        "GENERAL RISK",
+    _add_section_block("RISKS IN RELATION TO THE FIRST OFFER", merged.get("risks_first_offer_text") or default_risks_first_offer_text)
+
+    default_general_risk_text = (
         "Investments in equity and equity-related securities involve a degree of risk and investors should not invest any funds in this Offer unless "
         "they can afford to take the risk of losing their entire investment. Bidders are advised to read the risk factors carefully before taking an "
         "investment decision in this Offer. For taking an investment decision, Bidders must rely on their own examination of our Company and the Offer, "
@@ -423,7 +354,9 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
         "India (“SEBI”), nor does SEBI guarantee the accuracy or adequacy of the contents of the Draft Red Herring Prospectus. Specific attention of the "
         "Bidders is invited to “Risk Factors” beginning on page [●] of the Draft Red Herring Prospectus."
     )
-    responsibility_text = (
+    _add_section_block("GENERAL RISK", merged.get("general_risk_text") or default_general_risk_text)
+
+    default_responsibility_text = (
         "Our Company, having made all reasonable inquiries, accepts responsibility for and confirms that the Draft Red Herring Prospectus contains all "
         "information with regard to our Company and the Offer, which is material in the context of the Offer, that the information contained in the Draft "
         "Red Herring Prospectus is true and correct in all material aspects and is not misleading in any material respect, that the opinions and intentions "
@@ -431,7 +364,7 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
         "any of such information or the expression of any such opinions or intentions misleading in any material respect."
     )
     if has_selling_shareholders:
-        responsibility_text += (
+        default_responsibility_text += (
             " Further, the Selling Shareholder(s) accept(s) the responsibility for and confirm(s) only the statements made or confirmed in the Draft Red "
             "Herring Prospectus to the extent of information solely in relation to the Selling Shareholder(s) and the Offered Shares and assume(s) "
             "responsibility that such statements are true and correct in all material respects and are not misleading in any material respect. The Selling "
@@ -439,13 +372,14 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
             "including, inter alia, any of the statements, disclosure and undertakings made by or relating to our Company or our Company’s business or "
             "any other person."
         )
-    _add_section_block(f"COMPANY’S AND {responsibility_subject} ABSOLUTE RESPONSIBILITY", responsibility_text)
-    _add_section_block(
-        "LISTING",
+    _add_section_block(f"COMPANY’S AND {responsibility_subject} ABSOLUTE RESPONSIBILITY", merged.get("company_responsibility_text") or default_responsibility_text)
+
+    default_listing_text = (
         "The Equity Shares to be offered through Red Herring Prospectus are proposed to be listed on the BSE Limited (the “BSE”) and National Stock "
         "Exchange of India Limited (the “NSE”, and together with BSE, the “Stock Exchanges”). For the purposes of this Offer, the Designated Stock "
         "Exchange shall be [●]."
     )
+    _add_section_block("LISTING", merged.get("listing_text") or default_listing_text)
 
     _add_banner(doc, "BOOK RUNNING LEAD MANAGER")
     _add_grid_table(doc, ["LOGO AND NAME", "CONTACT PERSON", "EMAIL AND TELEPHONE"], [[g("lead_manager"), "[●]", "[●]"]], header_bg=TABLE_HEADER_TAN)
@@ -495,10 +429,10 @@ def generate_draft_docx(session: Dict[str, Any], schema: Dict[str, Any], output_
     _heading_numbered(doc, next_num(), "Summary of primary business of our Company")
     _heading_lettered(doc, "a", "Business overview - products and services")
     business_narrative = merged.get("products_services_description") or merged.get("products_services")
-    if not business_narrative:
-        narrative_result = generate_narrative_text("business_overview", merged, "detailed products, services, and business model overview")
-        business_narrative = narrative_result["content"]
-    doc.add_paragraph(_clean_llm_markdown(business_narrative))
+    if business_narrative:
+        doc.add_paragraph(_clean_llm_markdown(business_narrative))
+    else:
+        _missing_marker(doc, "[REQUIRES INPUT: describe products and services — use AI Assist in the wizard or enter manually]")
 
     _heading_lettered(doc, "b", "Industries served and typical customers")
     if merged.get("industries_served"):

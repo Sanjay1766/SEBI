@@ -2,14 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   FolderOpen, Check, Sparkles, LogOut, Loader2, ShieldCheck,
   ChevronRight, LayoutDashboard, AlertTriangle,
-  ClipboardCheck, Landmark, History, PanelLeftClose, PanelLeftOpen,
+  Landmark, History, PanelLeftClose, PanelLeftOpen,
   Menu, X, Bell, Search, FileDown, FileText,
 } from 'lucide-react';
 import Wizard, { WIZARD_TAB_ORDER, WIZARD_STEPS } from './components/Wizard';
 import Uploader from './components/Uploader';
 import Dashboard from './components/Dashboard';
 import Copilot from './components/Copilot';
-import ComplianceMap from './components/ComplianceMap';
 import BankerDashboard from './components/BankerDashboard';
 import AuditTrail from './components/AuditTrail';
 import { apiFetch } from './api';
@@ -740,7 +739,6 @@ export default function App({ user, onSignOut }) {
   const wizardStepIndex = isWizardTab ? tabOrder.indexOf(activeTab) : -1;
 
   const ADMIN_NAV = [
-    { id: 'compliance_matrix', label: 'Compliance Matrix', icon: ClipboardCheck },
     { id: 'banker_dashboard', label: 'Banker Certification', icon: Landmark },
     { id: 'audit_trail', label: 'Audit Trail', icon: History },
   ];
@@ -799,12 +797,12 @@ export default function App({ user, onSignOut }) {
           <img
             src="/logo.png"
             alt="IPO Sherpa"
-            className="h-9 w-auto shrink-0 rounded-lg drop-shadow-[0_4px_16px_rgba(249,115,22,0.45)]"
+            className="h-9 w-auto shrink-0 rounded-lg drop-shadow-[0_4px_16px_rgba(58,124,165,0.45)]"
           />
           {!collapsed && (
             <div>
               <h1 className="font-display font-bold text-[14.5px] text-white leading-tight tracking-tight flex items-center gap-1">
-                IPO <span className="text-[#f97316]">Sherpa</span>
+                IPO <span className="text-[#81C3D7]">Sherpa</span>
               </h1>
               <p className="text-[9px] uppercase font-bold tracking-widest text-accent-400/80 mt-0.5">SEBI IPO Workspace</p>
             </div>
@@ -1218,7 +1216,6 @@ export default function App({ user, onSignOut }) {
                 />
               )}
 
-              {activeTab === 'compliance_matrix' && <ComplianceMap />}
               {activeTab === 'banker_dashboard' && <BankerDashboard />}
               {activeTab === 'audit_trail' && <AuditTrail />}
             </>
