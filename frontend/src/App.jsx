@@ -34,8 +34,6 @@ export default function App({ user, onSignOut }) {
   const [lastSavedTime, setLastSavedTime] = useState(new Date().toLocaleTimeString());
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [scanningRedFlags, setScanningRedFlags] = useState(false);
-  const [redFlagResults, setRedFlagResults] = useState(null);
 
   // ── UI shell state (sidebar collapse, mobile drawer, topbar menus) ──
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -47,10 +45,8 @@ export default function App({ user, onSignOut }) {
   const [regulatoryAlerts, setRegulatoryAlerts] = useState([]);
 
 
-  // Real-time Collaboration States
-  const [collaborators, setCollaborators] = useState([]);
-  const [userRole, setUserRole] = useState('founder');
-  const [realtimeConnected, setRealtimeConnected] = useState(true);
+  // Real-time Collaboration State
+  const userRole = 'founder';
 
   const sessionDataRef = useRef(sessionData);
   const saveTimerRef = useRef(null);
@@ -61,6 +57,29 @@ export default function App({ user, onSignOut }) {
   }, [sessionData]);
 
   useEffect(() => () => clearTimeout(saveTimerRef.current), []);
+
+  // ── Topbar dropdowns (quick switcher, notifications, profile menu) ──
+  // Close whichever is open on any click outside its own container — not just
+  // via their toggle button or an inner item, which was the only way before.
+  const quickSwitchRef = useRef(null);
+  const notifRef = useRef(null);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (quickSwitchRef.current && !quickSwitchRef.current.contains(e.target)) {
+        setQuickSwitchOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ── Supabase Realtime Collaboration Setup ─────────────────────────────
   useEffect(() => {
@@ -76,23 +95,6 @@ export default function App({ user, onSignOut }) {
     realtimeChannelRef.current = channel;
 
     channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const activeUsers = [];
-        Object.keys(state).forEach(key => {
-          const presences = state[key];
-          if (presences && presences.length > 0) {
-            const p = presences[0];
-            activeUsers.push({
-              email: p.email || key,
-              role: p.role || 'founder',
-              active_tab: p.active_tab || 'dashboard',
-              is_self: (p.email === user?.email)
-            });
-          }
-        });
-        setCollaborators(activeUsers);
-      })
       .on('broadcast', { event: 'session_update' }, ({ payload }) => {
         if (payload && payload.form_data) {
           sessionDataRef.current = {
@@ -105,15 +107,12 @@ export default function App({ user, onSignOut }) {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          setRealtimeConnected(true);
           channel.track({
-            email: user.email || 'founder@apex.com',
+            email: user.email || 'founder@workspace.local',
             role: userRole,
             active_tab: activeTab,
             online_at: new Date().toISOString()
           });
-        } else {
-          setRealtimeConnected(false);
         }
       });
 
@@ -206,23 +205,6 @@ export default function App({ user, onSignOut }) {
 
 
 
-  const handleScanRedFlags = async () => {
-    setScanningRedFlags(true);
-    try {
-      const res = await authFetch('/api/nlp/redflag', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ form_data: sessionDataRef.current.form_data }),
-      });
-      if (!res.ok) throw new Error('Red-flag scan failed');
-      setRedFlagResults(await res.json());
-    } catch (err) {
-      console.error('Red Flag scan failed:', err);
-    } finally {
-      setScanningRedFlags(false);
-    }
-  };
-
   const handleReset = async () => {
     try {
       setLoading(true);
@@ -275,13 +257,24 @@ export default function App({ user, onSignOut }) {
       const updatedFiles = prev.uploaded_files.filter(f => f.type !== docType);
       updatedFiles.push({ ...upload, type: docType });
 
-      // Auto-fill only blank fields. A manually entered value always takes priority.
+      // Auto-fill blank fields, and also let a newer extraction correct a field
+      // that's still exactly what an earlier extraction put there (never
+      // manually edited since) — a genuinely manually-typed value always wins.
+      // Without the second clause, once any document set e.g. company_name —
+      // even a wrong value from a mismatched/corrupted document — every later,
+      // more authoritative document (say the actual Incorporation cert) could
+      // never correct it here, even though the server-side session already had
+      // the right value: the field looked "manually filled" forever after.
       const updatedFormData = { ...prev.form_data };
       for (const [key, value] of Object.entries(extractedFields || {})) {
         const isMetadata = key === 'missing_fields';
         const isMeaningfulValue = value !== undefined && value !== null && value !== '';
         const isBlankFormField = updatedFormData[key] === undefined || updatedFormData[key] === null || updatedFormData[key] === '';
-        if (!isMetadata && isMeaningfulValue && isBlankFormField) {
+        const matchesPriorExtraction = !isBlankFormField && Object.values(prev.extracted_data || {}).some(
+          docFields => docFields && docFields[key] !== undefined && docFields[key] !== null &&
+            JSON.stringify(docFields[key]) === JSON.stringify(updatedFormData[key])
+        );
+        if (!isMetadata && isMeaningfulValue && (isBlankFormField || matchesPriorExtraction)) {
           updatedFormData[key] = value;
         }
       }
@@ -663,24 +656,27 @@ export default function App({ user, onSignOut }) {
 
   const steps = WIZARD_STEPS;
 
-  // A handful of representative fields per tab, used only for the sidebar status dot / red-flag
-  // highlighting — the source of truth for what's actually required is coverage.py's
-  // SEBI_REQUIREMENTS (see the Filing Dashboard's coverage score), not this list.
-  const STEP_REPRESENTATIVE_FIELDS = {
-    cover: ['company_name', 'cin', 'registered_office', 'lead_manager', 'registrar', 'fresh_issue_size_cr'],
-    business: ['products_services_description', 'industries_served', 'key_geographies_served'],
+  // Every `required: true` field from schema.json that each wizard tab actually renders —
+  // cross-referenced directly against backend/schema.json and every renderInput/renderRows
+  // call in Wizard.jsx (not hand-picked "representative" fields, which previously could show
+  // a tab as green while other real required fields in it were still empty, or amber when
+  // everything real was already filled). Regenerate this list if a tab's rendered fields or
+  // schema.json's required flags change.
+  const STEP_REQUIRED_FIELDS = {
+    cover: ['cin', 'company_acronym', 'company_name', 'company_secretary_name', 'contact_email', 'contact_phone', 'face_value_per_share', 'fresh_issue_size_cr', 'issue_size', 'lead_manager', 'price_band', 'promoter_names', 'registered_office', 'registrar'],
+    business: ['business_strategies', 'business_strengths', 'industries_served', 'key_geographies_served', 'products_services_description', 'top5_customer_revenue_table', 'typical_customers'],
     industry: ['industry_name', 'industry_report_source'],
     promoters: ['promoters'],
-    objects: ['use_of_proceeds', 'general_corp_amount'],
-    shareholding: ['pre_offer_shareholding'],
-    financials: ['net_worth', 'revenue_from_operations', 'ebitda', 'pat'],
+    objects: ['general_corp_amount', 'use_of_proceeds'],
+    shareholding: ['pre_offer_shareholding', 'promoter_group_members'],
+    financials: ['ebitda', 'eps_basic', 'eps_diluted', 'equity_share_capital', 'net_worth', 'pat', 'revenue_from_operations', 'total_borrowings'],
     kpis: ['kpi_sector', 'kpi_values'],
-    risks: ['internal_risks', 'external_risks'],
-    waca: ['waca_table', 'waca_ca_certificate_date'],
+    risks: ['external_risks', 'internal_risks'],
+    waca: ['waca_ca_certificate_date', 'waca_table'],
     board: ['directors', 'kmp'],
     auditor: ['auditor_qualifications'],
     litigation: ['litigation_summary'],
-    compliance: ['pan', 'authorized_capital', 'declaration_signed'],
+    compliance: ['auditor_membership', 'auditor_name', 'authorized_capital', 'business_model', 'debt_repayment_amount', 'declaration_signed', 'expansion_amount', 'issue_expenses', 'material_contracts_desc', 'paid_up_capital_pre', 'pan', 'promoter_shareholding_pre_pct', 'rpt_declared', 'working_capital_amount'],
   };
 
   // list/table fields (arrays) only count as "filled" once they hold at least one row —
@@ -692,14 +688,32 @@ export default function App({ user, onSignOut }) {
     return true;
   };
 
-  const getStepStatus = (stepId) => {
-    // Merge form_data + extracted_data for completeness check (mirrors backend validator)
-    const data = { ...sessionData.form_data };
+  // Merge extracted_data + form_data (mirrors backend validator.py: form_data — the user's
+  // own edits — must win over raw extraction, not the other way round, or correcting an
+  // auto-extracted value in the wizard wouldn't update the sidebar).
+  const getMergedFormData = () => {
+    const data = {};
     for (const docType of Object.values(sessionData.extracted_data || {})) {
       if (docType && typeof docType === 'object') Object.assign(data, docType);
     }
+    Object.assign(data, sessionData.form_data);
+    return data;
+  };
 
-    const stepFields = STEP_REPRESENTATIVE_FIELDS[stepId] || [];
+  // {filled, total} of a step's real required fields — backs both the status dot/border
+  // color and the "N/M" count badge, so both always agree with each other.
+  const getStepFillCount = (stepId) => {
+    const data = getMergedFormData();
+    const stepFields = STEP_REQUIRED_FIELDS[stepId] || [];
+    const filled = stepFields.filter(f => {
+      if (f === 'declaration_signed') return data[f] === true || data[f] === 'true';
+      return isFieldFilled(data[f]);
+    }).length;
+    return { filled, total: stepFields.length };
+  };
+
+  const getStepStatus = (stepId) => {
+    const stepFields = STEP_REQUIRED_FIELDS[stepId] || [];
 
     // Check if this step has inconsistencies first
     const stepInconsistencies = (validationResults?.inconsistencies || []).filter(inc =>
@@ -708,13 +722,10 @@ export default function App({ user, onSignOut }) {
 
     if (stepInconsistencies.length > 0) return 'error';
 
-    const filledCount = stepFields.filter(f => {
-      if (f === 'declaration_signed') return data[f] === true || data[f] === 'true';
-      return isFieldFilled(data[f]);
-    }).length;
+    const { filled, total } = getStepFillCount(stepId);
 
-    if (filledCount === 0) return 'empty';
-    if (filledCount === stepFields.length) return 'complete';
+    if (filled === 0) return 'empty';
+    if (filled === total) return 'complete';
     return 'in_progress';
   };
 
@@ -732,6 +743,19 @@ export default function App({ user, onSignOut }) {
       case 'empty':
       default:
         return <span className="w-2 h-2 rounded-full bg-gray-200 block shrink-0" title="Not Started" />;
+    }
+  };
+
+  // Left border bar on each sidebar step — reflects fill status (gray → amber while
+  // partially filled → emerald once every representative field is filled, or red the
+  // moment a contradiction is flagged), independent of which tab happens to be open.
+  const getStatusBorderClass = (status) => {
+    switch (status) {
+      case 'complete': return 'border-emerald-500';
+      case 'in_progress': return 'border-amber-400';
+      case 'error': return 'border-red-500';
+      case 'empty':
+      default: return 'border-gray-200';
     }
   };
 
@@ -852,37 +876,48 @@ export default function App({ user, onSignOut }) {
             {steps.map((step) => {
               const status = getStepStatus(step.id);
               const isActive = activeTab === step.id;
+              const statusBorder = getStatusBorderClass(status);
               if (collapsed) {
                 return (
                   <button
                     key={step.id}
                     onClick={() => go(step.id)}
-                    title={step.label}
-                    className={`w-full flex items-center justify-center px-3 py-2.5 rounded-xl transition-all cursor-pointer border-l-[3px] ${isActive ? 'bg-gray-50 border-accent-500 shadow-sm' : 'border-transparent hover:bg-gray-50'
+                    title={`${step.label} — ${status.replace('_', ' ')}`}
+                    className={`w-full flex items-center justify-center px-3 py-2.5 rounded-xl transition-all cursor-pointer border-l-[3px] ${statusBorder} ${isActive ? 'bg-gray-50 shadow-sm' : 'hover:bg-gray-50'
                       }`}
                   >
                     {getStatusDot(status)}
                   </button>
                 );
               }
+              const { filled, total } = getStepFillCount(step.id);
               return (
                 <button
                   key={step.id}
                   onClick={() => go(step.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${isActive
-                      ? 'bg-gray-50 text-gray-900 border-accent-500 shadow-sm'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 border-transparent'
+                  title={`${step.code} — ${status.replace('_', ' ')}`}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-[12.5px] font-semibold rounded-xl transition-all cursor-pointer border-l-[3px] ${statusBorder} ${isActive
+                      ? 'bg-gray-50 text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
                     }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     {getStatusDot(status)}
                     <span className="truncate">{step.label}</span>
                   </div>
-                  <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${isActive
-                      ? 'bg-accent-50 text-accent-600 border border-accent-100'
-                      : 'bg-gray-100 text-gray-400 border border-gray-200'
+                  {/* Required-fields fraction — how many of this tab's actual required
+                      fields (from schema.json) are filled, so a gap is a number you can
+                      act on, not just a color. */}
+                  <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0 ml-1 ${
+                      status === 'complete'
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        : status === 'error'
+                        ? 'bg-red-50 text-red-600 border border-red-100'
+                        : filled > 0
+                        ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                        : 'bg-gray-100 text-gray-400 border border-gray-200'
                     }`}>
-                    {step.code}
+                    {filled}/{total}
                   </span>
                 </button>
               );
@@ -1021,7 +1056,7 @@ export default function App({ user, onSignOut }) {
           </div>
 
           {/* Quick switcher — real navigation over existing tabs, not a search backend */}
-          <div className="hidden lg:block relative flex-1 max-w-xs">
+          <div ref={quickSwitchRef} className="hidden lg:block relative flex-1 max-w-xs">
             <Search className="w-3.5 h-3.5 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -1057,7 +1092,7 @@ export default function App({ user, onSignOut }) {
             </div>
 
             {/* Notifications bell — real data: validation conflicts + regulatory alerts */}
-            <div className="relative">
+            <div ref={notifRef} className="relative">
               <button
                 onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); setQuickSwitchOpen(false); }}
                 className={`p-2 rounded-xl border transition-all cursor-pointer relative ${notifOpen ? 'bg-accent-50 border-accent-200 text-accent-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
@@ -1128,7 +1163,7 @@ export default function App({ user, onSignOut }) {
             </button>
 
             {/* Profile menu */}
-            <div className="relative">
+            <div ref={profileRef} className="relative">
               <button
                 onClick={() => { setProfileOpen(v => !v); setNotifOpen(false); setQuickSwitchOpen(false); }}
                 className="w-9 h-9 rounded-full bg-accent-500 text-white text-[12px] font-bold flex items-center justify-center cursor-pointer hover:brightness-95 transition-all shrink-0"
@@ -1187,7 +1222,6 @@ export default function App({ user, onSignOut }) {
                   generating={generating}
                   onNavigateTab={setActiveTab}
                   onPreFill={handlePreFill}
-                  onFormChange={handleFormChange}
                   lastSavedTime={lastSavedTime}
                   apiFetch={authFetch}
                 />
@@ -1212,7 +1246,6 @@ export default function App({ user, onSignOut }) {
                   activeTab={activeTab}
                   onNext={handleNextTab}
                   onPrev={handlePrevTab}
-                  validationResults={validationResults}
                 />
               )}
 

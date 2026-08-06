@@ -6,9 +6,12 @@ Append-only audit trail logging system stored as JSONL per user workspace.
 
 import os
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Literal
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("sebi-ipo-generator.audit_log")
 
 
 ACTION_TYPES = [
@@ -60,7 +63,7 @@ class AuditLog:
             with open(filepath, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry.model_dump(mode="json")) + "\n")
         except Exception as e:
-            pass
+            logger.error(f"Failed to write audit log entry for user {user_id}: {e}")
         return entry
 
     def get_log(self, user_id: str, limit: int = 100) -> List[AuditEntry]:

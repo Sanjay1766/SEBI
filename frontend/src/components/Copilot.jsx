@@ -1,20 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Sparkles, Send, X, Check, Loader2, 
-  MessageSquare, FileText, ArrowRight, Bot,
+import {
+  Sparkles, Send, X, Check,
+  MessageSquare, FileText, ArrowRight,
   Search, AlertTriangle, Shield, Scale, Building2, Info
 } from 'lucide-react';
 
 const FIELD_LABELS = {
   promoter_experience: 'Promoter Experience Summary',
-  products_services: 'Key Products & Services',
+  products_services_description: 'Key Products & Services',
   business_model: 'Business Model Description',
   internal_risks: 'Internal Risk Factors',
   external_risks: 'External Risk Factors',
+  risk_narrative_text: 'Consolidated Risk Factor Narrative',
   litigations_company: 'Litigations Against Company',
   litigations_promoters: 'Litigations Against Promoters',
   rpt_declared: 'Related Party Transactions',
-  material_contracts_desc: 'Material Contracts for Inspection'
+  material_contracts_desc: 'Material Contracts for Inspection',
+  industry_growth_narrative: 'Industry Growth Narrative',
+  esop_details: 'ESOP Details',
+  auditor_qualifications: 'Auditor Qualifications',
+  summary_business_note: 'Summary Business Note'
 };
 
 // Helper to format inline bold text **like this**
@@ -56,7 +61,7 @@ const renderMessageContent = (text) => {
     }
 
     // Match bullet points starting with *, -, or •
-    const bulletMatch = line.match(/^[\*\-•]\s*(.*)$/);
+    const bulletMatch = line.match(/^[*\-•]\s*(.*)$/);
     if (bulletMatch) {
       const content = bulletMatch[1];
       const lowerContent = content.toLowerCase();
@@ -136,42 +141,50 @@ export default function Copilot({ isOpen, onClose, onApplySuggestion, apiFetch }
     }
 
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Conversation so far (not including this new turn) — /api/copilot appends
+    // it before the new user message, giving the model real multi-turn memory.
+    const historyPayload = messages.map(m => ({ role: m.role, content: m.content }));
     const newMessages = [...messages, { role: 'user', content: text, timestamp }];
     setMessages(newMessages);
     setLoading(true);
 
     try {
-      const res = await apiFetch('/api/rag/query', {
+      // /api/copilot (not /api/rag/query) — it's the session-aware endpoint that
+      // sees live company data, missing fields, and active compliance conflicts,
+      // supports multi-turn history, and is the only one whose prompt actually
+      // emits the [SUGGESTION:field_key] tags parseMessageContent() below looks
+      // for. /api/rag/query is a narrower single-shot regulation citation
+      // lookup with no session context or suggestion support — calling it here
+      // meant every question got a near-identical canned/citation-only answer
+      // and "Apply Draft" could never appear.
+      const res = await apiFetch('/api/copilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text })
+        body: JSON.stringify({ message: text, history: historyPayload })
       });
 
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       if (res.ok) {
         const data = await res.json();
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: data.answer, 
-          citations: data.retrieved_citations,
-          confidence: data.overall_confidence,
-          engine: data.rag_engine,
-          timestamp: replyTimestamp 
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.reply,
+          timestamp: replyTimestamp
         }]);
       } else {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: 'Sorry, I encountered an error connecting to the SEBI RAG statutory service. Please check if the backend is running.',
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Sorry, I encountered an error connecting to the SEBI Compliance Copilot. Please check if the backend is running.',
           timestamp: replyTimestamp
         }]);
       }
     } catch (err) {
       console.error(err);
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Error: Could not reach the SEBI ICDR RAG copilot. Ensure the backend server is operational.',
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Error: Could not reach the SEBI Compliance Copilot. Ensure the backend server is operational.',
         timestamp: replyTimestamp
       }]);
     } finally {

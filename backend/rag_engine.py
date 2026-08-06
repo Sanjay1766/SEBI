@@ -8,10 +8,8 @@ the SEBI ICDR Chapter IX regulation corpus and uploaded SEBI PDFs.
 
 import os
 import re
-import json
-import math
 import logging
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 from sebi_icdr_corpus import SEBI_ICDR_CORPUS
 from llm_client import get_llm_client
 
@@ -221,7 +219,7 @@ class SEBIRAGEngine:
             if top_cit:
                 answer = f"According to **{top_cit['regulation_no']}** ({top_cit['citation']}): {top_cit['text']}\n\n*Statutory Guidance for {company_name}*: Draft prospectus disclosures must strictly comply with these SEBI ICDR Chapter IX requirements."
             else:
-                answer = f"Under SEBI ICDR Chapter IX regulations for SME IPOs, issuers must satisfy positive net worth criteria (Reg 229), lock in 20% minimum promoter holding for 3 years (Reg 236), and provide comprehensive risk disclosures (Reg 250)."
+                answer = "Under SEBI ICDR Chapter IX regulations for SME IPOs, issuers must satisfy positive net worth criteria (Reg 229), lock in 20% minimum promoter holding for 3 years (Reg 236), and provide comprehensive risk disclosures (Reg 250)."
 
             return {
                 "answer": answer,

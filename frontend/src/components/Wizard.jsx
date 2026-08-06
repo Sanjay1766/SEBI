@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api';
 import {
   Building2, Users, DollarSign, Briefcase, AlertTriangle, HelpCircle,
-  CheckCircle2, BookOpen, AlertCircle, FileText, ArrowRight, Loader2,
+  CheckCircle2, BookOpen, AlertCircle, FileText, Loader2,
   ChevronRight, ChevronLeft, Info, Sparkles, Lock, Plus, Trash2, Scale, TrendingUp,
   Landmark, Gavel, ClipboardList, Link2, PenLine
 } from 'lucide-react';
@@ -108,8 +108,29 @@ export const WIZARD_STEPS = [
   { id: 'compliance', label: 'Statutory & Compliance', code: 'Extra' },
 ];
 
-export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, validationResults, extractedData }) {
+export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, extractedData }) {
   const [draftingFields, setDraftingFields] = useState({});
+
+  // Which schema.json keys are `required: true` — drives the red-border empty-field
+  // treatment below. Fetched once; schema.json doesn't change at runtime.
+  const [requiredFields, setRequiredFields] = useState(() => new Set());
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch('/api/schema')
+      .then(res => (res.ok ? res.json() : null))
+      .then(schema => {
+        if (cancelled || !schema?.sections) return;
+        const keys = new Set();
+        for (const section of schema.sections) {
+          for (const field of section.fields || []) {
+            if (field.required) keys.add(field.key);
+          }
+        }
+        setRequiredFields(keys);
+      })
+      .catch(err => console.error('Failed to load schema for required-field indicators:', err));
+    return () => { cancelled = true; };
+  }, []);
 
   // Build a flat map of all extracted values for source detection
   const extractedFlat = React.useMemo(() => {
@@ -124,13 +145,22 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     return flat;
   }, [extractedData]);
 
-  const handleAIDraft = async (key) => {
+  // `label` is the field's actual on-screen heading and `currentValue` is
+  // whatever's currently typed in that textbox — both get sent to the backend
+  // so it knows exactly which section it's drafting and expands on what's
+  // already there instead of ignoring it and writing generic filler.
+  const handleAIDraft = async (key, label, currentValue) => {
     setDraftingFields(prev => ({ ...prev, [key]: true }));
     try {
       const response = await apiFetch('/api/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field_key: key, form_data: formData })
+        body: JSON.stringify({
+          field_key: key,
+          field_label: label,
+          existing_text: currentValue || '',
+          form_data: formData
+        })
       });
       if (response.ok) {
         const data = await response.json();
@@ -256,6 +286,8 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     const { manualNote, addLabel = 'Add row' } = opts;
     const extractedRows = extractedFlat[key];
     const hasExtracted = Array.isArray(extractedRows) && extractedRows.length > 0;
+    const isRequired = requiredFields.has(key);
+    const showRequiredEmpty = isRequired && rows.length === 0;
 
     const updateRow = (idx, colKey, val) => {
       const next = rows.map((r, i) => (i === idx ? { ...r, [colKey]: val } : r));
@@ -275,6 +307,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
         <div className="flex justify-between items-center mb-2 select-none">
           <label className="text-[11.5px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-0.5">
             {label}
+            {isRequired && <span className="text-red-500 font-bold" title="Required">*</span>}
             {tooltip && renderTooltip(tooltip)}
           </label>
           <div className="flex items-center gap-1.5">
@@ -297,7 +330,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           </button>
         )}
 
-        <div className="rounded-2xl border border-gray-200 overflow-hidden">
+        <div className={`rounded-2xl border overflow-hidden ${showRequiredEmpty ? 'border-red-300' : 'border-gray-200'}`}>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-[11.5px] text-gray-400 font-medium bg-gray-50">No entries yet.</div>
           ) : (
@@ -340,7 +373,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     );
   };
 
-  const renderInput = (key, label, type = 'text', tooltip = '', placeholder = '', options = null, defaultValue = '') => {
+  const renderInput = (key, label, type = 'text', tooltip = '', placeholder = '', options = null, defaultValue = '', aiAssist = true) => {
     // defaultValue pre-fills the field with standard boilerplate text (e.g. SEBI's fixed
     // regulatory language) without writing it to formData — the generator falls back to the
     // same text server-side, so an untouched field still renders correctly. Only editing it
@@ -351,6 +384,18 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     const isTextarea = type === 'textarea';
     const isNumber = type === 'number';
     const isCheckbox = type === 'checkbox';
+    // AI Assist only makes sense for freely-drafted narrative text — fixed SEBI statutory
+    // boilerplate paragraphs (aiAssist=false at the call site) must stay as regulation-standard
+    // wording, not something an LLM silently rewrites.
+    const showAIAssist = isTextarea && aiAssist;
+
+    // Required + still empty -> red border on the input itself, not just a badge, so a gap
+    // is visible at a glance while scanning the form (checkboxes get their own visual, so
+    // they're excluded rather than red-bordering the whole confirm-box).
+    const isRequired = requiredFields.has(key);
+    const isEmpty = value === '' || value === undefined || value === null;
+    const showRequiredEmpty = isRequired && !isCheckbox && isEmpty;
+    const requiredBorderClass = showRequiredEmpty ? '!border-red-300 focus:!border-red-400' : '';
 
     // Determine rows dynamically for textareas based on content
     const textLen = isTextarea ? String(value).length : 0;
@@ -365,6 +410,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
             className="text-[11.5px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-0.5 cursor-pointer"
           >
             {label}
+            {isRequired && <span className="text-red-500 font-bold" title="Required">*</span>}
             {tooltip && renderTooltip(tooltip)}
           </label>
 
@@ -403,11 +449,11 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               <Badge variant="danger" size="xs" icon={AlertCircle} title={validation.message}>Error</Badge>
             )}
 
-            {/* AI Assist button for textareas */}
-            {isTextarea && (
+            {/* AI Assist button for freely-drafted narrative textareas */}
+            {showAIAssist && (
               <button
                 type="button"
-                onClick={() => handleAIDraft(key)}
+                onClick={() => handleAIDraft(key, label, value)}
                 disabled={draftingFields[key]}
                 className="inline-flex items-center gap-1 text-[9.5px] font-bold text-accent-700 hover:text-accent-800 transition-all cursor-pointer bg-accent-50 hover:bg-accent-100 border border-accent-200 hover:border-accent-300 px-2 py-0.5 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -427,7 +473,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
             <textarea
               id={key}
               rows={dynamicRows}
-              className="form-input-base"
+              className={`form-input-base ${requiredBorderClass}`}
               placeholder={placeholder}
               value={value}
               onChange={(e) => onChange(key, e.target.value)}
@@ -440,7 +486,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
         ) : type === 'select' ? (
           <select
             id={key}
-            className="form-input-base"
+            className={`form-input-base ${requiredBorderClass}`}
             value={value}
             onChange={(e) => onChange(key, e.target.value)}
           >
@@ -464,7 +510,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           <input
             id={key}
             type={type}
-            className={`form-input-base ${isNumber ? 'font-mono text-right tracking-wider' : ''}`}
+            className={`form-input-base ${isNumber ? 'font-mono text-right tracking-wider' : ''} ${requiredBorderClass}`}
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(key, type === 'number' ? (e.target.value === '' ? '' : parseFloat(e.target.value)) : e.target.value)}
@@ -588,16 +634,16 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               {renderInput('company_name', 'Company Name', 'text', 'SEBI ICDR Sch VI Part A — Exact registered corporate name as per RoC Certificate of Incorporation.', 'e.g. Master Chains N Jewels Limited')}
               {renderInput('former_name', 'Former Name(s), if applicable', 'text', 'Prior registered name(s) per RoC/CIN history.', 'e.g. Master Chains N Jewels Private Limited')}
               {renderInput('cin', 'CIN Number', 'text', 'Companies Act 2013 Sec 7(1) — Corporate Identification Number (21 alphanumeric characters) as assigned by RoC.', 'U74999MH2018PLC312456')}
-              {renderInput('company_acronym', 'Company Acronym', 'text', 'Short form used throughout the prospectus.', 'e.g. APEX')}
+              {renderInput('company_acronym', 'Company Acronym', 'text', 'Short form used throughout the prospectus.', 'e.g. VSCL')}
 
               <SubGroupHeader icon={Building2} label="Registered Office & Contact" note="SEBI ICDR Sch VI Part A, Para 1(c)" />
               {renderInput('registered_office', 'Registered Office Address', 'text', 'Companies Act 2013 Sec 12 — Official address registered with ROC. All statutory correspondence is served here.', 'e.g. Plot 42, GIDC Industrial Area, Vapi, Gujarat')}
               {renderInput('company_secretary_name', 'Company Secretary / Compliance Officer', 'text', 'Named contact person on the cover page for investor correspondence.', 'e.g. Priya Shah')}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('contact_email', 'Contact Email', 'text', 'Compliance officer email printed on the cover page.', 'e.g. compliance@apex.com')}
+                {renderInput('contact_email', 'Contact Email', 'text', 'Compliance officer email printed on the cover page.', 'e.g. compliance@yourcompany.com')}
                 {renderInput('contact_phone', 'Contact Telephone', 'text', 'Compliance officer telephone printed on the cover page.', 'e.g. +91 22 4000 1234')}
               </div>
-              {renderInput('company_website', 'Company Website', 'text', 'Corporate website URL.', 'e.g. www.apextechnochem.com')}
+              {renderInput('company_website', 'Company Website', 'text', 'Corporate website URL.', 'e.g. www.yourcompany.com')}
               <ManualNote>Business decision — enter the company's own website. Cannot be auto-filled from any statutory document.</ManualNote>
 
               {renderRows('promoter_names', 'Promoter Names (Cover Page Banner)', "SEBI ICDR Sch VI Part A, Para 1(d) — names of all promoters as they appear on the cover page banner. Leave empty if the company has no identifiable promoter.",
@@ -632,22 +678,26 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               {renderInput('risks_first_offer_text', 'Risks in Relation to the First Offer', 'textarea',
                 'SEBI ICDR Sch VI Part A — standard first-offer risk disclosure. Pre-filled with regulation-standard wording; edit if legal counsel requires different phrasing.',
                 '', null,
-                `This being the first public issue of Equity Shares of our Company, there has been no formal market for the Equity Shares. The face value of each Equity Share is ₹${formData.face_value_per_share || '[●]'}. The Offer Price, Floor Price and the Cap Price determined by our Company in consultation with the book running lead manager (“BRLM”), in accordance with the SEBI ICDR Regulations and on the basis of the assessment of market demand for the Equity Shares by way of the Book Building Process, as stated in “Basis for Offer Price” beginning on page [●] of the Draft Red Herring Prospectus, should not be considered to be indicative of the market price of the Equity Shares after the Equity Shares are listed. No assurance can be given regarding an active and/or sustained trading in the Equity Shares or regarding the price at which the Equity Shares will be traded after listing.`)}
+                `This being the first public issue of Equity Shares of our Company, there has been no formal market for the Equity Shares. The face value of each Equity Share is ₹${formData.face_value_per_share || '[●]'}. The Offer Price, Floor Price and the Cap Price determined by our Company in consultation with the book running lead manager (“BRLM”), in accordance with the SEBI ICDR Regulations and on the basis of the assessment of market demand for the Equity Shares by way of the Book Building Process, as stated in “Basis for Offer Price” beginning on page [●] of the Draft Red Herring Prospectus, should not be considered to be indicative of the market price of the Equity Shares after the Equity Shares are listed. No assurance can be given regarding an active and/or sustained trading in the Equity Shares or regarding the price at which the Equity Shares will be traded after listing.`,
+                false)}
 
               {renderInput('general_risk_text', 'General Risk', 'textarea',
                 'SEBI ICDR Sch VI Part A — standard general investment risk disclosure. Pre-filled with regulation-standard wording; edit if legal counsel requires different phrasing.',
                 '', null,
-                `Investments in equity and equity-related securities involve a degree of risk and investors should not invest any funds in this Offer unless they can afford to take the risk of losing their entire investment. Bidders are advised to read the risk factors carefully before taking an investment decision in this Offer. For taking an investment decision, Bidders must rely on their own examination of our Company and the Offer, including the risks involved. The Equity Shares in the Offer have neither been recommended nor approved by Securities and Exchange Board of India (“SEBI”), nor does SEBI guarantee the accuracy or adequacy of the contents of the Draft Red Herring Prospectus. Specific attention of the Bidders is invited to “Risk Factors” beginning on page [●] of the Draft Red Herring Prospectus.`)}
+                `Investments in equity and equity-related securities involve a degree of risk and investors should not invest any funds in this Offer unless they can afford to take the risk of losing their entire investment. Bidders are advised to read the risk factors carefully before taking an investment decision in this Offer. For taking an investment decision, Bidders must rely on their own examination of our Company and the Offer, including the risks involved. The Equity Shares in the Offer have neither been recommended nor approved by Securities and Exchange Board of India (“SEBI”), nor does SEBI guarantee the accuracy or adequacy of the contents of the Draft Red Herring Prospectus. Specific attention of the Bidders is invited to “Risk Factors” beginning on page [●] of the Draft Red Herring Prospectus.`,
+                false)}
 
               {renderInput('company_responsibility_text', "Company's / Selling Shareholders' Absolute Responsibility", 'textarea',
                 "SEBI ICDR Sch VI Part A — standard issuer/selling-shareholder responsibility statement. The banner title above this text adjusts automatically based on whether selling shareholders are entered above; only the paragraph body is edited here.",
                 '', null,
-                `Our Company, having made all reasonable inquiries, accepts responsibility for and confirms that the Draft Red Herring Prospectus contains all information with regard to our Company and the Offer, which is material in the context of the Offer, that the information contained in the Draft Red Herring Prospectus is true and correct in all material aspects and is not misleading in any material respect, that the opinions and intentions expressed herein are honestly held and that there are no other facts, the omission of which makes the Draft Red Herring Prospectus as a whole or any of such information or the expression of any such opinions or intentions misleading in any material respect.`)}
+                `Our Company, having made all reasonable inquiries, accepts responsibility for and confirms that the Draft Red Herring Prospectus contains all information with regard to our Company and the Offer, which is material in the context of the Offer, that the information contained in the Draft Red Herring Prospectus is true and correct in all material aspects and is not misleading in any material respect, that the opinions and intentions expressed herein are honestly held and that there are no other facts, the omission of which makes the Draft Red Herring Prospectus as a whole or any of such information or the expression of any such opinions or intentions misleading in any material respect.`,
+                false)}
 
               {renderInput('listing_text', 'Listing', 'textarea',
                 'SEBI ICDR Sch VI Part A — standard stock exchange listing statement. Pre-filled with regulation-standard wording; edit if the designated stock exchange or listing venues differ.',
                 '', null,
-                `The Equity Shares to be offered through Red Herring Prospectus are proposed to be listed on the BSE Limited (the “BSE”) and National Stock Exchange of India Limited (the “NSE”, and together with BSE, the “Stock Exchanges”). For the purposes of this Offer, the Designated Stock Exchange shall be [●].`)}
+                `The Equity Shares to be offered through Red Herring Prospectus are proposed to be listed on the BSE Limited (the “BSE”) and National Stock Exchange of India Limited (the “NSE”, and together with BSE, the “Stock Exchanges”). For the purposes of this Offer, the Designated Stock Exchange shall be [●].`,
+                false)}
 
               <SubGroupHeader icon={Briefcase} label="Book Running Lead Manager & Registrar" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
@@ -664,7 +714,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
 
               <SubGroupHeader icon={Building2} label="b) Industries Served & Typical Customers" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
-                {renderInput('industries_served', 'Industries Served', 'text', "Sectors/industries the company's customers belong to.", 'e.g. Automotive coatings, Packaging')}
+                {renderInput('industries_served', 'Industries Served', 'textarea', "Sectors/industries the company's customers belong to.", 'e.g. Automotive coatings, Packaging')}
                 {renderInput('typical_customers', 'Typical Customers', 'text', 'Description of the typical customer profile served.', 'e.g. Single-store and multi-store retailers')}
               </div>
 
@@ -689,7 +739,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
               </div>
 
               <SubGroupHeader icon={Building2} label="d) Key Geographies Served" />
-              {renderInput('key_geographies_served', 'Key Geographies Served', 'text', 'Primary states/regions/countries generating revenue.', 'e.g. Maharashtra, Gujarat, Karnataka')}
+              {renderInput('key_geographies_served', 'Key Geographies Served', 'textarea', 'Primary states/regions/countries generating revenue.', 'e.g. Maharashtra, Gujarat, Karnataka')}
 
               <SubGroupHeader icon={TrendingUp} label="e) Revenue Concentration Among Top 5 Customers" />
               {renderRows('top5_customer_revenue_table', 'Top-5 Customer Revenue Concentration (3-Year)', 'SEBI ICDR — revenue concentration among top customers over 3 fiscal years.',

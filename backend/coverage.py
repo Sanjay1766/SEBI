@@ -19,8 +19,8 @@ This mirrors each field's `source_hint` in schema.json ("manual" -> manual,
 everything else -> extracted).
 """
 
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from typing import Dict, Any, List
+from pydantic import BaseModel
 
 
 SEBI_REQUIREMENTS = [
