@@ -30,6 +30,16 @@ services:
       # without touching host files or fighting the image's own /root/.cache.
       - backend-model-cache:/root/.cache
       - backend-paddlex-cache:/root/.paddlex
+      # Without these, every `docker compose down && up` silently wiped the
+      # demo user's entire in-progress session — main.py's load_session/
+      # save_session fall back to this local file whenever Supabase env vars
+      # are unset (the zero-config default this compose file advertises).
+      # Mounted onto individual paths (not the whole /app) so the app's own
+      # source code still comes from the image, not a stale host bind mount.
+      - backend-session-state:/app/session_state.json
+      - backend-uploads:/app/temp_uploads
+      - backend-audit-log:/app/audit
+      - backend-chroma-db:/app/chroma_db
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -59,3 +69,7 @@ services:
 volumes:
   backend-model-cache:
   backend-paddlex-cache:
+  backend-session-state:
+  backend-uploads:
+  backend-audit-log:
+  backend-chroma-db:
