@@ -4,7 +4,7 @@ import Badge from './ui/Badge';
 
 const SEBI_CIRCULARS_URL = 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=7&smid=0';
 
-export default function RegulatoryAlertBanner({ apiFetch, onNavigateTab }) {
+export default function RegulatoryAlertBanner({ apiFetch }) {
   const [alertsData, setAlertsData] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);

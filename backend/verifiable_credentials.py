@@ -6,11 +6,10 @@ Decentralized Identifier (DID) verification for SEBI compliance documents.
 """
 
 import hashlib
-import json
 import time
 import uuid
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger("sebi-ipo-generator.verifiable_credentials")
 

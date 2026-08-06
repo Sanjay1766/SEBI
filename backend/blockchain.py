@@ -103,7 +103,6 @@ CONTRACT_ABI = [
 # ── web3 import with graceful fallback ───────────────────────────────────────
 try:
     from web3 import Web3
-    from web3.exceptions import ContractLogicError
     WEB3_AVAILABLE = True
 except ImportError:
     WEB3_AVAILABLE = False

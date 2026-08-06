@@ -1,5 +1,5 @@
 import unittest
-from hallucination_guard import HallucinationGuard, HallucinationDetected
+from hallucination_guard import HallucinationGuard
 
 class TestHallucinationGuard(unittest.TestCase):
     def setUp(self):

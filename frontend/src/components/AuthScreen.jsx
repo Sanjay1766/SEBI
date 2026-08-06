@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
-  Loader2, LogIn, UserPlus, AlertCircle, Sparkles,
+  Loader2, LogIn, UserPlus, AlertCircle,
   FileText, CheckCircle2, Zap, Shield, ArrowDown, Layers, Bot, Mail
 } from 'lucide-react';
 import { supabase } from '../supabase';
@@ -12,23 +12,6 @@ export default function AuthScreen({ authError }) {
   const [message, setMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = (e) => {
-      const container = e.target;
-      if (container.scrollTop > 60) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
-    };
-    const mainEl = document.getElementById('auth-scroll-container');
-    if (mainEl) mainEl.addEventListener('scroll', handleScroll);
-    return () => {
-      if (mainEl) mainEl.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
 
   const submit = async (event) => {
     event.preventDefault();

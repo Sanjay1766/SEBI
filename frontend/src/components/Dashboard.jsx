@@ -49,16 +49,12 @@ export default function Dashboard({
   sessionData,
   onGenerate, 
   generating, 
-  onNavigateTab, 
-  onPreFill, 
-  onFormChange,
+  onNavigateTab,
+  onPreFill,
   lastSavedTime,
   apiFetch,
 }) {
   const [expandedSection, setExpandedSection] = useState(null);
-  const [expandedExplanations, setExpandedExplanations] = useState({});
-  const [expandedFixSteps, setExpandedFixSteps] = useState({});
-  const [expandedRegs, setExpandedRegs] = useState({});
   const [expandedCoT, setExpandedCoT] = useState({});
 
   if (!validationResults) {
@@ -76,23 +72,12 @@ export default function Dashboard({
   }
 
   const {
-    filing_readiness = 0,
-    overall_completeness = 0,
-    readiness_score = 0,
     sections = [],
     inconsistencies = [],
     status_counts = { complete: 0, incomplete: 0, inconsistent: 0 },
-    completed_fields = 0,
-    total_fields = 0,
-    completed_blocking_fields = 0,
-    total_blocking_fields = 0,
-    has_blocking_flags = false,
   } = validationResults;
 
   const toggleSection = (id) => setExpandedSection(expandedSection === id ? null : id);
-  const toggleExplanation = (id) => setExpandedExplanations(prev => ({ ...prev, [id]: !prev[id] }));
-  const toggleFixSteps = (id) => setExpandedFixSteps(prev => ({ ...prev, [id]: !prev[id] }));
-  const toggleReg = (id) => setExpandedRegs(prev => ({ ...prev, [id]: !prev[id] }));
   const toggleCoT = (id) => setExpandedCoT(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleBadgeClick = (e, sectionId) => {
@@ -134,7 +119,7 @@ export default function Dashboard({
       </div>
 
       {/* ── SEBI Regulatory Change Alert Banner ── */}
-      <RegulatoryAlertBanner apiFetch={apiFetch} onNavigateTab={onNavigateTab} />
+      <RegulatoryAlertBanner apiFetch={apiFetch} />
 
       {/* ── Compliance Score Meter (full-width centrepiece) ── */}
       <ComplianceScoreMeter validationResults={validationResults} />
@@ -207,9 +192,6 @@ export default function Dashboard({
 
           <div className="grid grid-cols-1 gap-3">
             {inconsistencies.map((inc) => {
-              const showExp = expandedExplanations[inc.id];
-              const showFix = expandedFixSteps[inc.id];
-              const showReg = expandedRegs[inc.id];
               const showCoT = expandedCoT[inc.id];
               const regData = lookupRegulation(inc.sebi_ref);
 

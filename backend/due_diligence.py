@@ -6,7 +6,7 @@ and generates official SEBI Form A Lead Manager Certificates.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 logger = logging.getLogger("sebi-ipo-generator.due_diligence")
