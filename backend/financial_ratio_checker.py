@@ -57,31 +57,14 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
     """
     flags: List[Dict[str, Any]] = []
     
-    # Extract numerical inputs from merged workspace session data. The wizard's
-    # actual fields (revenue_from_operations, pat, ebitda, total_borrowings,
-    # net_worth, eps_basic/eps_diluted) are 3-year restated FY tables, not flat
-    # scalars — this used to look for keys like "pl_revenue"/"pat_amount"/
-    # "total_debt" that no upload or form field ever populates, so every ratio
-    # here silently evaluated to None against real session data.
-    revenue = _latest_fy_value(merged, "revenue_from_operations") or _safe_float(merged.get("revenue_fy_latest"))
-    pat = _latest_fy_value(merged, "pat") or _safe_float(merged.get("pat_fy_latest"))
-    ebitda = _latest_fy_value(merged, "ebitda")
-    total_debt = _latest_fy_value(merged, "total_borrowings") or _safe_float(merged.get("borrowings_latest"))
-    total_equity = _latest_fy_value(merged, "net_worth")
-    eps = _latest_fy_value(merged, "eps_basic") or _latest_fy_value(merged, "eps_diluted")
-
-    # No dedicated issue_price field exists — derive it as the midpoint of the
-    # "Price Band (₹)" cover-page field (e.g. "100 - 105"), the only place an
-    # offer price is actually captured.
-    issue_price = None
-    price_band = merged.get("price_band")
-    if price_band:
-        try:
-            parts = str(price_band).replace("₹", "").split("-")
-            if len(parts) == 2:
-                issue_price = (float(parts[0].strip()) + float(parts[1].strip())) / 2
-        except (ValueError, TypeError):
-            issue_price = None
+    # Extract numerical inputs from merged workspace session data
+    revenue = _safe_float(merged.get("pl_revenue") or merged.get("revenue"))
+    pat = _safe_float(merged.get("pat_amount") or merged.get("pat") or merged.get("net_profit"))
+    ebitda = _safe_float(merged.get("ebitda_amount") or merged.get("ebitda"))
+    total_debt = _safe_float(merged.get("total_debt") or merged.get("debt"))
+    total_equity = _safe_float(merged.get("total_equity") or merged.get("net_worth") or merged.get("equity"))
+    issue_price = _safe_float(merged.get("issue_price") or merged.get("offer_price"))
+    eps = _safe_float(merged.get("eps") or merged.get("basic_eps"))
 
     sector_key = str(merged.get("industry_sector", "manufacturing")).lower().strip()
     if sector_key not in SECTOR_BENCHMARKS:
@@ -105,7 +88,6 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
             flags.append({
                 "id": "ratio_pat_margin_anomaly",
                 "section_id": "financials",
-                "related_fields": ["pat", "revenue_from_operations"],
                 "title": "Unusually High PAT Margin Anomaly",
                 "description": f"Calculated PAT Margin of {pat_margin}% exceeds the realistic threshold of {benchmarks['pat_margin_max']}% for {benchmarks['label']} issuers (industry median: {benchmarks['pat_margin_normal'][0]}% - {benchmarks['pat_margin_normal'][1]}%). High PAT margins prior to an IPO can be a red flag for window-dressed financials or unrecorded expenses.",
                 "reasoning_steps": [
@@ -139,7 +121,6 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
             flags.append({
                 "id": "ratio_ebitda_margin_high",
                 "section_id": "financials",
-                "related_fields": ["ebitda", "revenue_from_operations"],
                 "title": "EBITDA Margin Anomaly Exceeds Industry Benchmark",
                 "description": f"EBITDA Margin of {ebitda_margin}% is significantly higher than the peer benchmark ceiling ({benchmarks['ebitda_margin_max']}%) for {benchmarks['label']}.",
                 "reasoning_steps": [
@@ -170,8 +151,7 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
         if de_ratio > benchmarks["de_ratio_max"]:
             flags.append({
                 "id": "ratio_high_leverage",
-                "section_id": "financials",
-                "related_fields": ["total_borrowings", "net_worth"],
+                "section_id": "capital_structure",
                 "title": "Excessive Debt-to-Equity Leverage Ratio",
                 "description": f"Debt-to-Equity ratio of {de_ratio}x exceeds the threshold cap of {benchmarks['de_ratio_max']}x. High leverage increases financial risk for public SME shareholders.",
                 "reasoning_steps": [
@@ -204,7 +184,6 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
             flags.append({
                 "id": "ratio_pe_valuation_anomaly",
                 "section_id": "cover_page",
-                "related_fields": ["price_band", "eps_basic"],
                 "title": "Elevated Pre-IPO P/E Valuation Multiple",
                 "description": f"Price-to-Earnings (P/E) multiple of {pe_ratio}x (Offer Price ₹{issue_price} / EPS ₹{eps}) significantly exceeds peer SME valuations (median: {benchmarks['pe_ratio_normal'][0]}x - {benchmarks['pe_ratio_normal'][1]}x).",
                 "reasoning_steps": [
@@ -236,7 +215,6 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
             flags.append({
                 "id": "ratio_roe_anomaly",
                 "section_id": "financials",
-                "related_fields": ["pat", "net_worth"],
                 "title": "Anomalous Pre-IPO Return on Equity (ROE)",
                 "description": f"Calculated Return on Equity of {roe}% exceeds the benchmark limit ({benchmarks['roe_max']}%). Extreme ROE prior to IPO can indicate depressed net worth or unrecorded liabilities.",
                 "reasoning_steps": [
@@ -258,22 +236,6 @@ def calculate_and_audit_ratios(merged: Dict[str, Any]) -> Dict[str, Any]:
         "flags": flags,
         "sector_info": benchmarks
     }
-
-
-def _latest_fy_value(merged: Dict[str, Any], key: str) -> Optional[float]:
-    """Reads a wizard FY-restated-table field (e.g. 'pat', 'net_worth',
-    'revenue_from_operations') — stored as [{"fy": "FY26", "value": <num>}, ...],
-    latest year first — and returns the latest year's value. Falls back to
-    plain _safe_float() if the session happens to hold a flat scalar under
-    the same key (e.g. an older/legacy session), so this stays a strict
-    superset of reading a plain number.
-    """
-    val = merged.get(key)
-    if isinstance(val, list):
-        if not val or not isinstance(val[0], dict):
-            return None
-        return _safe_float(val[0].get("value"))
-    return _safe_float(val)
 
 
 def _safe_float(val: Any) -> Optional[float]:

@@ -216,13 +216,8 @@ def _get_web3_and_contract():
 # unbuffered) gas price can leave a transaction stuck as "underpriced" during
 # network congestion.
 
-GAS_LIMIT_BUFFER_PCT = 0.10  # +10% safety margin over the raw eth_estimateGas result
-GAS_PRICE_BUFFER_PCT = 0.10  # +10% over the network's current suggested gas price
-# Both trimmed down from 25%/20% — the wallet funding this contract runs on a
-# thin, manually-topped-up testnet MATIC balance, so the combined 1.5x markup
-# over raw cost (now 1.21x) was burning through it faster than it needed to.
-# Polygon Amoy's gas price is stable enough day-to-day that 10% is still a
-# safe cushion against being underpriced between quote time and inclusion.
+GAS_LIMIT_BUFFER_PCT = 0.25  # +25% safety margin over the raw eth_estimateGas result
+GAS_PRICE_BUFFER_PCT = 0.20  # +20% over the network's current suggested gas price
 
 # Used only if eth_estimateGas itself fails (e.g. RPC hiccup) — a conservative
 # ceiling, not the per-call gas actually used, which is now estimated live.

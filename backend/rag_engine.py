@@ -11,7 +11,7 @@ import re
 import logging
 from typing import Dict, Any, List
 from sebi_icdr_corpus import SEBI_ICDR_CORPUS
-from llm_client import get_llm_client, is_rate_limit_error
+from llm_client import get_llm_client
 
 try:
     import chromadb
@@ -259,14 +259,6 @@ Instructions:
                 "rag_engine": f"{engine_name} + {llm.provider}:{llm.model}"
             }
         except Exception as e:
-            if is_rate_limit_error(e):
-                logger.warning(f"LLM ({llm.provider}) RAG synthesis rate-limited: {e}")
-                return {
-                    "answer": "⏳ **AI usage limit reached.** The configured LLM provider's request quota has been used up for now — this isn't a bug, just a temporary capacity limit. Please try again in a few minutes.",
-                    "retrieved_citations": citations,
-                    "overall_confidence": max_confidence,
-                    "rag_engine": f"{engine_name} (Rate Limited)"
-                }
             logger.error(f"LLM ({llm.provider}) RAG synthesis error: {e}")
             top_cit = citations[0] if citations else None
             answer = f"According to **{top_cit['regulation_no']}**: {top_cit['text']}" if top_cit else "Consult SEBI ICDR Regulations Chapter IX."

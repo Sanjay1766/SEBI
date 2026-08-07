@@ -16,18 +16,15 @@ except ImportError:
 FALLBACK_REASONING = {
     "company_name": {
         "explanation": (
-            "Company name mismatch detected. Your 'Company Name' field (Cover Page) says '{form_name}' and your "
-            "'Name on PAN Card' field (Compliance tab) says '{pan_name}' — both of these you can edit directly in "
-            "the wizard. The uploaded GST certificate says '{gst_name}' and the uploaded Certificate of "
-            "Incorporation says '{inc_name}' — these two come from the documents you uploaded, not from typed "
-            "fields, so they can only be corrected by re-uploading a corrected document in the Document Vault."
+            "Company name mismatch detected across documents. "
+            "GST certificate lists '{gst_name}', Certificate of Incorporation lists '{inc_name}', "
+            "and PAN Card lists '{pan_name}'. Please verify and ensure names are identical for SEBI compliance."
         ),
         "reasoning_steps": [
-            "1. Compared four name sources: Company Name field='{form_name}', Name on PAN Card field='{pan_name}', "
-            "uploaded GST certificate='{gst_name}', uploaded Certificate of Incorporation='{inc_name}'.",
+            "1. Extracted names across document filings: GST Certificate='{gst_name}', Certificate of Incorporation='{inc_name}', PAN Card='{pan_name}'.",
             "2. Statutory Rule (SEBI ICDR Reg 230(1)(a)): The issuer's corporate name must match exactly across all tax and corporate registrations.",
-            "3. NLP Semantic Evaluation: Identified a substantive name discrepancy (not just spacing/punctuation) between at least two of these sources.",
-            "4. Therefore: Corporate identity mismatch detected. The MCA Certificate of Incorporation is the authoritative legal name — every other source should match it."
+            "3. NLP Semantic Evaluation: Identified string discrepancies / character variations between the document titles.",
+            "4. Therefore: Corporate identity mismatch detected. MCA Certificate of Incorporation must be taken as the primary master."
         ]
     },
     "gst_vs_pl": {
@@ -143,101 +140,6 @@ FALLBACK_REASONING = {
             "3. Evaluated Ratio: Cap price is {spread_pct}% of the floor price, exceeding the 120% statutory maximum.",
             "4. Therefore: Non-compliant price band spread. Narrow price band before DRHP submission."
         ]
-    },
-    "eps_diluted_exceeds_basic": {
-        "explanation": (
-            "Diluted EPS (₹{eps_diluted}) is higher than Basic EPS (₹{eps_basic}) for the latest fiscal year. "
-            "Dilution (from potential shares such as ESOPs or convertibles) can only reduce or leave EPS "
-            "unchanged, never increase it — this indicates a data entry error in one of the two figures."
-        ),
-        "reasoning_steps": [
-            "1. Extracted figures: Basic EPS = ₹{eps_basic}, Diluted EPS = ₹{eps_diluted} (latest fiscal year).",
-            "2. Accounting Rule (Ind AS 33, Earnings per Share): Diluted EPS reflects the effect of potential dilutive "
-            "securities on the weighted-average share count, so it can only be ≤ Basic EPS.",
-            "3. Evaluated Values: Diluted EPS (₹{eps_diluted}) exceeds Basic EPS (₹{eps_basic}), violating this rule.",
-            "4. Therefore: One of the two EPS figures is misstated — verify against the restated financial statements."
-        ]
-    },
-    "face_value_exceeds_price_band": {
-        "explanation": (
-            "The face value per share (₹{face_value}) exceeds the price band floor (₹{floor_price}). "
-            "The issue price of an equity share cannot be set below its face value."
-        ),
-        "reasoning_steps": [
-            "1. Extracted values: Face Value per Share = ₹{face_value}, Price Band Floor = ₹{floor_price}.",
-            "2. Statutory Rule (Companies Act 2013 Sec 52 & SEBI ICDR pricing norms): Shares cannot be issued at a "
-            "price below their face value (that would constitute an issue at a discount, which is prohibited for "
-            "equity shares outside specific ESOP/sweat-equity exceptions).",
-            "3. Evaluated Values: Price band floor (₹{floor_price}) is below face value (₹{face_value}).",
-            "4. Therefore: Correct the price band or the face value — one of the two is misstated."
-        ]
-    },
-    "litigation_narrative_mismatch": {
-        "explanation": (
-            "The structured Litigation Schedule reports {lit_count} pending matter(s) against the Company, but "
-            "the free-text litigation disclosure states there are none. These two disclosures must agree."
-        ),
-        "reasoning_steps": [
-            "1. Extracted structured data: Litigation Schedule totals {lit_count} pending matter(s) across all entity types.",
-            "2. Extracted narrative: The 'Litigations Against the Issuer' text states no material litigation is pending.",
-            "3. Statutory Rule (SEBI ICDR Schedule VI Part A): All disclosures concerning the same subject matter must "
-            "be internally consistent across the prospectus.",
-            "4. Therefore: Reconcile the narrative text with the structured Litigation Schedule before filing."
-        ]
-    },
-    "auditor_mismatch": {
-        "explanation": (
-            "The statutory auditor entered on the Compliance tab ('{form_auditor}') does not match the auditor named "
-            "in the uploaded audited financial statements ('{extracted_auditor}')."
-        ),
-        "reasoning_steps": [
-            "1. Extracted names: Form entry = '{form_auditor}', Audited Financial Statement = '{extracted_auditor}'.",
-            "2. Statutory Rule (Companies Act 2013 Sec 139 & SEBI ICDR disclosure norms): The statutory auditor named "
-            "in the prospectus must be the same auditor who signed the restated financial statements.",
-            "3. NLP Semantic Evaluation: Identified a substantive name discrepancy between the two sources.",
-            "4. Therefore: Update the Compliance tab to match the audited financial statements, or verify if the "
-            "auditor was recently changed and disclose the change per SEBI norms."
-        ]
-    },
-    "waca_date_implausible": {
-        "explanation": (
-            "The WACA Chartered Accountant certificate date ({waca_date}) is not a plausible date — it is either "
-            "before the company's incorporation date ({inc_date}) or in the future."
-        ),
-        "reasoning_steps": [
-            "1. Extracted dates: WACA CA Certificate Date = {waca_date}, Incorporation Date = {inc_date}.",
-            "2. Logical Rule: A Chartered Accountant certificate can only be dated on or after the company's own "
-            "incorporation, and cannot be dated in the future.",
-            "3. Evaluated Sequence: The certificate date fails this chronological check.",
-            "4. Therefore: Verify the WACA CA certificate date against the actual document."
-        ]
-    },
-    "segment_reporting_note_missing": {
-        "explanation": (
-            "Segment reporting is marked as not applicable, but no explanatory note has been provided. "
-            "Ind AS 108 requires issuers to state why segment reporting does not apply, not just leave it unchecked."
-        ),
-        "reasoning_steps": [
-            "1. Extracted value: Segment Reporting Applicable = False, Segment Reporting Note = (empty).",
-            "2. Statutory Rule (Ind AS 108, Operating Segments): Where an issuer determines segment reporting is not "
-            "applicable, the restated financial statements/prospectus must explain the basis for that determination.",
-            "3. Evaluated Disclosure: No explanatory note is present despite the applicability flag being False.",
-            "4. Therefore: Add a brief note explaining why the Company operates as a single reportable segment."
-        ]
-    },
-    "customer_concentration_mismatch": {
-        "explanation": (
-            "The declared top-5 customer concentration ({declared_pct}%) does not match the sum of individual "
-            "customer percentages in the Top-5 Customer Revenue table ({table_pct}%)."
-        ),
-        "reasoning_steps": [
-            "1. Extracted values: Declared Customer Concentration = {declared_pct}%, Sum of Top-5 Customer Revenue "
-            "Table rows = {table_pct}%.",
-            "2. Statutory Rule (SEBI ICDR Schedule VI Part A): Customer concentration risk disclosures must be "
-            "consistent with the underlying customer revenue breakup table.",
-            "3. Evaluated Variance: The two figures differ by more than the acceptable rounding tolerance.",
-            "4. Therefore: Reconcile the Risk Factors concentration percentage with the Top-5 Customer table in the Business Overview section."
-        ]
     }
 }
 
@@ -306,24 +208,6 @@ def get_explanation_and_cot(rule_name: str, details: Dict[str, Any]) -> Dict[str
     return result
 
 
-def _latest_fy_value(merged: Dict[str, Any], key: str) -> Optional[float]:
-    """Reads a wizard FY-restated-table field (e.g. 'revenue_from_operations'),
-    stored as [{"fy": "FY26", "value": <num>}, ...] latest year first, and
-    returns the latest year's value as a float. Falls back to treating the
-    key as a plain scalar for older/legacy sessions.
-    """
-    val = merged.get(key)
-    if isinstance(val, list):
-        if not val or not isinstance(val[0], dict):
-            return None
-        val = val[0].get("value")
-    if val is None:
-        return None
-    try:
-        return float(str(val).replace("₹", "").replace(",", "").strip())
-    except (ValueError, TypeError):
-        return None
-
 
 # ── Individual consistency check functions ───────────────────────────────────
 
@@ -368,19 +252,13 @@ def check_company_name_match(
         return None
 
     cot_res = get_explanation_and_cot("company_name", {
-        "form_name": form_name or "(not provided)",
         "gst_name": gst_name or "(not uploaded)",
-        "inc_name": inc_name or "(not uploaded)",
-        "pan_name": pan_name or "(not provided)",
+        "inc_name": inc_name or form_name or "(not provided)",
+        "pan_name": pan_name or "(not uploaded)",
     })
     return {
         "id": "company_name_mismatch",
-        "section_id": "cover_page",
-        # Both editable fields being compared — gst_name/inc_name have no separate
-        # Wizard field of their own (they just feed company_name on extraction),
-        # but pan_name is its own editable field on the Compliance tab, so a
-        # mismatch there should red-border both sides, not just company_name.
-        "related_fields": ["company_name", "pan_name"],
+        "section_id": "general_info",
         "title": "Company Name Inconsistency Across Documents",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -388,9 +266,9 @@ def check_company_name_match(
         "blocking": True,
         "sebi_ref": "SEBI ICDR Reg 230(1)(a)",
         "fix_steps": [
-            "Check the MCA Certificate of Incorporation you uploaded — the name printed on it is the legally authoritative name and should be treated as the target everyone else must match.",
-            "Directly editable in this app: the 'Company Name' field on the Cover Page tab, and the 'Name on PAN Card' field on the Compliance tab. Open the Wizard and correct either one if it doesn't match the Certificate of Incorporation.",
-            "NOT directly editable: the names read off your GST certificate and Certificate of Incorporation come from the uploaded PDFs themselves, not a typed field. If either of those is the outdated/incorrect one, go to the Document Vault and re-upload the corrected certificate — the extracted name will update automatically.",
+            "Identify the legally registered name on the MCA Certificate of Incorporation — this is the authoritative source.",
+            "Update the GST registration name via GST portal (Amendment application) if it differs.",
+            "Ensure the PAN card name matches the MCA name exactly (including punctuation).",
         ],
     }
 
@@ -419,7 +297,6 @@ def check_revenue_consistency(
     return {
         "id": "gst_vs_pl",
         "section_id": "compliance_certs",
-        "related_fields": ["gst_annual_turnover", "revenue_from_operations"],
         "title": "GST Turnover & P&L Revenue Mismatch",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -452,7 +329,6 @@ def check_date_logic(
     return {
         "id": "inc_vs_gst_date",
         "section_id": "compliance_certs",
-        "related_fields": ["incorporation_date"],
         "title": "GST Registration Predates Incorporation",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -470,9 +346,7 @@ def check_date_logic(
 def check_capital_structure(
     authorized_capital: Optional[float],
     paid_up_capital_pre: Optional[float],
-    fresh_issue_size_cr: Optional[float],
-    face_value_per_share: Optional[float],
-    price_band: Optional[str],
+    issue_size: Optional[float],
 ) -> List[Dict[str, Any]]:
     """Check capital structure rules:
     1. Paid-up ≤ Authorized
@@ -490,7 +364,6 @@ def check_capital_structure(
                 flags.append({
                     "id": "capital_exceeds_auth",
                     "section_id": "capital_structure",
-                    "related_fields": ["authorized_capital", "paid_up_capital_pre"],
                     "title": "Paid-up Capital Exceeds Authorized Capital",
                     "description": cot_res["explanation"],
                     "reasoning_steps": cot_res["reasoning_steps"],
@@ -506,43 +379,31 @@ def check_capital_structure(
         except (ValueError, TypeError):
             pass
 
-    # 2. SME paid-up cap — computed on a face-value basis. fresh_issue_size_cr
-    # (not issue_size, which may bundle in OFS — a resale of existing shares
-    # that adds no new paid-up capital) is money raised at the issue price, so
-    # it must be converted through the price band floor into a new-share count
-    # before it's comparable to paid_up_capital_pre (a face-value figure).
-    # Skipped entirely if the price band isn't set yet — there's no way to
-    # size the new shares without it, and guessing would just invent a flag.
-    if fresh_issue_size_cr is not None and paid_up_capital_pre is not None and face_value_per_share:
-        issue_price = _parse_price_band_floor(price_band)
-        if issue_price:
-            try:
-                fresh = float(fresh_issue_size_cr)
-                pup = float(paid_up_capital_pre)
-                fv = float(face_value_per_share)
-                new_shares = (fresh * 1e7) / issue_price
-                new_paidup_cr = (new_shares * fv) / 1e7
-                post_paidup = pup + new_paidup_cr
-                if post_paidup > 25.0:
-                    cot_res = get_explanation_and_cot("sme_paidup_cap", {"post_paidup": round(post_paidup, 2)})
-                    flags.append({
-                        "id": "sme_paidup_cap",
-                        "section_id": "capital_structure",
-                        "related_fields": ["paid_up_capital_pre", "fresh_issue_size_cr", "price_band"],
-                        "title": "Post-Issue Paid-up Capital Exceeds SME IPO Cap of ₹25 Cr (ICDR Reg 229)",
-                        "description": cot_res["explanation"],
-                        "reasoning_steps": cot_res["reasoning_steps"],
-                        "severity": "high",
-                        "blocking": True,
-                        "sebi_ref": "SEBI ICDR Reg 229(1)",
-                        "fix_steps": [
-                            "Reduce the fresh issue size so that post-issue paid-up capital stays at or below ₹25 Crores.",
-                            "Alternatively, migrate to the Main Board (BSE/NSE) which has no paid-up capital ceiling for IPOs.",
-                            "Consult your Lead Manager (SEBI-registered Merchant Banker) to restructure the offer.",
-                        ],
-                    })
-            except (ValueError, TypeError, ZeroDivisionError):
-                pass
+    # 2. SME paid-up cap
+    if issue_size is not None and paid_up_capital_pre is not None:
+        try:
+            issue = float(issue_size)
+            pup = float(paid_up_capital_pre)
+            post_paidup = pup + issue
+            if post_paidup > 25.0:
+                cot_res = get_explanation_and_cot("sme_paidup_cap", {"post_paidup": round(post_paidup, 2)})
+                flags.append({
+                    "id": "sme_paidup_cap",
+                    "section_id": "capital_structure",
+                    "title": "Post-Issue Paid-up Capital Exceeds SME IPO Cap of ₹25 Cr (ICDR Reg 229)",
+                    "description": cot_res["explanation"],
+                    "reasoning_steps": cot_res["reasoning_steps"],
+                    "severity": "high",
+                    "blocking": True,
+                    "sebi_ref": "SEBI ICDR Reg 229(1)",
+                    "fix_steps": [
+                        "Reduce the issue size so that post-issue paid-up capital stays at or below ₹25 Crores.",
+                        "Alternatively, migrate to the Main Board (BSE/NSE) which has no paid-up capital ceiling for IPOs.",
+                        "Consult your Lead Manager (SEBI-registered Merchant Banker) to restructure the offer.",
+                    ],
+                })
+        except (ValueError, TypeError):
+            pass
 
     return flags
 
@@ -576,7 +437,6 @@ def check_shareholding_sum(
     return {
         "id": "promoter_lockdown",
         "section_id": "capital_structure",
-        "related_fields": ["promoter_shareholding_pre_pct", "issue_size", "paid_up_capital_pre"],
         "title": "Promoter Post-Issue Shareholding Below 20% (ICDR Reg 236)",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -612,13 +472,7 @@ def check_objects_vs_issue(merged: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     cot_res = get_explanation_and_cot("objects_vs_issue", {"objects_total": round(objects_total, 2), "issue_size": issue_f})
     return {
         "id": "objects_vs_issue",
-        # 4 of these 6 fields (expansion/working_capital/debt_repayment/issue_expenses)
-        # actually render on the Compliance tab in the current wizard, not Objects —
-        # general_corp_amount is the only one actually on the Objects tab, and
-        # issue_size is on Cover — "compliance_certs" is the best single "Fix in..."
-        # destination even though the check's statutory name says Objects of the Issue.
-        "section_id": "compliance_certs",
-        "related_fields": ["expansion_amount", "working_capital_amount", "debt_repayment_amount", "general_corp_amount", "issue_expenses", "issue_size"],
+        "section_id": "objects_issue",
         "title": "Use-of-Proceeds Total Does Not Match Issue Size (ICDR Reg 247)",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -645,7 +499,6 @@ def check_pan_format(pan: Optional[str]) -> Optional[Dict[str, Any]]:
     return {
         "id": "pan_format",
         "section_id": "compliance_certs",
-        "related_fields": ["pan"],
         "title": "Invalid PAN Format",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -672,7 +525,6 @@ def check_gstin_format(gstin: Optional[str]) -> Optional[Dict[str, Any]]:
     return {
         "id": "gstin_format",
         "section_id": "compliance_certs",
-        "related_fields": ["gstin"],
         "title": "Invalid GSTIN Format",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -714,7 +566,6 @@ def check_price_band_width(price_band: Optional[str]) -> Optional[Dict[str, Any]
     return {
         "id": "price_band_width",
         "section_id": "cover_page",
-        "related_fields": ["price_band"],
         "title": "Price Band Spread Exceeds 20% of Floor Price",
         "description": cot_res["explanation"],
         "reasoning_steps": cot_res["reasoning_steps"],
@@ -729,283 +580,6 @@ def check_price_band_width(price_band: Optional[str]) -> Optional[Dict[str, Any]
     }
 
 
-def _parse_price_band_floor(price_band: Optional[str]) -> Optional[float]:
-    if not price_band:
-        return None
-    try:
-        parts = str(price_band).replace("₹", "").split("-")
-        if len(parts) != 2:
-            return None
-        lower_p = float(parts[0].strip())
-        return lower_p if lower_p > 0 else None
-    except (ValueError, IndexError):
-        return None
-
-
-def check_eps_consistency(eps_basic: Optional[List[Dict[str, Any]]], eps_diluted: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
-    """Diluted EPS can only be ≤ Basic EPS (Ind AS 33) — never higher."""
-    basic_val = _latest_fy_value({"eps_basic": eps_basic}, "eps_basic")
-    diluted_val = _latest_fy_value({"eps_diluted": eps_diluted}, "eps_diluted")
-    if basic_val is None or diluted_val is None:
-        return None
-    # Small tolerance for rounding — only flag a real violation, not a paise-level rounding artifact
-    if diluted_val <= basic_val + 0.01:
-        return None
-
-    cot_res = get_explanation_and_cot("eps_diluted_exceeds_basic", {"eps_basic": basic_val, "eps_diluted": diluted_val})
-    return {
-        "id": "eps_diluted_exceeds_basic",
-        "section_id": "financials",
-        "related_fields": ["eps_basic", "eps_diluted"],
-        "title": "Diluted EPS Exceeds Basic EPS (Ind AS 33 Violation)",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "medium",
-        "blocking": False,
-        "sebi_ref": "Ind AS 33 — Earnings per Share",
-        "fix_steps": [
-            "Re-verify both EPS figures against the restated financial statements' EPS working notes.",
-            "Diluted EPS must incorporate the weighted-average effect of all potential dilutive securities (ESOPs, "
-            "convertible instruments) and can only reduce, never increase, EPS versus the basic figure.",
-        ],
-    }
-
-
-def check_face_value_vs_price_band(face_value_per_share: Optional[float], price_band: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Issue price (price band floor) cannot be below the share's face value."""
-    if face_value_per_share is None:
-        return None
-    try:
-        fv = float(face_value_per_share)
-    except (ValueError, TypeError):
-        return None
-    if fv <= 0:
-        return None
-
-    floor_price = _parse_price_band_floor(price_band)
-    if floor_price is None or floor_price >= fv:
-        return None
-
-    cot_res = get_explanation_and_cot("face_value_exceeds_price_band", {"face_value": fv, "floor_price": floor_price})
-    return {
-        "id": "face_value_exceeds_price_band",
-        "section_id": "cover_page",
-        "related_fields": ["face_value_per_share", "price_band"],
-        "title": "Price Band Floor Below Face Value Per Share",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "high",
-        "blocking": True,
-        "sebi_ref": "Companies Act 2013 Sec 52 & SEBI ICDR Pricing Norms",
-        "fix_steps": [
-            "Raise the price band floor to at least the face value per share.",
-            "If the face value itself is incorrect, correct it to match the MOA capital clause / RoC records.",
-        ],
-    }
-
-
-def check_litigation_narrative_consistency(litigation_summary: Optional[List[Dict[str, Any]]], litigations_company: Optional[str]) -> Optional[Dict[str, Any]]:
-    """The structured Litigation Schedule and the free-text litigation narrative must agree on
-    whether there is any pending litigation against the Company."""
-    if not isinstance(litigation_summary, list) or not litigation_summary:
-        return None
-
-    lit_count = 0
-    for row in litigation_summary:
-        if not isinstance(row, dict):
-            continue
-        entity_type = str(row.get("entity_type", "")).lower()
-        if not entity_type.startswith("company"):
-            continue
-        for count_key in ("criminal_count", "tax_count", "statutory_regulatory_count", "civil_litigation_count"):
-            try:
-                lit_count += int(row.get(count_key) or 0)
-            except (ValueError, TypeError):
-                pass
-
-    if lit_count == 0:
-        return None
-
-    narrative = str(litigations_company or "").lower()
-    if not narrative:
-        return None
-    denies_litigation = any(phrase in narrative for phrase in [
-        "no material", "no litigation", "none pending", "nil", "not applicable", "no pending",
-    ])
-    if not denies_litigation:
-        return None
-
-    cot_res = get_explanation_and_cot("litigation_narrative_mismatch", {"lit_count": lit_count})
-    return {
-        "id": "litigation_narrative_mismatch",
-        "section_id": "legal_disclosures",
-        "related_fields": ["litigation_summary", "litigations_company"],
-        "title": "Litigation Schedule Conflicts With Litigation Narrative",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "high",
-        "blocking": True,
-        "sebi_ref": "SEBI ICDR Schedule VI Part A — Outstanding Litigation Disclosures",
-        "fix_steps": [
-            "Update the 'Litigations Against the Issuer' narrative to reflect the matters listed in the Litigation Schedule.",
-            "If the Litigation Schedule is stale (matters since resolved), update the schedule instead and re-certify with legal counsel.",
-        ],
-    }
-
-
-def check_auditor_consistency(form_auditor_name: Optional[str], extracted_auditor_name: Optional[str]) -> Optional[Dict[str, Any]]:
-    """The auditor named on the Compliance tab should match the auditor who signed the uploaded
-    audited financial statements."""
-    if not form_auditor_name or not extracted_auditor_name:
-        return None
-    a = str(form_auditor_name).strip()
-    b = str(extracted_auditor_name).strip()
-    if not a or not b:
-        return None
-
-    if nlp_semantic_match:
-        res = nlp_semantic_match(a, b, threshold=0.75)
-        if res.get("is_match", False):
-            return None
-    else:
-        if "".join(a.lower().split()) == "".join(b.lower().split()):
-            return None
-
-    cot_res = get_explanation_and_cot("auditor_mismatch", {"form_auditor": a, "extracted_auditor": b})
-    return {
-        "id": "auditor_mismatch",
-        "section_id": "compliance_certs",
-        "related_fields": ["auditor_name"],
-        "title": "Statutory Auditor Name Mismatch",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "medium",
-        "blocking": False,
-        "sebi_ref": "Companies Act 2013 Sec 139",
-        "fix_steps": [
-            "Confirm the current statutory auditor's exact name as it appears on the signed audit report.",
-            "Update the Compliance tab's Auditor Name field to match exactly.",
-            "If the auditor changed recently, ensure the change is separately disclosed per SEBI norms.",
-        ],
-    }
-
-
-def check_waca_date_plausibility(waca_ca_certificate_date: Optional[str], incorporation_date: Optional[str]) -> Optional[Dict[str, Any]]:
-    """The WACA CA certificate cannot be dated before incorporation or in the future."""
-    if not waca_ca_certificate_date:
-        return None
-    waca_str = str(waca_ca_certificate_date).strip()
-    if not waca_str:
-        return None
-
-    from datetime import datetime, timezone
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    is_future = waca_str > today_str
-    predates_incorporation = bool(incorporation_date) and waca_str < str(incorporation_date).strip()
-    if not is_future and not predates_incorporation:
-        return None
-
-    cot_res = get_explanation_and_cot("waca_date_implausible", {
-        "waca_date": waca_str,
-        "inc_date": incorporation_date or "(not provided)",
-    })
-    return {
-        "id": "waca_date_implausible",
-        "section_id": "waca",
-        "related_fields": ["waca_ca_certificate_date"],
-        "title": "WACA Certificate Date Is Not Plausible",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "medium",
-        "blocking": False,
-        "sebi_ref": "General chronological consistency",
-        "fix_steps": [
-            "Verify the WACA CA certificate date against the actual certificate document.",
-            "The certificate must be dated on or after incorporation and cannot be dated in the future.",
-        ],
-    }
-
-
-def check_segment_reporting_note(segment_reporting_applicable: Any, segment_reporting_note: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Ind AS 108 requires an explanatory note when segment reporting is marked not applicable."""
-    if segment_reporting_applicable is not False and segment_reporting_applicable != "false":
-        return None
-    if segment_reporting_note and str(segment_reporting_note).strip():
-        return None
-
-    cot_res = get_explanation_and_cot("segment_reporting_note_missing", {})
-    return {
-        "id": "segment_reporting_note_missing",
-        "section_id": "business_overview",
-        "related_fields": ["segment_reporting_note"],
-        "title": "Segment Reporting Marked Not Applicable Without Explanatory Note",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "low",
-        "blocking": False,
-        "sebi_ref": "Ind AS 108 — Operating Segments",
-        "fix_steps": [
-            "Add a one-line note explaining why the Company operates as a single reportable segment "
-            "(e.g. 'The Company operates in a single business and geographical segment').",
-        ],
-    }
-
-
-def check_customer_concentration_consistency(customer_concentration_pct: Optional[float], top5_customer_revenue_table: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
-    """The declared top-5 customer concentration % should match the sum of the Top-5 Customer
-    Revenue table's individual percentage columns."""
-    if customer_concentration_pct is None or not isinstance(top5_customer_revenue_table, list) or not top5_customer_revenue_table:
-        return None
-    try:
-        declared_pct = float(customer_concentration_pct)
-    except (ValueError, TypeError):
-        return None
-    if declared_pct <= 0:
-        return None
-
-    # Rows may use fy1_pct (per-customer, latest year) — sum whichever *_pct columns are present per row
-    table_pct = 0.0
-    found_any = False
-    for row in top5_customer_revenue_table:
-        if not isinstance(row, dict):
-            continue
-        for k, v in row.items():
-            if k.endswith("_pct") and v is not None:
-                try:
-                    table_pct += float(v)
-                    found_any = True
-                except (ValueError, TypeError):
-                    pass
-                break  # only the first *_pct column per row (latest year) — avoid summing multi-year columns together
-
-    if not found_any:
-        return None
-
-    if abs(declared_pct - table_pct) <= 5.0:  # generous tolerance — both are manually-entered approximations
-        return None
-
-    cot_res = get_explanation_and_cot("customer_concentration_mismatch", {
-        "declared_pct": round(declared_pct, 2),
-        "table_pct": round(table_pct, 2),
-    })
-    return {
-        "id": "customer_concentration_mismatch",
-        "section_id": "risk_factors",
-        "related_fields": ["customer_concentration_pct", "top5_customer_revenue_table"],
-        "title": "Customer Concentration % Does Not Match Top-5 Customer Table",
-        "description": cot_res["explanation"],
-        "reasoning_steps": cot_res["reasoning_steps"],
-        "severity": "low",
-        "blocking": False,
-        "sebi_ref": "SEBI ICDR Schedule VI Part A",
-        "fix_steps": [
-            "Recompute the customer concentration percentage as the sum of the Top-5 Customer Revenue table's latest-year percentages.",
-            "Update whichever of the two fields is out of date.",
-        ],
-    }
-
-
 # ── Master runner ────────────────────────────────────────────────────────────
 
 def run_all_consistency_checks(
@@ -1015,25 +589,20 @@ def run_all_consistency_checks(
     """Run all consistency checks and return a list of ConsistencyFlag dicts."""
     flags: List[Dict[str, Any]] = []
 
-    # 1. Company name match — pan_name comes from `merged` (not the raw extraction
-    # snapshot) since it's a directly editable Wizard field; reading the original
-    # extracted_data value here would mean editing pan_name could never clear
-    # this conflict, even after fixing the exact field the flag points at.
+    # 1. Company name match
     flag = check_company_name_match(
         form_name=merged.get("company_name"),
         gst_name=extracted_data.get("gst", {}).get("company_name"),
         inc_name=extracted_data.get("incorporation", {}).get("company_name"),
-        pan_name=merged.get("pan_name"),
+        pan_name=extracted_data.get("compliance", {}).get("pan_name"),
     )
     if flag:
         flags.append(flag)
 
-    # 2. Revenue consistency — compares against the current 3-year restated
-    # revenue table (latest year), not the deprecated single-value legacy
-    # field, so this actually reflects what the Financials tab holds.
+    # 2. Revenue consistency
     flag = check_revenue_consistency(
         gst_turnover=merged.get("gst_annual_turnover"),
-        pl_revenue=_latest_fy_value(merged, "revenue_from_operations") or merged.get("revenue_fy_latest"),
+        pl_revenue=merged.get("revenue_fy_latest"),
     )
     if flag:
         flags.append(flag)
@@ -1046,24 +615,14 @@ def run_all_consistency_checks(
     if flag:
         flags.append(flag)
 
-    # 4. Post-issue promoter shareholding (check_shareholding_sum, deliberately
-    # NOT called here): the wizard's `issue_size` field is ambiguous — it may
-    # represent the total offer (fresh issue + OFS combined) rather than just
-    # the dilutive fresh-issue portion (tracked separately in
-    # `fresh_issue_size_cr`). Since OFS is a resale of existing shares and
-    # doesn't dilute promoters, feeding a total-including-OFS `issue_size`
-    # into the post-paid-up-capital formula would systematically overstate
-    # dilution and false-positive on any offer with a real OFS component.
-    # Re-enable only once `fresh_issue_size_cr` (the unambiguous dilutive
-    # figure) is used here instead of `issue_size`.
+    # Post-issue promoter holdings require share-level inputs and are intentionally
+    # not inferred from issue proceeds. They must be calculated and reviewed separately.
 
     # 5. Capital structure (returns list)
     cap_flags = check_capital_structure(
         authorized_capital=merged.get("authorized_capital"),
         paid_up_capital_pre=merged.get("paid_up_capital_pre"),
-        fresh_issue_size_cr=merged.get("fresh_issue_size_cr"),
-        face_value_per_share=merged.get("face_value_per_share"),
-        price_band=merged.get("price_band"),
+        issue_size=merged.get("issue_size"),
     )
     flags.extend(cap_flags)
 
@@ -1087,42 +646,7 @@ def run_all_consistency_checks(
     if flag:
         flags.append(flag)
 
-    # 10. EPS Diluted vs Basic (Ind AS 33 — diluted can never exceed basic)
-    flag = check_eps_consistency(merged.get("eps_basic"), merged.get("eps_diluted"))
-    if flag:
-        flags.append(flag)
-
-    # 11. Face value vs price band floor (cannot issue below face value)
-    flag = check_face_value_vs_price_band(merged.get("face_value_per_share"), merged.get("price_band"))
-    if flag:
-        flags.append(flag)
-
-    # 12. Litigation Schedule vs free-text litigation narrative
-    flag = check_litigation_narrative_consistency(merged.get("litigation_summary"), merged.get("litigations_company"))
-    if flag:
-        flags.append(flag)
-
-    # 13. Auditor name — form entry vs the audited financial statement's own extraction
-    flag = check_auditor_consistency(merged.get("auditor_name"), extracted_data.get("financials", {}).get("auditor_name"))
-    if flag:
-        flags.append(flag)
-
-    # 14. WACA CA certificate date plausibility
-    flag = check_waca_date_plausibility(merged.get("waca_ca_certificate_date"), merged.get("incorporation_date"))
-    if flag:
-        flags.append(flag)
-
-    # 15. Segment reporting note required when marked not applicable
-    flag = check_segment_reporting_note(merged.get("segment_reporting_applicable"), merged.get("segment_reporting_note"))
-    if flag:
-        flags.append(flag)
-
-    # 16. Customer concentration % vs Top-5 Customer Revenue table
-    flag = check_customer_concentration_consistency(merged.get("customer_concentration_pct"), merged.get("top5_customer_revenue_table"))
-    if flag:
-        flags.append(flag)
-
-    # 17. Integrated Financial Ratio Anomaly Detection
+    # 10. Integrated Financial Ratio Anomaly Detection
     try:
         from financial_ratio_checker import calculate_and_audit_ratios
         ratio_res = calculate_and_audit_ratios(merged)
@@ -1130,7 +654,7 @@ def run_all_consistency_checks(
     except Exception as e:
         logger.warning(f"Financial ratio anomaly check skipped: {e}")
 
-    # 18. Integrated Narrative Quality & Investor Protection Compliance Check (NLP-driven under the hood)
+    # 11. Integrated Narrative Quality & Investor Protection Compliance Check (NLP-driven under the hood)
     narrative_flags = check_narrative_quality(merged)
     flags.extend(narrative_flags)
 
@@ -1145,13 +669,9 @@ def check_narrative_quality(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
     flags: List[Dict[str, Any]] = []
 
     # ── Guard: skip entirely if no narrative fields have content ─────────────
-    # Keys must match analyze_prospectus_narratives()'s own narrative dict —
-    # kept in sync there, not re-derived independently, to avoid these two
-    # drifting apart again like the previous ("business_overview", "risk_factors",
-    # "objects_summary") set did once those stopped being real form fields.
     narrative_keys = [
-        "products_services_description", "internal_risks", "external_risks",
-        "business_model", "promoter_experience", "industry_growth_narrative",
+        "business_overview", "risk_factors", "internal_risks",
+        "external_risks", "promoter_experience", "objects_summary",
     ]
     has_any_content = any(
         merged.get(k) and str(merged[k]).strip()
@@ -1165,28 +685,21 @@ def check_narrative_quality(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
         analysis = analyze_prospectus_narratives(merged)
         red_flags = analysis.get("red_flags", [])
 
-        # Maps each narrative field to a Dashboard section_id that actually
-        # resolves to a wizard tab (see frontend Dashboard.jsx SECTION_TO_TAB) —
-        # "management" previously had no matching tab at all, so its "Fix in..."
-        # button silently did nothing.
         FIELD_SECTION_MAP = {
-            "products_services_description": "business_overview",
+            "business_overview": "business_overview",
+            "risk_factors": "risk_factors",
             "internal_risks": "risk_factors",
             "external_risks": "risk_factors",
-            "business_model": "compliance_certs",
-            "promoter_experience": "compliance_certs",
-            "industry_growth_narrative": "industry_overview",
+            "promoter_experience": "management",
+            "objects_summary": "objects_issue",
         }
 
         for rf in red_flags:
-            key = rf.get("field_key") or "products_services_description"
-            if key not in FIELD_SECTION_MAP:
-                key = "products_services_description"
+            key = rf.get("field_key", "business_overview")
             sec_id = FIELD_SECTION_MAP.get(key, "business_overview")
             flags.append({
                 "id": rf.get("id", f"narrative_{key}"),
                 "section_id": sec_id,
-                "related_fields": [key],
                 "title": f"{rf.get('field_label', 'Narrative')} Disclosure Compliance Issue",
                 "description": rf.get("issue", "Narrative section requires enhanced disclosure clarity."),
                 "severity": rf.get("severity", "MEDIUM").lower(),
@@ -1201,4 +714,293 @@ def check_narrative_quality(merged: Dict[str, Any]) -> List[Dict[str, Any]]:
         logger.warning(f"Narrative compliance check skipped: {e}")
     return flags
 
+
+# ── SECTION 3: Planted Contradiction Validator ────────────────────────────────
+
+from pydantic import BaseModel
+
+
+class ContradictionFinding(BaseModel):
+    id: str
+    severity: str  # "BLOCKER" | "MATERIAL" | "MINOR"
+    title: str
+    description: str
+    field_a: str
+    value_a: Any
+    field_b: str
+    value_b: Any
+    difference: str
+    suggested_fix: str
+
+
+class ContradictionDetector:
+    """Statutory & Data Contradiction Detector for SEBI SME IPO applications."""
+
+    def _get_val(self, session: Dict[str, Any], path: str) -> Any:
+        """Helper to get nested values from session."""
+        parts = path.split(".")
+        curr = session
+        for p in parts:
+            if isinstance(curr, dict):
+                curr = curr.get(p)
+            else:
+                return None
+        return curr
+
+    def _check_issue_size_consistency(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        extracted = session.get("extracted_data", {})
+        bank_letter = extracted.get("bank_letter", {})
+
+        issue_size = form_data.get("issue_size_cr") or form_data.get("issue_size")
+        bank_issue_size = bank_letter.get("issue_size_cr") or session.get("bank_letter_issue_size_cr")
+
+        if issue_size is not None and bank_issue_size is not None:
+            try:
+                v1 = float(issue_size)
+                v2 = float(bank_issue_size)
+                diff = abs(v1 - v2)
+                if diff > 0.01:
+                    return ContradictionFinding(
+                        id="issue_size_mismatch",
+                        severity="BLOCKER",
+                        title="Issue Size Contradiction Between Form and Bank Sanction Letter",
+                        description=f"Form data specifies issue size of ₹{v1} Cr, but bank sanction letter field states ₹{v2} Cr.",
+                        field_a="form_data.issue_size_cr",
+                        value_a=v1,
+                        field_b="bank_letter.issue_size_cr",
+                        value_b=v2,
+                        difference=f"₹{diff:.2f} Cr gap",
+                        suggested_fix=f"Reconcile to ₹{v1:.2f} Cr — difference is ₹{diff:.2f} Cr"
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_promoter_holding_consistency(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        extracted = session.get("extracted_data", {})
+        shareholding = extracted.get("shareholding", {})
+
+        form_holding = form_data.get("promoter_holding_pct")
+        extracted_holding = shareholding.get("promoter_holding_pct")
+
+        if form_holding is not None and extracted_holding is not None:
+            try:
+                v1 = float(form_holding)
+                v2 = float(extracted_holding)
+                diff = abs(v1 - v2)
+                if diff > 0.1:
+                    return ContradictionFinding(
+                        id="promoter_holding_mismatch",
+                        severity="MATERIAL",
+                        title="Promoter Holding Discrepancy",
+                        description=f"Form data promoter holding ({v1}%) does not match extracted shareholding pattern ({v2}%).",
+                        field_a="form_data.promoter_holding_pct",
+                        value_a=v1,
+                        field_b="extracted_data.shareholding.promoter_holding_pct",
+                        value_b=v2,
+                        difference=f"{diff:.1f}% discrepancy",
+                        suggested_fix=f"Reconcile promoter shareholding pattern to exact figure ({v1}% or {v2}%)."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_gcp_cap(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        issue_size = form_data.get("issue_size_cr") or form_data.get("issue_size")
+        gcp_amount = form_data.get("gcp_amount_cr") or form_data.get("gcp_amount")
+
+        if issue_size is not None and gcp_amount is not None:
+            try:
+                iss = float(issue_size)
+                gcp = float(gcp_amount)
+                max_gcp = min(0.15 * iss, 10.0)
+                if gcp > max_gcp + 0.01:
+                    return ContradictionFinding(
+                        id="gcp_cap_violated",
+                        severity="BLOCKER",
+                        title="General Corporate Purposes (GCP) Exceeds Regulatory Cap",
+                        description=f"GCP allocation ₹{gcp:.2f} Cr exceeds SEBI ICDR Reg 230(2) maximum cap of ₹{max_gcp:.2f} Cr (min of 15% of issue size or ₹10 Cr).",
+                        field_a="form_data.gcp_amount_cr",
+                        value_a=gcp,
+                        field_b="sebi_icdr_reg_230_cap",
+                        value_b=max_gcp,
+                        difference=f"₹{gcp - max_gcp:.2f} Cr excess",
+                        suggested_fix=f"Cap GCP allocation at ₹{max_gcp:.2f} Cr as per SEBI ICDR Regulation 230(2)."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_objects_arithmetic(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        issue_size = form_data.get("issue_size_cr") or form_data.get("issue_size")
+        gcp_amount = form_data.get("gcp_amount_cr") or form_data.get("gcp_amount") or 0.0
+        objects = form_data.get("objects_of_issue") or []
+
+        if issue_size is not None and isinstance(objects, list) and len(objects) > 0:
+            try:
+                iss = float(issue_size)
+                gcp = float(gcp_amount)
+                obj_sum = 0.0
+                for o in objects:
+                    if isinstance(o, dict):
+                        obj_sum += float(o.get("amount_cr", 0.0))
+                    elif isinstance(o, (int, float)):
+                        obj_sum += float(o)
+                total_alloc = obj_sum + gcp
+                diff = abs(total_alloc - iss)
+                if diff > 0.01:
+                    return ContradictionFinding(
+                        id="objects_arithmetic_mismatch",
+                        severity="BLOCKER",
+                        title="Objects of Issue Arithmetic Mismatch",
+                        description=f"Sum of objects (₹{obj_sum:.2f} Cr) + GCP (₹{gcp:.2f} Cr) equals ₹{total_alloc:.2f} Cr, which does not match total issue size ₹{iss:.2f} Cr.",
+                        field_a="sum(objects) + gcp",
+                        value_a=total_alloc,
+                        field_b="form_data.issue_size_cr",
+                        value_b=iss,
+                        difference=f"₹{diff:.2f} Cr gap",
+                        suggested_fix=f"Reconcile project object allocations so total sum matches ₹{iss:.2f} Cr (difference: ₹{diff:.2f} Cr)."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_promoter_lock_in(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        lock_in_years = form_data.get("promoter_lock_in_years")
+        existing_shares = form_data.get("existing_shares_cr") or form_data.get("pre_issue_shares")
+        fresh_shares = form_data.get("fresh_issue_shares_cr") or form_data.get("fresh_shares")
+        promoter_holding_pct = form_data.get("promoter_holding_pct", 100.0)
+
+        if lock_in_years is not None:
+            try:
+                years = float(lock_in_years)
+                if years < 3.0:
+                    return ContradictionFinding(
+                        id="promoter_lock_in_duration",
+                        severity="BLOCKER",
+                        title="Promoter Lock-in Duration Below SEBI Minimum",
+                        description=f"Promoter lock-in period of {years} years is less than the mandatory SEBI Chapter IX minimum of 3 years.",
+                        field_a="form_data.promoter_lock_in_years",
+                        value_a=years,
+                        field_b="sebi_minimum_lock_in",
+                        value_b=3,
+                        difference=f"{3 - years:.1f} years shortfall",
+                        suggested_fix="Set promoter lock-in period to at least 3 years as mandated by SEBI ICDR Regulations."
+                    )
+            except ValueError:
+                pass
+
+        if existing_shares and fresh_shares and promoter_holding_pct:
+            try:
+                ex = float(existing_shares)
+                fr = float(fresh_shares)
+                pct = float(promoter_holding_pct)
+                promoter_shares = (pct / 100.0) * ex
+                post_total = ex + fr
+                post_promoter_pct = (promoter_shares / post_total) * 100.0 if post_total > 0 else 0.0
+
+                if post_promoter_pct < 20.0:
+                    return ContradictionFinding(
+                        id="promoter_post_issue_holding_too_low",
+                        severity="BLOCKER",
+                        title="Post-Issue Promoter Shareholding Below 20% Mandatory Minimum",
+                        description=f"Calculated post-issue promoter shareholding is {post_promoter_pct:.2f}%, which is below SEBI's 20% minimum threshold.",
+                        field_a="post_issue_promoter_pct",
+                        value_a=round(post_promoter_pct, 2),
+                        field_b="sebi_minimum_post_issue_pct",
+                        value_b=20.0,
+                        difference=f"{20.0 - post_promoter_pct:.2f}% shortfall",
+                        suggested_fix="Increase promoter contribution or restructure issue size to maintain post-issue promoter shareholding at ≥ 20%."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_post_issue_capital(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        existing_shares = form_data.get("existing_shares_cr")
+        fresh_shares = form_data.get("fresh_issue_shares_cr")
+        face_value = form_data.get("face_value", 10.0)
+
+        if existing_shares is not None and fresh_shares is not None:
+            try:
+                ex = float(existing_shares)
+                fr = float(fresh_shares)
+                fv = float(face_value)
+                # If existing_shares and fresh_shares are already expressed in Cr paid-up value:
+                total_capital_cr = (ex + fr) * (fv / 10.0) if fv != 10 else (ex + fr)
+                if total_capital_cr > 25.0:
+                    return ContradictionFinding(
+                        id="post_issue_capital_exceeded",
+                        severity="BLOCKER",
+                        title="Post-Issue Paid-up Capital Exceeds SME IPO Limit",
+                        description=f"Post-issue paid-up capital of ₹{total_capital_cr:.2f} Cr exceeds the ₹25 Cr SME IPO ceiling.",
+                        field_a="post_issue_paidup_capital_cr",
+                        value_a=round(total_capital_cr, 2),
+                        field_b="sme_ipo_cap_cr",
+                        value_b=25.0,
+                        difference=f"₹{total_capital_cr - 25.0:.2f} Cr breach",
+                        suggested_fix="Reduce fresh issue size or pre-issue capital so post-issue paid-up capital remains ≤ ₹25 Crores."
+                    )
+            except ValueError:
+                pass
+        return None
+
+    def _check_ebitda_track_record(self, session: Dict[str, Any]) -> Optional[ContradictionFinding]:
+        form_data = session.get("form_data", session)
+        e24 = form_data.get("ebitda_fy24") or form_data.get("ebitda")
+        e23 = form_data.get("ebitda_fy23")
+        e22 = form_data.get("ebitda_fy22")
+
+        ebitdas = [e24, e23, e22]
+        valid_ebitdas = []
+        for e in ebitdas:
+            if e is not None:
+                try:
+                    valid_ebitdas.append(float(e))
+                except ValueError:
+                    pass
+
+        if len(valid_ebitdas) >= 3:
+            positive_count = sum(1 for v in valid_ebitdas if v > 0)
+            if positive_count < 2:
+                return ContradictionFinding(
+                    id="ebitda_track_record_insufficient",
+                    severity="BLOCKER",
+                    title="Operating Profit (EBITDA) Track Record Criterion Not Met",
+                    description=f"Issuer has positive EBITDA in only {positive_count} of the last 3 financial years. SEBI SME IPO rules require operating profit in at least 2 of 3 FYs.",
+                    field_a="positive_ebitda_years",
+                    value_a=positive_count,
+                    field_b="sebi_required_years",
+                    value_b=2,
+                    difference=f"{2 - positive_count} year shortfall",
+                    suggested_fix="Issuer must establish positive operating profit (EBITDA) in at least 2 of the prior 3 financial years before SME IPO filing."
+                )
+        return None
+
+    def run_all_checks(self, session: Dict[str, Any]) -> List[ContradictionFinding]:
+        """Runs all contradiction and statutory consistency checks."""
+        findings: List[ContradictionFinding] = []
+
+        checks = [
+            self._check_issue_size_consistency,
+            self._check_promoter_holding_consistency,
+            self._check_gcp_cap,
+            self._check_objects_arithmetic,
+            self._check_promoter_lock_in,
+            self._check_post_issue_capital,
+            self._check_ebitda_track_record,
+        ]
+
+        for check in checks:
+            res = check(session)
+            if res:
+                findings.append(res)
+
+        return findings
 

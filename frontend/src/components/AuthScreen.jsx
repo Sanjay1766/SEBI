@@ -45,24 +45,6 @@ export default function AuthScreen({ authError }) {
     setSuccessMessage('');
   };
 
-  const demoLogin = async () => {
-    setLoading(true);
-    setMessage('');
-    setSuccessMessage('');
-    try {
-      if (!supabase) {
-        setLoading(false);
-        return setMessage("Supabase is not properly configured. Please check your credentials.");
-      }
-      const result = await supabase.auth.signInWithPassword({ email: 'admin@gmail.com', password: 'admin123' });
-      setLoading(false);
-      if (result.error) return setMessage(result.error.message);
-    } catch (err) {
-      setLoading(false);
-      setMessage(err?.message || 'Demo login failed.');
-    }
-  };
-
   const displayMessage = message || authError;
 
   return (
@@ -233,22 +215,6 @@ export default function AuthScreen({ authError }) {
                   <UserPlus className="h-4 w-4 text-slate-950" />
                 )}
                 {mode === 'signin' ? 'Sign In to Workspace' : 'Create Workspace Account'}
-              </button>
-
-              {/* Demo shortcut — skips manual credential entry for evaluators/reviewers */}
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-[#1b3d52]" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">or</span>
-                <div className="h-px flex-1 bg-[#1b3d52]" />
-              </div>
-              <button
-                type="button"
-                onClick={demoLogin}
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[#1d445c] bg-[#0a1e2d] hover:bg-[#0d2636] px-4 py-3 text-sm font-bold text-[#81C3D7] disabled:opacity-60 transition-all duration-200 cursor-pointer"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                Try Demo Account
               </button>
 
               {/* Verification Email Message Banner below */}

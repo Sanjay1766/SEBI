@@ -108,7 +108,7 @@ export const WIZARD_STEPS = [
   { id: 'compliance', label: 'Statutory & Compliance', code: 'Extra' },
 ];
 
-export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, extractedData, inconsistencies }) {
+export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, extractedData }) {
   const [draftingFields, setDraftingFields] = useState({});
 
   // Which schema.json keys are `required: true` — drives the red-border empty-field
@@ -144,20 +144,6 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     }
     return flat;
   }, [extractedData]);
-
-  // Maps each field key to the active SEBI compliance conflict(s) that name it
-  // in their `related_fields` (see consistency_checker.py / financial_ratio_checker.py)
-  // — lets a field's own input get a red border, not just the Dashboard's list.
-  const fieldConflicts = React.useMemo(() => {
-    const map = {};
-    for (const inc of inconsistencies || []) {
-      for (const key of inc.related_fields || []) {
-        if (!map[key]) map[key] = [];
-        map[key].push(inc);
-      }
-    }
-    return map;
-  }, [inconsistencies]);
 
   // `label` is the field's actual on-screen heading and `currentValue` is
   // whatever's currently typed in that textbox — both get sent to the backend
@@ -302,8 +288,6 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     const hasExtracted = Array.isArray(extractedRows) && extractedRows.length > 0;
     const isRequired = requiredFields.has(key);
     const showRequiredEmpty = isRequired && rows.length === 0;
-    const fieldConflictList = fieldConflicts[key];
-    const hasConflict = fieldConflictList && fieldConflictList.length > 0;
 
     const updateRow = (idx, colKey, val) => {
       const next = rows.map((r, i) => (i === idx ? { ...r, [colKey]: val } : r));
@@ -332,17 +316,6 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
                 {extractedRows.length} row{extractedRows.length === 1 ? '' : 's'} extracted
               </Badge>
             )}
-            {hasConflict && (
-              <Badge
-                variant="danger"
-                size="xs"
-                icon={AlertCircle}
-                pulse
-                title={fieldConflictList.map(c => c.title).join(' · ')}
-              >
-                Conflict
-              </Badge>
-            )}
             <span className="text-[10px] text-gray-400 font-mono font-semibold">{rows.length} row{rows.length === 1 ? '' : 's'}</span>
           </div>
         </div>
@@ -357,7 +330,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
           </button>
         )}
 
-        <div className={`rounded-2xl border overflow-hidden ${(showRequiredEmpty || hasConflict) ? 'border-red-300' : 'border-gray-200'}`}>
+        <div className={`rounded-2xl border overflow-hidden ${showRequiredEmpty ? 'border-red-300' : 'border-gray-200'}`}>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-[11.5px] text-gray-400 font-medium bg-gray-50">No entries yet.</div>
           ) : (
@@ -422,14 +395,7 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
     const isRequired = requiredFields.has(key);
     const isEmpty = value === '' || value === undefined || value === null;
     const showRequiredEmpty = isRequired && !isCheckbox && isEmpty;
-
-    // Active SEBI compliance conflict naming this exact field (see fieldConflicts
-    // above) — red-borders the input the same way a missing required field does,
-    // so the conflict is visible right where you'd fix it, not just in the
-    // Dashboard's conflicts list.
-    const fieldConflictList = fieldConflicts[key];
-    const hasConflict = !isCheckbox && fieldConflictList && fieldConflictList.length > 0;
-    const requiredBorderClass = (showRequiredEmpty || hasConflict) ? '!border-red-300 focus:!border-red-400' : '';
+    const requiredBorderClass = showRequiredEmpty ? '!border-red-300 focus:!border-red-400' : '';
 
     // Determine rows dynamically for textareas based on content
     const textLen = isTextarea ? String(value).length : 0;
@@ -481,19 +447,6 @@ export default function Wizard({ formData, onChange, activeTab, onNext, onPrev, 
             )}
             {validation.status === 'error' && (
               <Badge variant="danger" size="xs" icon={AlertCircle} title={validation.message}>Error</Badge>
-            )}
-
-            {/* SEBI compliance conflict naming this field — see fieldConflicts above */}
-            {hasConflict && (
-              <Badge
-                variant="danger"
-                size="xs"
-                icon={AlertCircle}
-                pulse
-                title={fieldConflictList.map(c => c.title).join(' · ')}
-              >
-                Conflict
-              </Badge>
             )}
 
             {/* AI Assist button for freely-drafted narrative textareas */}

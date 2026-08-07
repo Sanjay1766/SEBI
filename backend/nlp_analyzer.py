@@ -358,20 +358,14 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     llm = get_llm_client()
 
-    # Collect narrative inputs — keys must be real wizard field keys (verified
-    # against Wizard.jsx's actual renderInput calls). The previous set
-    # ("business_overview", "risk_factors", "objects_summary", "industry_overview")
-    # dated from an earlier schema and no longer exist as form fields at all, so
-    # this scan was silently running on almost no content — only company_name and
-    # promoter_experience ever had real data.
+    # Collect narrative inputs
     narratives = {
         "company_name": form_data.get("company_name", ""),
-        "products_services_description": form_data.get("products_services_description", ""),
-        "internal_risks": form_data.get("internal_risks", ""),
-        "external_risks": form_data.get("external_risks", ""),
-        "business_model": form_data.get("business_model", ""),
+        "business_overview": form_data.get("business_overview", ""),
+        "risk_factors": form_data.get("risk_factors", ""),
+        "objects_summary": form_data.get("objects_summary", ""),
         "promoter_experience": form_data.get("promoter_experience", ""),
-        "industry_growth_narrative": form_data.get("industry_growth_narrative", ""),
+        "industry_overview": form_data.get("industry_overview", ""),
     }
 
     # Filter out empty fields
@@ -417,11 +411,11 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
                     ]
                 })
 
-            if key in ("internal_risks", "external_risks") and any(b in norm_t for b in ["economic downturn", "general economic", "market risks", "beyond our control"]):
+            if key == "risk_factors" and any(b in norm_t for b in ["economic downturn", "general economic", "market risks", "beyond our control"]):
                 flags.append({
-                    "id": f"rf_boilerplate_risk_{key}",
-                    "field_label": "Internal Risk Factors" if key == "internal_risks" else "External Risk Factors",
-                    "field_key": key,
+                    "id": "rf_boilerplate_risk",
+                    "field_label": "Risk Factors",
+                    "field_key": "risk_factors",
                     "severity": "HIGH",
                     "category": "boilerplate",
                     "issue": "Generic macroeconomic risk factors included without company-specific sensitivity analysis.",
@@ -473,7 +467,6 @@ def analyze_prospectus_narratives(form_data: Dict[str, Any]) -> Dict[str, Any]:
           "issue": "Clear description of the compliance/investor protection issue",
           "suggestion": "Actionable remedy to resolve for SEBI submission"
         }}
-        `field_key` MUST be copied verbatim from the keys of the Narratives object above (e.g. "internal_risks", "business_model") — never invent, abbreviate, or paraphrase a different key.
         Only return the JSON array, no commentary.
         """
 

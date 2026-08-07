@@ -11,8 +11,8 @@ from nlp_analyzer import (
 class NLPAnalyzerTests(unittest.TestCase):
     def test_analyze_prospectus_narratives_returns_flags(self):
         form_data = {
-            "products_services_description": "We are a market leader rapidly growing across India.",
-            "internal_risks": "General economic downturn could affect our business.",
+            "business_overview": "We are a market leader rapidly growing across India.",
+            "risk_factors": "General economic downturn could affect our business.",
             "promoter_experience": "Promoters have 20 years of experience."
         }
         res = analyze_prospectus_narratives(form_data)

@@ -80,46 +80,6 @@ def validate_session_data(session: Dict[str, Any], schema: Dict[str, Any]) -> Di
     consistency_flags = run_all_consistency_checks(merged, extracted_data)
     consistency_flags.extend(ratio_flags)
 
-    # ── Declaration signed while blocking fields are still incomplete ────────
-    # Needs the full missing-blocking-fields picture, which only exists here
-    # (schema-driven), not inside consistency_checker.py — computed before the
-    # section loop below so this flag flows through the same per-section
-    # status/risk-score mechanism as every other consistency flag.
-    if merged.get("declaration_signed") is True:
-        missing_blocking_labels = []
-        for sec in schema.get("sections", []):
-            for field in sec.get("fields", []):
-                if field.get("required") and field.get("blocking") and field["key"] != "declaration_signed":
-                    if _is_empty_value(merged.get(field["key"])):
-                        missing_blocking_labels.append(field["label"])
-        if missing_blocking_labels:
-            consistency_flags.append({
-                "id": "declaration_signed_prematurely",
-                "section_id": "declaration",
-                "related_fields": ["declaration_signed"],
-                "title": "Declaration Signed While Required Disclosures Are Incomplete",
-                "description": (
-                    f"The compliance declaration has been marked as signed, but {len(missing_blocking_labels)} "
-                    f"blocking required field(s) are still missing (e.g. '{missing_blocking_labels[0]}'"
-                    + (f" and {len(missing_blocking_labels) - 1} more" if len(missing_blocking_labels) > 1 else "")
-                    + "). A declaration of completeness cannot be truthfully signed while material disclosures are outstanding."
-                ),
-                "reasoning_steps": [
-                    f"1. Declaration Signed = True, but {len(missing_blocking_labels)} blocking required field(s) remain empty.",
-                    "2. Statutory Rule (SEBI ICDR Reg 57 & Schedule VI — Declaration): The declaration affirms the "
-                    "prospectus contains all material disclosures required by the Act and ICDR Regulations.",
-                    "3. Evaluated Completeness: Blocking fields are still missing, so the affirmation is not yet accurate.",
-                    "4. Therefore: Un-sign the declaration until all blocking disclosures are complete, then re-sign.",
-                ],
-                "severity": "high",
-                "blocking": True,
-                "sebi_ref": "SEBI ICDR Schedule VI Part A — Declaration",
-                "fix_steps": [
-                    "Complete all remaining blocking required fields shown across the wizard tabs.",
-                    "Only re-check the declaration once every blocking disclosure is genuinely complete.",
-                ],
-            })
-
     # ── Completeness checks for each schema section ─────────────────────────
     sections_results = []
     total_fields = 0
