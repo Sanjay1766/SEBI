@@ -9,7 +9,12 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8000
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      # Must include whatever origin the browser actually loads the frontend
+      # from — localhost works for local dev, but a cloud host (EC2, etc.)
+      # needs its public DNS/IP added here, e.g.
+      # CORS_ORIGINS=http://ec2-x-x-x-x.compute.amazonaws.com:5173 in your
+      # root .env. The default below only covers local dev.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       LLM_PROVIDER: ${LLM_PROVIDER:-groq}
       LLM_MODEL: ${LLM_MODEL:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
@@ -60,11 +65,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Baked into the JS bundle at build time — must match wherever the
-        # backend is reachable from the browser, not from inside the Compose
-        # network. Published on host port 8000 above, so localhost:8000 is
-        # correct for the default one-command local run.
-        VITE_API_URL: http://localhost:8000
+        # Baked into the JS bundle at build time (Vite reads this at `build`,
+        # not container start) — must be whatever address the *browser* can
+        # reach the backend at, not an address that's only valid inside the
+        # Compose network or on the host machine itself. localhost:8000 only
+        # works when the browser and the containers are on the same machine;
+        # on a cloud host (EC2, etc.) this must be that host's public DNS/IP,
+        # e.g. VITE_API_URL=http://ec2-x-x-x-x.compute.amazonaws.com:8000 in
+        # your root .env — and changing it requires `docker compose up
+        # --build` (a plain restart won't re-bake the JS bundle).
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
     ports:
