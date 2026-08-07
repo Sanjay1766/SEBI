@@ -227,7 +227,16 @@ def supabase_request(path: str, method: str = "GET", payload: Optional[Dict[str,
         logger.error("Supabase request failed: %s", exc)
         raise HTTPException(status_code=503, detail="Workspace storage is temporarily unavailable.")
 
-SESSION_STATE_FILE = os.path.join(os.path.dirname(__file__), "session_state.json")
+# Lives inside a "state/" subdirectory, not directly at backend/session_state.json —
+# Docker Compose mounts a named volume onto that directory (not the file itself) so
+# the mount always matches the well-supported directory-volume pattern used for
+# temp_uploads/, audit/, and chroma_db/. Naming this file directly as a volume
+# target hit a runc "mount directory onto a file" failure even on a freshly created
+# volume — some Docker builds don't reliably auto-detect that a named volume should
+# be file-typed just because the image path is a file.
+_SESSION_STATE_DIR = os.path.join(os.path.dirname(__file__), "state")
+os.makedirs(_SESSION_STATE_DIR, exist_ok=True)
+SESSION_STATE_FILE = os.path.join(_SESSION_STATE_DIR, "session_state.json")
 
 def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     demo_user = {"id": "demo-user-123", "email": "demo@iposherpa.local", "user_metadata": {"full_name": "Demo Founder"}}
