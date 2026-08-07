@@ -292,8 +292,9 @@ def generate_abridged_prospectus_docx(session_data: Dict[str, Any]) -> bytes:
 
 def create_export_zip_bundle(session_data: Dict[str, Any], user_id: str = "default_user") -> bytes:
     """Packages DRHP DOCX, Abridged DOCX, Audit Log, Coverage Report, and Contradiction Findings into a ZIP bundle."""
+    import os
     from coverage import compute_coverage
-    from consistency_checker import ContradictionDetector
+    from validator import validate_session_data
     from audit_log import AuditLog
     from blockchain import anchor_document_hash
 
@@ -307,9 +308,17 @@ def create_export_zip_bundle(session_data: Dict[str, Any], user_id: str = "defau
     abridged_bytes = generate_abridged_prospectus_docx(session_data)
 
     # 2. Coverage & Contradiction Reports
+    # Reuses validate_session_data (the same engine that powers the live Dashboard's
+    # conflict list) rather than the old ContradictionDetector class, which checked
+    # for field names (issue_size_cr, gcp_amount_cr, promoter_holding_pct, ...) that
+    # don't exist anywhere in the current schema — it always silently returned zero
+    # findings, so every exported bundle claimed a clean contradiction report even
+    # when the Dashboard was actively showing real conflicts to the user.
     coverage_report = compute_coverage(session_data).model_dump(mode="json")
-    detector = ContradictionDetector()
-    contradictions = [c.model_dump(mode="json") for c in detector.run_all_checks(session_data)]
+    schema_path = os.path.join(os.path.dirname(__file__), "schema.json")
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    contradictions = validate_session_data(session_data, schema).get("inconsistencies", [])
 
     # 3. Audit Log
     logger_inst = AuditLog()

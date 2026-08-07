@@ -113,9 +113,21 @@ export default function Dashboard({
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
 
       {/* ── Page Title ── */}
-      <div>
-        <h1 className="text-page-title">Filing Dashboard</h1>
-        <p className="text-body mt-1">Live SEBI ICDR Chapter IX compliance tracking for your draft prospectus.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-page-title">Filing Dashboard</h1>
+          <p className="text-body mt-1">Live SEBI ICDR Chapter IX compliance tracking for your draft prospectus.</p>
+        </div>
+        {onPreFill && (
+          <button
+            onClick={() => onPreFill('complete')}
+            className="inline-flex items-center gap-2 text-[13px] font-bold text-accent-700 hover:text-accent-800 bg-accent-50 hover:bg-accent-100 border border-accent-200 hover:border-accent-300 px-4 py-2.5 rounded-xl transition-all cursor-pointer shrink-0"
+            title="Load all form fields with sample data for Master Chains N Jewels Limited"
+          >
+            <Sparkles className="w-4 h-4 text-accent-500" />
+            <span>Load sample — Master Chains N Jewels</span>
+          </button>
+        )}
       </div>
 
       {/* ── SEBI Regulatory Change Alert Banner ── */}
@@ -159,17 +171,6 @@ export default function Dashboard({
                 <><FileDown className="w-4 h-4" /><span>DOCX Prospectus</span></>
               )}
             </button>
-
-            {onPreFill && (
-              <button
-                onClick={() => onPreFill('complete')}
-                className="btn-secondary w-full"
-                title="Load all form fields with sample data for Master Chains N Jewels Limited"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-accent-400" />
-                <span>Load sample — Master Chains N Jewels</span>
-              </button>
-            )}
           </div>
           {lastSavedTime && (
             <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center gap-1.5 text-[10px] text-gray-400 font-medium select-none">

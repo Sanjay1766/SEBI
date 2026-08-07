@@ -323,8 +323,11 @@ export default function App({ user, onSignOut }) {
         { name: 'Taruna Madan Kothari' },
       ],
       fresh_issue_size_cr: 400.0,
-      // ofs_size_cr and price_band are left blank — the source itself states these as "[●] million" /
+      // ofs_size_cr is left blank — the source itself states this as "[●] million",
       // undetermined pending price-band finalization, so the Abridged Prospectus shows [●] there too.
+      // price_band is filled in (unlike the source's "[●]") so the demo can show a signed,
+      // fully-complete declaration without tripping "Declaration Signed While Incomplete".
+      price_band: '208 - 219',
       face_value_per_share: 10,
       issue_size: 400.0,
       selling_shareholders: [
@@ -441,6 +444,8 @@ export default function App({ user, onSignOut }) {
       internal_risks: 'Our top 10 customers accounted for ₹483.84 Crores, ₹485.13 Crores and ₹379.51 Crores representing 28.79%, 32.08% and 29.82% of our revenue from operations for Fiscals 2026, 2025 and 2024, respectively. We do not have any long-term contracts with our customers and any loss of one or more of our top customers, or the deterioration of their financial condition or prospects, or a reduction in their demand for our products, could adversely affect our business, results of operations, financial condition and cash flows.\n\nA significant portion of our business operations and revenue generation is concentrated in the western and southern India, which accounted for ₹1,309.80 Crores, ₹1,071.06 Crores and ₹863.01 Crores representing 77.94%, 70.83% and 67.81% of our revenue from operations in Fiscals 2026, 2025 and 2024, respectively. This regional concentration could expose our Company to economic, cultural, geopolitical and local market risks.\n\nOur ability to retain existing customers and acquire new customers in a cost-effective manner is critical to our business, and any failure to do so may adversely affect our business, financial condition and results of operations.\n\nOur employees may engage in misconduct, fraud or other improper activities, including non-compliance with regulatory standards and requirements. Additionally, we are exposed to risks of unauthorised disclosure or misuse of our designs by our Karigars, which may adversely affect our competitiveness, business and financial performance.\n\nOur top 10 suppliers accounted for ₹1,019.96 Crores, ₹1,070.99 Crores and ₹971.32 Crores, representing 67.60%, 74.14% and 77.64% of our total purchases in Fiscals 2026, 2025 and 2024, respectively. We are dependent on such suppliers for gold bullion, our key raw material, and do not have long-term arrangements with them. Any increase in raw material costs or disruption in supply could adversely affect our business, financial condition and results of operations.\n\nOur business is dependent on the availability and price of gold, and volatility in gold prices or disruptions in supply may adversely affect our demand, working capital requirements, margins and overall business operations.\n\nOur business is working capital intensive, and any inability to obtain or renew adequate working capital facilities on commercially acceptable terms could adversely affect our liquidity, cash flows and results of operations.\n\nOur operations are dependent on efficient logistics and coordination across our Manufacturing Units, primary distribution hub and branch network, and any delay or disruption in such processes or third-party logistics services may adversely affect our business, financial condition and results of operations. We also may be exposed to the risk of theft, accidents and/or loss of our products in transit.\n\nOur business is dependent on effective inventory management, and any inability to accurately forecast demand or manage inventory levels may adversely affect our business, financial condition, results of operations and cash flows. Additionally, we maintain significant inventory at our premises and any loss due to theft, fraud or other incidents may adversely affect our business and results of operations.\n\nWe have experienced negative cash flows in the past. Any negative cash flows in the future would adversely affect our cash flow requirements, which may adversely affect our ability to operate our business and implement our growth plans, thereby affecting our financial condition.',
       external_risks: '1. Changes in customs duty or import regulations on gold and precious metals could affect our input costs.\n2. Changes in GST rates applicable to gold jewellery could affect demand.\n3. Macroeconomic factors affecting discretionary consumer spending on jewellery.',
       risk_narrative_text: 'Set forth below is a summary of our top 10 internal risk factors: (1) Revenue concentration among our top 10 customers; (2) Regional concentration of revenue in western and southern India; (3) Ability to retain and acquire customers cost-effectively; (4) Risk of employee misconduct or misuse of designs by Karigars; (5) Concentration among our top 10 suppliers for gold bullion; (6) Dependence on the availability and price of gold; (7) Working-capital intensive operations; (8) Dependence on efficient logistics across our manufacturing units and branch network; (9) Dependence on effective inventory management given significant on-premises inventory; and (10) A history of negative cash flows in certain periods.',
+      // Matches the Top-5 Customer Revenue table's fy1_pct below (18.91%).
+      customer_concentration_pct: 18.91,
 
       // ── 9. WACA ───────────────────────────────────────────────────────────
       waca_table: [
@@ -528,16 +533,26 @@ export default function App({ user, onSignOut }) {
           revenue_fy_latest: 1680.59,
           pat_fy_latest: 97.27,
           borrowings_latest: 214.19,
-          auditor_name: 'CGCA & Associates LLP, Chartered Accountants',
+          // Deliberately a different firm than the Compliance tab's auditor_name
+          // below — represents an auditor rotation that happened after this
+          // financial statement was signed but before the current form entry
+          // was updated. Surfaces a "Statutory Auditor Name Mismatch" conflict.
+          auditor_name: 'R.K. Associates & Co., Chartered Accountants',
           auditor_membership: '123393W/W100755',
           net_worth: [{ fy: 'Fiscal 2026', value: 231.96 }, { fy: 'Fiscal 2025', value: 134.65 }, { fy: 'Fiscal 2024', value: 97.52 }],
           revenue_from_operations: [{ fy: 'Fiscal 2026', value: 1680.59 }, { fy: 'Fiscal 2025', value: 1512.20 }, { fy: 'Fiscal 2024', value: 1272.64 }],
         },
         gst: {
           gstin: '27AABCM1234K1Z5',
-          company_name: 'Master Chains N Jewels Limited',
+          // Deliberately the company's pre-conversion name (see former_name
+          // above) — the GST certificate was never amended after the name
+          // change, surfacing a real "Company Name Inconsistency Across
+          // Documents" conflict on the Filing Dashboard.
+          company_name: 'Master Chain Private Limited',
           gst_annual_turnover: 1680.59,
-          registration_date: '1997-05-01',
+          // Deliberately predates incorporation_date (1997-04-15) below —
+          // surfaces a "GST Registration Predates Incorporation" conflict.
+          registration_date: '1997-03-01',
           filing_status: 'Active'
         },
         incorporation: {
@@ -551,14 +566,80 @@ export default function App({ user, onSignOut }) {
           pan: 'AABCM1234K',
           pan_name: 'Master Chains N Jewels Limited',
           tan: 'MUMM12345B'
-        }
+        },
+        moa_aoa: {
+          authorized_capital: 10.0,
+          face_value_per_share: 10,
+          objects_clause: 'To carry on the business of designing, manufacturing, job-work and dealing in gold, silver, diamond and other precious and semi-precious stone jewellery of every description, and to establish, operate and maintain manufacturing units, showrooms and distribution facilities for the aforesaid purposes.',
+        },
+        cap_table: {
+          promoter_shareholding_pre_pct: 99.55,
+          pre_offer_shareholding: [
+            { shareholder: 'Madan Sardarmal Kothari', shares: 46536000, pct: 49.24 },
+            { shareholder: 'Raj Madan Kothari', shares: 31499958, pct: 33.33 },
+            { shareholder: 'Khushbu Raj Kothari', shares: 420000, pct: 0.44 },
+            { shareholder: 'Taruna Madan Kothari', shares: 15624000, pct: 16.53 },
+            { shareholder: 'Neha Varun Muthaliya (Promoter Group)', shares: 420000, pct: 0.44 },
+            { shareholder: 'Salvi Abhay Sakaria', shares: 21, pct: 0.00 },
+            { shareholder: 'Gopinathan Venugopal', shares: 21, pct: 0.00 },
+          ],
+          promoter_group_members: [
+            { name: 'Neha Varun Muthaliya', relationship: 'Member of the Promoter Group' },
+          ],
+        },
+        dir12: {
+          directors: [
+            { name: 'Madan Sardarmal Kothari', din: '01234567', designation: 'Chairman and Whole-time Director', independent_flag: 'no' },
+            { name: 'Raj Madan Kothari', din: '01234568', designation: 'Managing Director and Chief Executive Officer', independent_flag: 'no' },
+            { name: 'Khushbu Raj Kothari', din: '01234569', designation: 'Whole-time Director', independent_flag: 'no' },
+            { name: 'Sangeeta Jogen Parekh', din: '02345671', designation: 'Independent Director', independent_flag: 'yes' },
+            { name: 'Milin Jagdish Ramani', din: '02345672', designation: 'Independent Director', independent_flag: 'yes' },
+            { name: 'Ankush Gupta', din: '02345673', designation: 'Independent Director', independent_flag: 'yes' },
+          ],
+          kmp: [
+            { name: 'Salvi Abhay Sakaria', designation: 'Chief Financial Officer' },
+            { name: 'Rahul Rasikbhai Jethwa', designation: 'Company Secretary and Compliance Officer' },
+          ],
+        },
+        litigation_schedule: {
+          litigation_summary: [
+            { entity_type: 'Company - By', criminal_count: 6, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 1.86 },
+            { entity_type: 'Company - Against', criminal_count: 0, tax_count: 1, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0.25 },
+            { entity_type: 'Directors - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+            { entity_type: 'Directors - Against', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+            { entity_type: 'Promoters - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+            { entity_type: 'Promoters - Against', criminal_count: 0, tax_count: 3, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 1.24 },
+            { entity_type: 'Key Managerial Personnel - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+            { entity_type: 'Key Managerial Personnel - Against', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+            { entity_type: 'Senior Management - By', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+            { entity_type: 'Senior Management - Against', criminal_count: 0, tax_count: 0, statutory_regulatory_count: 0, civil_litigation_count: 0, aggregate_amount_cr: 0 },
+          ],
+        },
+        industry_report: {
+          industry_market_size: "India's gems and jewellery industry contributes approximately 7% of the country's GDP and around 15% of total merchandise exports. Gold accounted for approximately 80% of the market by material type in 2025 (followed by diamonds at 10%, silver at 5%, and other materials at 5%).",
+          industry_cagr: '8.5%',
+          industry_report_source: 'CARE Report',
+        },
+        sales_register: {
+          top5_customer_revenue_table: [
+            { customer_name: 'Top 5 customers', fy1_revenue: 317.85, fy1_pct: 18.91, fy2_revenue: 291.56, fy2_pct: 19.28, fy3_revenue: 248.80, fy3_pct: 19.55 },
+          ],
+          key_geographies_served: "We have a significant presence in the western region followed by southern region of the country. For the Fiscal 2026, 2025 and 2024, we majorly catered to Maharashtra, Karnataka and Telangana, Gujarat and Punjab.",
+          gst_annual_turnover: 1680.59,
+        },
       };
 
       updatedSession.uploaded_files = [
         { filename: 'financial_statements_restated_3yrs.pdf', type: 'financials', size: 142452 },
         { filename: 'gst_registration_cert_reg06.pdf', type: 'gst', size: 91310 },
         { filename: 'incorporation_certificate_roc.pdf', type: 'incorporation', size: 101411 },
-        { filename: 'company_pan_tan_licenses.pdf', type: 'compliance', size: 58124 }
+        { filename: 'company_pan_tan_licenses.pdf', type: 'compliance', size: 58124 },
+        { filename: 'moa_aoa.pdf', type: 'moa_aoa', size: 76890 },
+        { filename: 'register_of_members_cap_table.pdf', type: 'cap_table', size: 68240 },
+        { filename: 'dir12_board_resolutions.pdf', type: 'dir12', size: 54310 },
+        { filename: 'litigation_schedule.pdf', type: 'litigation_schedule', size: 61980 },
+        { filename: 'industry_report_care.pdf', type: 'industry_report', size: 118420 },
+        { filename: 'sales_register_gst_sales.pdf', type: 'sales_register', size: 73150 },
       ];
     }
 
@@ -1193,8 +1274,14 @@ export default function App({ user, onSignOut }) {
           </div>
         </header>
 
-        {/* Content Container */}
-        <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-[#F8F9FB]">
+        {/* Content Container — a soft blue wash on the Dashboard only, so its
+            cards sit on a bit of the brand accent instead of flat white/grey;
+            every other tab keeps the neutral page background. */}
+        <div className={`flex-grow p-6 md:p-8 overflow-y-auto ${
+          activeTab === 'dashboard'
+            ? 'bg-gradient-to-br from-accent-50 via-[#F8F9FB] to-accent-50/60'
+            : 'bg-[#F8F9FB]'
+        }`}>
           {loading ? (
 
 
@@ -1246,6 +1333,7 @@ export default function App({ user, onSignOut }) {
                   activeTab={activeTab}
                   onNext={handleNextTab}
                   onPrev={handlePrevTab}
+                  inconsistencies={validationResults?.inconsistencies}
                 />
               )}
 
