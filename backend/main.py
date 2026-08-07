@@ -98,7 +98,6 @@ except ImportError as err:
 
 try:
     from hallucination_guard import HallucinationGuard
-    from consistency_checker import ContradictionDetector
     from certification import CertificationStore
     from audit_log import AuditLog
     from coverage import compute_coverage
@@ -108,7 +107,7 @@ except ImportError as err:
 audit_logger = AuditLog()
 cert_store = CertificationStore()
 
-from llm_client import get_llm_client
+from llm_client import get_llm_client, is_rate_limit_error
 
 app = FastAPI(title="SEBI SME IPO Draft-Generator API")
 
@@ -443,6 +442,18 @@ def copilot_assistant(payload: CopilotPayload, user: Dict[str, Any] = Depends(ge
         )
         return {"reply": reply}
     except Exception as e:
+        # Distinguish "provider quota/rate limit hit" from every other failure —
+        # both used to fall into the same generic offline-simulation text below,
+        # which reads as "the AI is broken" when it's actually "today's token
+        # quota is used up, try again later." That was silently indistinguishable
+        # from a real outage and confused anyone hitting it (observed concretely
+        # with Groq's free-tier daily token cap).
+        if is_rate_limit_error(e):
+            logger.warning(f"Copilot API rate-limited ({llm.provider}): {e}")
+            return {
+                "reply": "⏳ **AI usage limit reached.** The configured LLM provider's request quota has been used up for now — this isn't a bug, just a temporary capacity limit. Please try again in a few minutes, or ask your administrator to check the provider's usage dashboard / upgrade the plan if this keeps happening."
+            }
+
         logger.error(f"Copilot API failed ({llm.provider}): {e}. Falling back to offline simulation.")
         user_msg = payload.message.lower()
         if "audit" in user_msg or "scan" in user_msg or "report" in user_msg:
@@ -450,16 +461,16 @@ def copilot_assistant(payload: CopilotPayload, user: Dict[str, Any] = Depends(ge
             conflicts_msg = f"I found {len(conflicts)} data conflict(s): {', '.join(conflicts)}." if conflicts else "No high-risk conflicts found."
             missing_count = sum(len(sec.get("missing_fields", [])) for sec in validation.get("sections", []))
             return {
-                "reply": f"⚠️ (AI Model Offline - Failsafe Active)\n\n**Compliance Scan Report:**\n* {conflicts_msg}\n* You have {missing_count} missing required field(s).\n\n*Suggestions:* Check for corporate name mismatches across GST and Incorporation certificates, and verify registration dates."
+                "reply": f"⚠️ (Temporary AI Error — Fallback Response)\n\n**Compliance Scan Report:**\n* {conflicts_msg}\n* You have {missing_count} missing required field(s).\n\n*Suggestions:* Check for corporate name mismatches across GST and Incorporation certificates, and verify registration dates."
             }
         elif "risk" in user_msg or "draft" in user_msg or "business" in user_msg:
             key = "internal_risks" if "risk" in user_msg else "business_model"
             return {
-                "reply": f"⚠️ (AI Model Offline - Failsafe Active)\n\nHere is a drafted narrative suggestion for your company:\n\n[SUGGESTION:{key}]\nOur company operates in the speciality chemicals sector, which is subject to high raw material price volatility. Specifically, key inputs such as toluene and butyl acetate are sourced from domestic distributors under fluctuating spot market prices, which may impact our operating margins.\n[/SUGGESTION]\n\nClick the button above to apply this to the wizard."
+                "reply": f"⚠️ (Temporary AI Error — Fallback Response)\n\nHere is a drafted narrative suggestion for your company:\n\n[SUGGESTION:{key}]\nOur company operates in the speciality chemicals sector, which is subject to high raw material price volatility. Specifically, key inputs such as toluene and butyl acetate are sourced from domestic distributors under fluctuating spot market prices, which may impact our operating margins.\n[/SUGGESTION]\n\nClick the button above to apply this to the wizard."
             }
         else:
             return {
-                "reply": "⚠️ (AI Model Offline - Failsafe Active)\n\nI am the SEBI SME IPO Compliance Copilot. Ask me to 'audit my data', 'draft my risks', or explain Chapter IX regulations like promoter shareholding requirements."
+                "reply": "⚠️ (Temporary AI Error — Fallback Response)\n\nI am the SEBI SME IPO Compliance Copilot. Ask me to 'audit my data', 'draft my risks', or explain Chapter IX regulations like promoter shareholding requirements."
             }
 
 @app.post("/api/draft")
@@ -569,7 +580,10 @@ def draft_field(payload: DraftPayload, _: Dict[str, Any] = Depends(get_current_u
         )
         return {"draft": draft_text}
     except Exception as e:
-        logger.error(f"Auto-draft failed for {field_key} ({llm.provider}): {e}. Returning fallback template.")
+        if is_rate_limit_error(e):
+            logger.warning(f"Auto-draft rate-limited for {field_key} ({llm.provider}): {e}")
+        else:
+            logger.error(f"Auto-draft failed for {field_key} ({llm.provider}): {e}. Returning fallback template.")
         return {"draft": existing_text or local_drafts.get(field_key, "Auto-draft fallback placeholder.")}
 
 @app.get("/api/ocr_status")
@@ -1252,11 +1266,11 @@ class FixSuggestionPayload(BaseModel):
 @app.post("/api/validate/fix-suggestion")
 def fix_suggestion_endpoint(payload: FixSuggestionPayload, user: Dict[str, Any] = Depends(get_current_user)):
     session = load_session(user["id"])
-    detector = ContradictionDetector()
-    findings = detector.run_all_checks(session)
-    for f in findings:
-        if f.id == payload.finding_id:
-            return {"finding_id": f.id, "suggested_fix": f.suggested_fix}
+    schema = load_schema()
+    validation = validate_session_data(session, schema)
+    for f in validation.get("inconsistencies", []):
+        if f["id"] == payload.finding_id:
+            return {"finding_id": f["id"], "suggested_fix": " ".join(f.get("fix_steps", []))}
     return {"finding_id": payload.finding_id, "suggested_fix": "Reconcile field values across documents to comply with SEBI ICDR regulations."}
 
 

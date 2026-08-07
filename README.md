@@ -36,7 +36,7 @@ Requires [Docker](https://docs.docker.com/get-docker/) and Docker Compose (bundl
 Desktop / Rancher Desktop).
 
 ```bash
-git clone https://github.com/Sanjay1766/SEBI.git
+git clone https://github.com/cjagadheesh/SEBI.git
 cd SEBI
 docker compose up
 ```
@@ -67,7 +67,7 @@ docker compose down    # stop (data persists in named volumes)
 ### Manual (2 minutes)
 
 ```bash
-git clone https://github.com/Sanjay1766/SEBI.git
+git clone https://github.com/cjagadheesh/SEBI.git
 cd SEBI
 
 # Backend
@@ -104,7 +104,7 @@ Open `http://localhost:5173`.
 │                                                                        │
 │  validator.py     — per-field completeness → filing_readiness score   │
 │  coverage.py       — 55 named SEBI ICDR requirements → gap list       │
-│  consistency_checker.py — 7+ cross-document contradiction checks      │
+│  consistency_checker.py — 20+ cross-document contradiction checks     │
 │  financial_ratio_checker.py — restated-financials ratio audit         │
 │  nlp_analyzer.py   — semantic matching, entity extraction, red flags  │
 │  hallucination_guard.py — verifies every LLM-drafted number is real   │
@@ -171,11 +171,11 @@ user typed manually in the wizard.
 | `main.py` | FastAPI app: ~50 REST endpoints, session load/save (Supabase or local JSON fallback), auth (`get_current_user` — JWT bearer or a fixed demo user), rate-limiting middleware. |
 | `extractor.py` | Document → structured JSON. pdfplumber text → OCR fallback (PaddleOCR primary, pytesseract secondary) → LLM extraction (JSON mode) with a regex-based fallback when no LLM key is configured. Table-heavy doc types (financials, cap table, litigation schedule) go through a 3-tier table extractor first (camelot stream → camelot lattice → tabula) before falling back to plain text. |
 | `llm_client.py` | Single abstraction over Groq / OpenAI / Anthropic / Ollama — swapping providers is a `.env` change, no code edits. |
-| `schema.json` | The single source of truth for every field in the wizard: 21 sections, 102 fields, each with `data_type` (string/number/date/boolean/select/list/table), `source_hint` (which doc type extracts it, or `"manual"`), and a `kpi_sector_templates` map (Manufacturing / NBFC / Jewellery & Trading / Services each get a different KPI field set). |
+| `schema.json` | The single source of truth for every field in the wizard: 21 sections, 106 fields, each with `data_type` (string/number/date/boolean/select/list/table), `source_hint` (which doc type extracts it, or `"manual"`), and a `kpi_sector_templates` map (Manufacturing / NBFC / Jewellery & Trading / Services each get a different KPI field set). |
 | `validator.py` | Computes `filing_readiness` (blocking fields, capped by open contradictions) and `overall_completeness` (all required fields) scores, per-section AI risk scores, and merges in the financial-ratio audit. |
 | `coverage.py` | 55 named, individually clause-referenced SEBI ICDR requirements (`SEBI_REQUIREMENTS`), each tagged `fill_type: "manual"` or `"extracted"` — powers the gap-list the UI shows and the `[MISSING]` vs `[REQUIRES BANKER/LEGAL INPUT]` markers in the generated document. |
-| `consistency_checker.py` | `ContradictionDetector` — cross-checks form data against extracted document data and against itself (company name mismatches, revenue inconsistency, date logic, capital structure math, shareholding sums summing to 100%, objects-of-issue vs. total issue size, PAN/GSTIN format, price-band width, narrative quality). |
-| `financial_ratio_checker.py` | Recomputes standard financial ratios from the restated financials and flags implausible/inconsistent values. |
+| `consistency_checker.py` | `run_all_consistency_checks()` — 16+ cross-checks of form data against extracted document data and against itself: company name mismatches, GST-vs-P&L turnover, GST-registration-predates-incorporation date logic, capital structure math (paid-up vs. authorized, SME ₹25 Cr post-issue cap computed on a face-value basis via the price band), objects-of-issue vs. total issue size, PAN/GSTIN format, price-band width, diluted-vs-basic EPS, face value vs. price-band floor, litigation table vs. narrative text, statutory auditor name mismatch, WACA certificate date plausibility, segment reporting note presence, customer-concentration % vs. the top-5 customer table, and narrative quality (via `nlp_analyzer.py`). The same result feeds the live Dashboard, the `/api/validate/fix-suggestion` endpoint, and the exported ZIP bundle's `contradiction_findings.json` — one source of truth, not three. |
+| `financial_ratio_checker.py` | Recomputes 5 standard financial ratios (PAT margin, EBITDA margin, leverage, P/E, RoE) from the restated financials against sector-specific benchmarks and flags implausible/inconsistent values. |
 | `hallucination_guard.py` | Wraps every LLM-drafted narrative: extracts every number the LLM used, verifies each one traces back to a real number already present in the session (across unit conversions), and retries/falls back to a template if it can't. |
 | `nlp_analyzer.py` | Semantic text matching (sentence-transformers), named-entity extraction, readability/quality scoring, narrative summarization, full-session NLP analysis, and `generate_sebi_risk_factors` (drafts internal/external risk factors from session facts, used by the Wizard's "Auto-Generate Risk Factors" button). |
 | `generator.py` | Builds the Draft Abridged Prospectus `.docx` — cover page (issuer identity, offer mechanics, BRLM/registrar, bid/offer period), then the 12-part "salient features" summary (business overview, industry, promoters, objects of the offer, shareholding, restated financials, KPIs, risk factors, WACA, board/KMP, auditor qualifications, litigation). Table borders, header shading (`#D09E73` tan for cover-page mechanics, `#D9D9D9` gray for content tables), and fonts were extracted directly from a real filed abridged prospectus's DOCX XML, not estimated. |
@@ -341,7 +341,7 @@ python -m pytest tests/ -v
 ```
 
 Covers `certification.py`, `consistency_checker.py`, `coverage.py`, `hallucination_guard.py`,
-and `nlp_analyzer.py` (33 tests total).
+`nlp_analyzer.py`, and `validator.py` (47 tests total).
 
 ---
 
@@ -377,6 +377,7 @@ inline docs. Summary:
 | `LLM_PROVIDER` | `groq` \| `openai` \| `anthropic` \| `ollama` | No — defaults to `groq`; without a valid key the app runs in offline/template mode |
 | `LLM_MODEL` | Override the default model for the selected provider | No |
 | `GROQ_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Provider API key | Only for the selected provider |
+| `GROQ_API_KEY_2` | Optional second Groq key — a request that hits `GROQ_API_KEY`'s rate limit automatically retries on this key, which becomes primary until it rate-limits too | No — single-key mode if unset |
 | `OLLAMA_BASE_URL` | Local Ollama server URL | Only if `LLM_PROVIDER=ollama` |
 | `POLYGON_RPC_URL`, `BLOCKCHAIN_PRIVATE_KEY`, `BLOCKCHAIN_CONTRACT_ADDRESS` | Real Polygon Amoy anchoring | No — mocks deterministically if unset |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | Multi-user, persisted workspaces | No — falls back to a local `session_state.json` |
@@ -391,7 +392,7 @@ inline docs. Summary:
 SEBI/
 ├── backend/
 │   ├── main.py                  FastAPI app & all API routes
-│   ├── schema.json              Field/section data model (21 sections, 102 fields)
+│   ├── schema.json              Field/section data model (21 sections, 106 fields)
 │   ├── extractor.py             Document → structured data (10 doc types)
 │   ├── generator.py             Draft Abridged Prospectus DOCX generator
 │   ├── exporter.py              Full DRHP + Abridged Prospectus + ZIP bundle
@@ -410,7 +411,7 @@ SEBI/
 │   ├── sebi_circulars.py        Regulatory alert feed
 │   ├── due_diligence.py, peer_comparison.py, version_tracker.py, ps_mapping.py
 │   ├── job_manager.py           Background extraction job queue
-│   ├── tests/                   pytest suite (33 tests)
+│   ├── tests/                   pytest suite (47 tests)
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/

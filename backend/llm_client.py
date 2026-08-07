@@ -10,10 +10,18 @@ Provider selection (.env):
     LLM_MODEL    = optional override; each provider has a sensible default
 
 Per-provider credentials:
-    groq      -> GROQ_API_KEY
+    groq      -> GROQ_API_KEY (+ optional GROQ_API_KEY_2 for failover — see below)
     openai    -> OPENAI_API_KEY
     anthropic -> ANTHROPIC_API_KEY
     ollama    -> OLLAMA_BASE_URL (default http://localhost:11434/v1); no key needed
+
+Groq two-key failover:
+    If GROQ_API_KEY_2 is also set, a request that hits GROQ_API_KEY's rate
+    limit automatically retries once on GROQ_API_KEY_2, which then becomes
+    the active ("primary") key for subsequent requests. If GROQ_API_KEY_2
+    later rate-limits too, the retry falls back to GROQ_API_KEY again — the
+    two keys just swap primary/secondary roles on failure. Useful for
+    stretching a limited free-tier daily token quota across two accounts.
 
 Usage:
     from llm_client import get_llm_client
@@ -72,6 +80,8 @@ class LLMClient:
         self.model = (model or os.getenv("LLM_MODEL", "").strip()) or DEFAULT_MODELS[self.provider]
         self._client = None
         self._init_error: Optional[str] = None
+        self._groq_keys: List[str] = []
+        self._groq_key_index: int = 0
         self._init_client()
 
     # ── Provider client construction ──────────────────────────────────────
@@ -80,11 +90,14 @@ class LLMClient:
         try:
             if self.provider == "groq":
                 from groq import Groq
-                key = os.getenv("GROQ_API_KEY", "")
-                if _is_placeholder(key):
+                self._groq_keys = [
+                    k for k in (os.getenv("GROQ_API_KEY", ""), os.getenv("GROQ_API_KEY_2", ""))
+                    if not _is_placeholder(k)
+                ]
+                if not self._groq_keys:
                     self._init_error = "GROQ_API_KEY not configured"
                     return
-                self._client = Groq(api_key=key)
+                self._client = Groq(api_key=self._groq_keys[self._groq_key_index])
 
             elif self.provider == "openai":
                 from openai import OpenAI
@@ -150,6 +163,8 @@ class LLMClient:
                 # Local Ollama builds/models don't reliably honour response_format yet;
                 # JSON-mode callers already instruct the format in-prompt as a fallback.
                 kwargs["response_format"] = {"type": "json_object"}
+            if self.provider == "groq" and len(self._groq_keys) > 1:
+                return self._complete_groq_with_failover(kwargs)
             completion = self._client.chat.completions.create(**kwargs)
             return (completion.choices[0].message.content or "").strip()
 
@@ -170,6 +185,46 @@ class LLMClient:
             ).strip()
 
         raise RuntimeError(f"Unsupported LLM provider: {self.provider}")
+
+    def _complete_groq_with_failover(self, kwargs: Dict) -> str:
+        """Two-key failover for Groq: on a rate-limit error, swap to the other
+        configured key and retry once. The key that just worked stays active
+        ("primary") for subsequent calls. If the second attempt also hits a
+        rate limit, both keys are exhausted — swap back to the original key
+        (so the next unrelated call starts there rather than the one that
+        just failed twice) and let the error propagate to the caller's
+        existing is_rate_limit_error handling.
+        """
+        from groq import Groq
+        try:
+            completion = self._client.chat.completions.create(**kwargs)
+            return (completion.choices[0].message.content or "").strip()
+        except Exception as e:
+            if not is_rate_limit_error(e):
+                raise
+            fallback_index = (self._groq_key_index + 1) % len(self._groq_keys)
+            logger.warning(f"Groq key #{self._groq_key_index + 1} rate-limited; switching to key #{fallback_index + 1}.")
+            self._groq_key_index = fallback_index
+            self._client = Groq(api_key=self._groq_keys[self._groq_key_index])
+            try:
+                completion = self._client.chat.completions.create(**kwargs)
+                return (completion.choices[0].message.content or "").strip()
+            except Exception as e2:
+                if is_rate_limit_error(e2):
+                    self._groq_key_index = (self._groq_key_index + 1) % len(self._groq_keys)
+                    self._client = Groq(api_key=self._groq_keys[self._groq_key_index])
+                raise e2
+
+
+def is_rate_limit_error(exc: Exception) -> bool:
+    """True if `exc` is a provider rate-limit error (HTTP 429) — groq, openai, and
+    anthropic's SDKs each raise a same-named `RateLimitError` class, so matching on
+    the class name avoids importing all three SDKs just to check `isinstance`.
+    Callers use this to give a distinct "usage limit reached, try again shortly"
+    message instead of silently folding it into the generic offline-fallback path,
+    which reads as "the AI is broken" rather than "today's quota is used up."
+    """
+    return type(exc).__name__ == "RateLimitError"
 
 
 _singleton: Optional["LLMClient"] = None
