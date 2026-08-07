@@ -100,12 +100,16 @@ COPY . .
 
 # Pre-create every path the app writes runtime state to, so the named volumes
 # mounted onto them in docker-compose.yml bind cleanly on first `up` instead
-# of Docker creating an empty directory where a file (session_state.json) is
-# expected, or the app hitting ENOENT on a directory that was never created.
-# Without this, `docker compose down && up` silently wiped the demo user's
-# entire in-progress session (session_state.json), audit trail (audit/*.jsonl),
-# and the seeded ChromaDB corpus (chroma_db/) on every restart.
-RUN mkdir -p temp_uploads audit chroma_db && touch session_state.json
+# of Docker creating an empty directory where one is expected, or the app
+# hitting ENOENT on a directory that was never created. Without this,
+# `docker compose down && up` silently wiped the demo user's entire
+# in-progress session (state/session_state.json), audit trail
+# (audit/*.jsonl), and the seeded ChromaDB corpus (chroma_db/) on every
+# restart. state/ holds session_state.json inside a directory (not mounted
+# as a volume directly onto the file itself) — some Docker builds fail to
+# mount a named volume onto a single file path even when it's freshly
+# created, so the volume targets this directory instead.
+RUN mkdir -p temp_uploads audit chroma_db state && touch state/session_state.json
 
 # Expose FastAPI port
 EXPOSE 8000

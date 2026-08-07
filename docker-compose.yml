@@ -37,7 +37,13 @@ services:
       # are unset (the zero-config default this compose file advertises).
       # Mounted onto individual paths (not the whole /app) so the app's own
       # source code still comes from the image, not a stale host bind mount.
-      - backend-session-state:/app/session_state.json
+      # backend-session-state targets the state/ directory, not the
+      # session_state.json file directly — mounting a named volume onto a
+      # single file failed with a runc "mount directory onto a file" error
+      # even on a freshly created volume (some Docker builds don't reliably
+      # auto-detect the target should be file-typed), so main.py now keeps
+      # session_state.json inside this directory instead.
+      - backend-session-state:/app/state
       - backend-uploads:/app/temp_uploads
       - backend-audit-log:/app/audit
       - backend-chroma-db:/app/chroma_db
